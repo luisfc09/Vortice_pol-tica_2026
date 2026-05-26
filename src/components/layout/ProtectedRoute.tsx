@@ -43,7 +43,8 @@ export function ProtectedRoute({
     if (session.is_super_admin) {
       return <Navigate to="/admin/campaigns" replace />;
     }
-    return <Navigate to="/login" replace />;
+    // Usuário comum logou mas ainda não foi vinculado → tela de espera
+    return <Navigate to="/aguardando-ativacao" replace />;
   }
 
   if (roles && roles.length > 0) {

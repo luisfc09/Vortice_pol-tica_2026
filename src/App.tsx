@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { useBrandSync } from '@/hooks/useBrand';
 import LoginPage from '@/pages/Login';
 import TrocarSenhaPage from '@/pages/TrocarSenha';
+import AguardandoAtivacaoPage from '@/pages/AguardandoAtivacao';
 import DashboardPage from '@/pages/Dashboard';
 import LiderancasPage from '@/pages/Liderancas';
 import EleitoresPage from '@/pages/Eleitores';
@@ -39,6 +40,7 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route path="/trocar-senha" element={<TrocarSenhaPage />} />
+          <Route path="/aguardando-ativacao" element={<AguardandoAtivacaoPage />} />
         </Route>
 
         {/* Rotas da campanha — exigem membership ativo */}

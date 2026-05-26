@@ -13,6 +13,7 @@ import {
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { ProvisionSheet } from '@/components/team/ProvisionSheet';
+import { PendingUsersSection } from '@/components/team/PendingUsersSection';
 import { collections, useCollection } from '@/lib/data';
 import { SEED_TEAMMATE_PROFILES } from '@/data/seeds';
 import { initials } from '@/lib/utils';
@@ -47,6 +48,8 @@ export default function EquipePage() {
 
   return (
     <div className="space-y-5">
+      <PendingUsersSection />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {members.length} {members.length === 1 ? 'membro' : 'membros'} ·{' '}

@@ -29,27 +29,13 @@ export function useAuth() {
       ]);
       if (!active) return { ok: false };
 
-      // Super admin sem membership entra no modo /admin (sem campanha)
-      if (!profile && !isSuperAdmin) {
-        await supabase.auth.signOut();
-        setSession(null);
-        return { ok: false, error: 'Usuário sem perfil. Fale com o admin.' };
-      }
-      if (!membership && !isSuperAdmin) {
-        await supabase.auth.signOut();
-        setSession(null);
-        return {
-          ok: false,
-          error: 'Usuário sem campanha associada. Fale com o admin.',
-        };
-      }
+      // Conta desativada explicitamente pelo admin → desloga
       if (membership && !membership.is_active) {
         await supabase.auth.signOut();
         setSession(null);
         return { ok: false, error: 'Sua conta foi desativada pelo admin da campanha.' };
       }
-      // Status default é 'active' caso a coluna não exista ainda (migration 004
-      // pendente). Apenas suspended/cancelled bloqueiam o login.
+      // Campanha suspensa/cancelada → desloga
       const campaignStatus = membership?.campaign.status ?? 'active';
       if (
         membership &&
@@ -64,12 +50,19 @@ export function useAuth() {
         };
       }
 
+      // Caso "aguardando ativação": user logou (auth.user existe + profile pelo
+      // trigger handle_new_user) mas ainda não foi vinculado a campanha. Em vez
+      // de deslogar, deixa session válida com campaign: null e role: null —
+      // ProtectedRoute redireciona pra /aguardando-ativacao.
       setSession({
         id: sb.user.id,
         email: sb.user.email ?? '',
         profile: profile ?? {
           id: sb.user.id,
-          full_name: sb.user.email ?? 'Super Admin',
+          full_name:
+            (sb.user.user_metadata?.full_name as string | undefined) ??
+            sb.user.email ??
+            'Novo usuário',
           phone: null,
           avatar_url: null,
           municipality_code: null,
@@ -140,14 +133,6 @@ export function useAuth() {
           fetchMembership(data.user.id),
           fetchIsSuperAdmin(),
         ]);
-        if (!profile && !isSuperAdmin) {
-          await supabase.auth.signOut();
-          return { ok: false, error: 'Usuário sem perfil. Fale com o admin.' };
-        }
-        if (!membership && !isSuperAdmin) {
-          await supabase.auth.signOut();
-          return { ok: false, error: 'Usuário sem campanha associada. Fale com o admin.' };
-        }
         if (membership && !membership.is_active) {
           await supabase.auth.signOut();
           return { ok: false, error: 'Conta desativada pelo admin da campanha.' };
@@ -168,7 +153,10 @@ export function useAuth() {
           email: data.user.email ?? email,
           profile: profile ?? {
             id: data.user.id,
-            full_name: data.user.email ?? 'Super Admin',
+            full_name:
+              (data.user.user_metadata?.full_name as string | undefined) ??
+              data.user.email ??
+              'Novo usuário',
             phone: null,
             avatar_url: null,
             municipality_code: null,
