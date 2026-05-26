@@ -360,7 +360,7 @@ export function computeSignals(input: PulseInput): CampaignSignal[] {
         level: 'critical',
         title: 'Equipe parada',
         description: 'Risco de perder base. Cobrar agentes de campo imediatamente.',
-        cta: { label: 'Ver equipe', to: '/equipe' },
+        cta: { label: 'Ver usuários', to: '/usuarios' },
       });
     }
   }

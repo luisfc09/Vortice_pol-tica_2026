@@ -26,7 +26,7 @@ interface ProfileLite {
   avatar_url: string | null;
 }
 
-export default function EquipePage() {
+export default function UsuariosPage() {
   const session = useAuthStore((s) => s.session);
   const members = useCollection(collections.campaign_users);
   const [provisionOpen, setProvisionOpen] = useState(false);
@@ -132,18 +132,18 @@ export default function EquipePage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          {members.length} {members.length === 1 ? 'membro' : 'membros'} ·{' '}
+          {members.length} {members.length === 1 ? 'usuário' : 'usuários'} ·{' '}
           {session?.campaign?.candidate_name ?? '—'}
         </p>
         <Button onClick={() => setProvisionOpen(true)}>
-          <UserPlus className="h-4 w-4" /> Provisionar membro
+          <UserPlus className="h-4 w-4" /> Provisionar usuário
         </Button>
       </div>
 
       {members.length === 0 ? (
         <EmptyState
-          title="Sem membros ainda"
-          description="Provisione admin, coordenadores e agentes de campo. Cada um recebe link e senha temporária."
+          title="Sem usuários ainda"
+          description="Provisione administradores, candidato, coordenadores, pesquisadores, apoiadores e lideranças. Cada um recebe link e senha temporária."
           icon={<Plus className="h-5 w-5" />}
           action={
             <Button onClick={() => setProvisionOpen(true)}>
@@ -231,7 +231,7 @@ export default function EquipePage() {
       <ConfirmDelete
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Remover membro?"
+        title="Remover usuário?"
         description="A pessoa perderá acesso imediatamente. Para suspender temporariamente, use Desativar."
         onConfirm={() => deleteTarget && collections.campaign_users.remove(deleteTarget.id)}
       />

@@ -37,10 +37,14 @@ export const MOCK_CREDENTIALS = {
 };
 
 export function buildMockSession(role: UserRole = 'admin'): SessionUser {
+  const isFieldUser = role === 'leader' || role === 'supporter' || role === 'field_agent';
   return {
     id: MOCK_PROFILE.id,
-    email: role === 'field_agent' ? MOCK_CREDENTIALS.field.email : MOCK_CREDENTIALS.admin.email,
-    profile: { ...MOCK_PROFILE, full_name: role === 'field_agent' ? 'Agente de Campo' : MOCK_PROFILE.full_name },
+    email: isFieldUser ? MOCK_CREDENTIALS.field.email : MOCK_CREDENTIALS.admin.email,
+    profile: {
+      ...MOCK_PROFILE,
+      full_name: isFieldUser ? 'Liderança de Campo' : MOCK_PROFILE.full_name,
+    },
     campaign: MOCK_CAMPAIGN,
     role,
     is_super_admin: role === 'admin',
@@ -61,7 +65,7 @@ export function resolveMockLogin(
     email === MOCK_CREDENTIALS.field.email &&
     password === MOCK_CREDENTIALS.field.password
   ) {
-    return buildMockSession('field_agent');
+    return buildMockSession('leader');
   }
   return null;
 }

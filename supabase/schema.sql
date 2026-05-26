@@ -10,7 +10,17 @@ create extension if not exists "pgcrypto";
 -- ENUMs
 -- ----------------------------------------------------------------------------
 do $$ begin
-  create type user_role as enum ('admin', 'coordinator', 'field_agent', 'researcher');
+  -- Conjunto atual de papéis (ver migration-015). field_agent fica como
+  -- legado pra compat com instalações antigas.
+  create type user_role as enum (
+    'admin',
+    'candidate',
+    'coordinator',
+    'researcher',
+    'supporter',
+    'leader',
+    'field_agent'
+  );
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -81,7 +91,7 @@ create table if not exists campaign_users (
   id uuid primary key default gen_random_uuid(),
   campaign_id uuid not null references campaigns (id) on delete cascade,
   user_id uuid not null references auth.users (id) on delete cascade,
-  role user_role not null default 'field_agent',
+  role user_role not null default 'leader',
   invited_by uuid references auth.users (id),
   created_at timestamptz not null default now(),
   unique (campaign_id, user_id)

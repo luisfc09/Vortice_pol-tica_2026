@@ -44,8 +44,8 @@ const ITEMS: NavItem[] = [
   { to: '/campo', label: 'Campo', icon: ClipboardList, requiresCampaign: true },
   { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
   {
-    to: '/equipe',
-    label: 'Equipe',
+    to: '/usuarios',
+    label: 'Usuários',
     icon: UsersRound,
     roles: ['admin', 'coordinator'],
     requiresCampaign: true,

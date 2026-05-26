@@ -23,7 +23,7 @@ import { collections, isMockMode } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
-import { ROLE_LABEL, type UserRole } from '@/types';
+import { ROLE_LABEL, ROLE_DESCRIPTION, ROLE_OPTIONS, type UserRole } from '@/types';
 
 interface Props {
   open: boolean;
@@ -37,7 +37,7 @@ interface ProvisionResult {
   user_id: string;
 }
 
-const ROLE_VALUES: UserRole[] = ['admin', 'coordinator', 'field_agent', 'researcher'];
+const ROLE_VALUES: UserRole[] = [...ROLE_OPTIONS];
 
 const MOCK_TEMP_PASSWORD = '123456';
 
@@ -46,7 +46,7 @@ export function ProvisionSheet({ open, onOpenChange }: Props) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<UserRole>('field_agent');
+  const [role, setRole] = useState<UserRole>('leader');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<ProvisionResult | null>(null);
   const [copied, setCopied] = useState<'creds' | 'link' | null>(null);
@@ -245,6 +245,9 @@ export function ProvisionSheet({ open, onOpenChange }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {ROLE_DESCRIPTION[role]}
+              </p>
             </div>
 
             <div className="flex gap-2 pt-2">

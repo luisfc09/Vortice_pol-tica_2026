@@ -631,7 +631,7 @@ export const SEED_CAMPAIGN_USERS: CampaignUser[] = [
     id: 'cu-3',
     campaign_id: CAMPAIGN_ID,
     user_id: 'user-mock-3',
-    role: 'field_agent',
+    role: 'leader',
     invited_by: USER_ID,
     is_active: true,
     created_at: iso(20),

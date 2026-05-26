@@ -25,7 +25,15 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
-type Role = 'admin' | 'coordinator' | 'field_agent' | 'researcher';
+type Role =
+  | 'admin'
+  | 'candidate'
+  | 'coordinator'
+  | 'researcher'
+  | 'supporter'
+  | 'leader'
+  // Mantido para compat com chamadas legadas
+  | 'field_agent';
 
 interface ProvisionRequest {
   email: string;
@@ -34,7 +42,15 @@ interface ProvisionRequest {
   role: Role;
 }
 
-const ALLOWED_ROLES: Role[] = ['admin', 'coordinator', 'field_agent', 'researcher'];
+const ALLOWED_ROLES: Role[] = [
+  'admin',
+  'candidate',
+  'coordinator',
+  'researcher',
+  'supporter',
+  'leader',
+  'field_agent',
+];
 
 const TEMP_PASSWORD = '123456';
 

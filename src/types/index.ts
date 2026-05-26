@@ -3,7 +3,16 @@
 // Alinhados 1:1 ao schema em supabase/schema.sql
 // ============================================================================
 
-export type UserRole = 'admin' | 'coordinator' | 'field_agent' | 'researcher';
+export type UserRole =
+  | 'admin'
+  | 'candidate'
+  | 'coordinator'
+  | 'researcher'
+  | 'supporter'
+  | 'leader'
+  // Mantido para compatibilidade com dados antigos. Não aparece em UI.
+  // Usuários existentes com este papel devem ser migrados para 'leader'.
+  | 'field_agent';
 
 export type VoteIntention =
   | 'apoiador'
@@ -472,9 +481,35 @@ export const VOTE_INTENTION_COLOR: Record<VoteIntention, string> = {
 
 export const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Administrador',
+  candidate: 'Candidato/Político',
   coordinator: 'Coordenador',
-  field_agent: 'Agente de campo',
   researcher: 'Pesquisador',
+  supporter: 'Apoiador',
+  leader: 'Liderança',
+  field_agent: 'Agente de campo (legado)',
+};
+
+// Lista canônica de papéis oferecidos em formulários e selects da UI.
+// `field_agent` ficou fora propositalmente — só aparece em registros
+// antigos enquanto não rodam o UPDATE da migration 015.
+export const ROLE_OPTIONS: readonly UserRole[] = [
+  'admin',
+  'candidate',
+  'coordinator',
+  'researcher',
+  'supporter',
+  'leader',
+] as const;
+
+// Texto curto explicando o que cada papel pode fazer. Usado nos selects.
+export const ROLE_DESCRIPTION: Record<UserRole, string> = {
+  admin: 'Controle total da campanha.',
+  candidate: 'Visualização executiva; aprovação de respostas.',
+  coordinator: 'Gerencia campo, equipe e operação.',
+  researcher: 'Leitura + análise de menções e dados.',
+  supporter: 'Apoiador estruturado com login.',
+  leader: 'Liderança local que registra cadastros em campo.',
+  field_agent: 'Papel legado — migrar para Liderança.',
 };
 
 export const FAQ_CATEGORY_LABEL: Record<FaqCategory, string> = {

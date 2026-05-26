@@ -19,7 +19,9 @@ const TITLES: Record<string, string> = {
   '/campo/entrevista': 'Nova entrevista',
   '/campo/faq': 'FAQ de argumentação',
   '/agenda': 'Agenda do candidato',
-  '/equipe': 'Equipe',
+  '/usuarios': 'Usuários',
+  '/equipe': 'Usuários', // legado
+  '/campo/historico': 'Minhas entrevistas',
   '/integracoes': 'Integrações',
   '/campanha/branding': 'Identidade da campanha',
   '/admin/campaigns': 'Admin Vórtice — Campanhas',

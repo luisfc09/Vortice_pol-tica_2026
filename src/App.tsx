@@ -19,7 +19,7 @@ import CampoFaqPage from '@/pages/CampoFaq';
 import CampoHistoricoPage from '@/pages/CampoHistorico';
 import CampoHojePage from '@/pages/CampoHoje';
 import AgendaPage from '@/pages/Agenda';
-import EquipePage from '@/pages/Equipe';
+import UsuariosPage from '@/pages/Usuarios';
 import IntegracoesPage from '@/pages/Integracoes';
 import BrandingPage from '@/pages/Branding';
 import AdminCampaignsPage from '@/pages/AdminCampaigns';
@@ -84,7 +84,9 @@ export default function App() {
           element={<ProtectedRoute requireCampaign roles={['admin', 'coordinator']} />}
         >
           <Route element={<AppLayout />}>
-            <Route path="/equipe" element={<EquipePage />} />
+            <Route path="/usuarios" element={<UsuariosPage />} />
+            {/* Compat: link antigo /equipe ainda funciona */}
+            <Route path="/equipe" element={<Navigate to="/usuarios" replace />} />
             <Route path="/integracoes" element={<IntegracoesPage />} />
             <Route path="/campanha/branding" element={<BrandingPage />} />
           </Route>

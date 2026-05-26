@@ -312,7 +312,8 @@ function detectEventoSemConfirmacao(input: DetectorInput): AlertDraft[] {
 }
 
 function detectCaboSumido(input: DetectorInput): AlertDraft[] {
-  // Cabos (campaign_users com role='field_agent') sem entrevista nos últimos 7d.
+  // Lideranças/apoiadores/cabos legados (campaign_users com role in
+  // 'leader' | 'supporter' | 'field_agent') sem entrevista nos últimos 7d.
   const cutoff = Date.now() - 7 * MS_DAY;
   const recentByAgent = new Map<string, number>();
   for (const i of input.interviews) {
@@ -320,8 +321,9 @@ function detectCaboSumido(input: DetectorInput): AlertDraft[] {
       recentByAgent.set(i.created_by, (recentByAgent.get(i.created_by) ?? 0) + 1);
     }
   }
+  const fieldRoles = new Set(['leader', 'supporter', 'field_agent']);
   const sumidos = input.members
-    .filter((m) => m.role === 'field_agent' && m.is_active)
+    .filter((m) => fieldRoles.has(m.role) && m.is_active)
     .filter((m) => !recentByAgent.has(m.user_id));
 
   if (sumidos.length === 0) return [];
@@ -329,11 +331,11 @@ function detectCaboSumido(input: DetectorInput): AlertDraft[] {
     draft({
       type: 'cabo_sumido',
       priority: 'atencao',
-      title: `${sumidos.length} cabo${sumidos.length > 1 ? 's' : ''} eleitora${sumidos.length > 1 ? 'is' : 'l'} sem atividade há 7+ dias`,
+      title: `${sumidos.length} liderança${sumidos.length > 1 ? 's' : ''} sem atividade há 7+ dias`,
       description: 'Sem registros de entrevista nesta semana. Verifique se ainda estão ativos.',
       acao_sugerida: 'Contate os coordenadores regionais para reativar ou substituir.',
-      acao_label: 'Ver equipe',
-      acao_route: '/equipe',
+      acao_label: 'Ver usuários',
+      acao_route: '/usuarios',
       meta: { user_ids: sumidos.map((s) => s.user_id) },
       dedup_key: 'cabo_sumido:weekly',
     }),
@@ -355,8 +357,8 @@ function detectEntrevistasParadas(input: DetectorInput): AlertDraft[] {
       title: 'Nenhuma entrevista de campo hoje',
       description: 'Equipe parou completamente. Meta diária em risco.',
       acao_sugerida: 'Acione todos os coordenadores regionais imediatamente.',
-      acao_label: 'Ver equipe',
-      acao_route: '/equipe',
+      acao_label: 'Ver usuários',
+      acao_route: '/usuarios',
       meta: { date: start.toISOString().slice(0, 10) },
       dedup_key: `entrevistas_paradas:${start.toISOString().slice(0, 10)}`,
       expires_at: new Date(start.getTime() + MS_DAY).toISOString(),

@@ -24,7 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { initials } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ROLE_LABEL, type UserRole } from '@/types';
+import { ROLE_LABEL, ROLE_DESCRIPTION, ROLE_OPTIONS, type UserRole } from '@/types';
 
 interface PendingRow {
   id: string;
@@ -33,7 +33,7 @@ interface PendingRow {
   created_at: string;
 }
 
-const ROLE_VALUES: UserRole[] = ['admin', 'coordinator', 'field_agent', 'researcher'];
+const ROLE_VALUES: UserRole[] = [...ROLE_OPTIONS];
 
 interface Props {
   onApproved?: () => void;
@@ -44,7 +44,7 @@ export function PendingUsersSection({ onApproved }: Props) {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<PendingRow | null>(null);
-  const [role, setRole] = useState<UserRole>('field_agent');
+  const [role, setRole] = useState<UserRole>('leader');
   const [fullName, setFullName] = useState('');
   const [approving, setApproving] = useState(false);
 
@@ -67,7 +67,7 @@ export function PendingUsersSection({ onApproved }: Props) {
   function startApprove(row: PendingRow) {
     setTarget(row);
     setFullName(row.full_name);
-    setRole('field_agent');
+    setRole('leader');
     setOpen(true);
   }
 
@@ -204,8 +204,7 @@ export function PendingUsersSection({ onApproved }: Props) {
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
-                  Admin: controle total · Coordenador: gerencia campo · Field agent: só cadastra
-                  · Pesquisador: leitura + menções
+                  {ROLE_DESCRIPTION[role]}
                 </p>
               </div>
 
