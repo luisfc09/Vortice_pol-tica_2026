@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -14,22 +14,69 @@ import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { ProvisionSheet } from '@/components/team/ProvisionSheet';
 import { PendingUsersSection } from '@/components/team/PendingUsersSection';
-import { collections, useCollection } from '@/lib/data';
+import { collections, isMockMode, useCollection } from '@/lib/data';
 import { SEED_TEAMMATE_PROFILES } from '@/data/seeds';
+import { supabase } from '@/lib/supabase';
 import { initials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { ROLE_LABEL, type CampaignUser, type UserRole } from '@/types';
+
+interface ProfileLite {
+  full_name: string;
+  phone: string | null;
+}
 
 export default function EquipePage() {
   const session = useAuthStore((s) => s.session);
   const members = useCollection(collections.campaign_users);
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CampaignUser | null>(null);
+  const [profiles, setProfiles] = useState<Record<string, ProfileLite>>({});
 
-  function profileFor(userId: string) {
-    if (userId === session?.id) {
-      return { full_name: session.profile.full_name, phone: session.profile.phone };
+  const userIds = useMemo(() => members.map((m) => m.user_id), [members]);
+
+  // Carrega os profiles dos membros do banco. Em mock mode, usa SEED.
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      if (userIds.length === 0) {
+        setProfiles({});
+        return;
+      }
+      if (isMockMode()) {
+        const next: Record<string, ProfileLite> = {};
+        for (const id of userIds) {
+          const seed = SEED_TEAMMATE_PROFILES[id];
+          if (seed) next[id] = { full_name: seed.full_name, phone: seed.phone };
+        }
+        if (active) setProfiles(next);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone')
+        .in('id', userIds);
+      if (!active || error || !data) return;
+      const next: Record<string, ProfileLite> = {};
+      for (const row of data as Array<{ id: string; full_name: string; phone: string | null }>) {
+        next[row.id] = { full_name: row.full_name, phone: row.phone };
+      }
+      setProfiles(next);
     }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [userIds]);
+
+  function profileFor(userId: string): ProfileLite {
+    if (userId === session?.id) {
+      return {
+        full_name: session.profile.full_name,
+        phone: session.profile.phone,
+      };
+    }
+    if (profiles[userId]) return profiles[userId];
     return (
       SEED_TEAMMATE_PROFILES[userId] ?? {
         full_name: `Membro ${userId.slice(-4)}`,
