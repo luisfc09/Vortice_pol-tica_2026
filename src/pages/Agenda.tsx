@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { EventFormSheet } from '@/components/events/EventFormSheet';
+import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import { collections, useCollection } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import type { CampaignEvent, EventType } from '@/types';
@@ -172,11 +173,20 @@ export default function AgendaPage() {
             <p className="mt-2 text-sm text-muted-foreground">{event.description}</p>
           ) : null}
 
-          {canManage ? (
-            <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
+            {canManage ? (
               <Button variant="ghost" size="sm" onClick={onEdit}>
                 <Pencil className="h-3.5 w-3.5" /> Editar
               </Button>
+            ) : null}
+            <OpenInMapsButton
+              target={{
+                logradouro: event.location,
+                cidade: event.city,
+                uf: 'MG',
+              }}
+            />
+            {canManage ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -185,8 +195,8 @@ export default function AgendaPage() {
               >
                 <Trash2 className="h-3.5 w-3.5" /> Excluir
               </Button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </li>
     );

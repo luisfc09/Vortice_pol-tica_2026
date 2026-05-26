@@ -92,7 +92,7 @@ export function TodayVisitsMap({ interviews, period, onChangePeriod }: Props) {
             zoom={initialZoom}
             scrollWheelZoom
             className="h-[420px] w-full rounded-lg border border-vortex-border"
-            style={{ backgroundColor: '#0A0F1E' }}
+            style={{ backgroundColor: '#0A0F1E', isolation: 'isolate' }}
           >
             <TileLayer
               attribution='&copy; <a href="https://carto.com/">CARTO</a>'

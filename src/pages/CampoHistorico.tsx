@@ -6,6 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/data/EmptyState';
+import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import { collections, useCollection } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import { MUNI_COORDS } from '@/data/municipalities-mg-coords';
@@ -99,12 +100,27 @@ export default function CampoHistoricoPage() {
                   </p>
                 </div>
 
-                <Button asChild size="sm" variant="outline">
-                  <Link to={`/campo/entrevista/${i.id}`}>
-                    <Pencil className="h-3.5 w-3.5" />
-                    Editar
-                  </Link>
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link to={`/campo/entrevista/${i.id}`}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      Editar
+                    </Link>
+                  </Button>
+                  <OpenInMapsButton
+                    size="sm"
+                    variant="outline"
+                    label="Local"
+                    mode="search"
+                    target={{
+                      lat: i.lat,
+                      lng: i.lng,
+                      bairro: i.neighborhood,
+                      cidade: muni,
+                      uf: 'MG',
+                    }}
+                  />
+                </div>
               </li>
             );
           })}

@@ -7,6 +7,7 @@ import { FilterPill } from '@/components/data/FilterPill';
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SupporterFormSheet } from '@/components/supporters/SupporterFormSheet';
+import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import { collections, useCollection } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import type { Supporter, SupporterRoleType } from '@/types';
@@ -155,10 +156,20 @@ export default function LiderancasPage() {
                 </p>
               </div>
 
-              <div className="mt-4 flex gap-2 border-t border-vortex-border pt-3">
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-vortex-border pt-3">
                 <Button variant="ghost" size="sm" onClick={() => openEdit(s)}>
                   <Pencil className="h-3.5 w-3.5" /> Editar
                 </Button>
+                <OpenInMapsButton
+                  target={{
+                    logradouro: s.logradouro,
+                    numero: s.numero,
+                    bairro: s.neighborhood,
+                    cidade: s.city,
+                    uf: 'MG',
+                    cep: s.cep,
+                  }}
+                />
                 {canManage ? (
                   <Button
                     variant="ghost"

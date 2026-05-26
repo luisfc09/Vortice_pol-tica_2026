@@ -6,6 +6,7 @@ import { FilterPill } from '@/components/data/FilterPill';
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { VoterFormSheet } from '@/components/voters/VoterFormSheet';
+import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import { collections, useCollection } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
@@ -145,7 +146,7 @@ export default function EleitoresPage() {
                 ) : null}
               </div>
 
-              <div className="mt-4 flex gap-2 border-t border-vortex-border pt-3">
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-vortex-border pt-3">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -156,6 +157,18 @@ export default function EleitoresPage() {
                 >
                   <Pencil className="h-3.5 w-3.5" /> Editar
                 </Button>
+                <OpenInMapsButton
+                  target={{
+                    lat: v.lat,
+                    lng: v.lng,
+                    logradouro: v.logradouro,
+                    numero: v.numero,
+                    bairro: v.neighborhood,
+                    cidade: v.city,
+                    uf: 'MG',
+                    cep: v.cep,
+                  }}
+                />
                 {canManage ? (
                   <Button
                     variant="ghost"
