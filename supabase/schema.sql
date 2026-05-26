@@ -410,10 +410,16 @@ create policy mentions_select on mentions
 drop policy if exists alerts_select on alerts;
 create policy alerts_select on alerts
   for select using (campaign_id = public.current_campaign_id());
+drop policy if exists alerts_insert on alerts;
+create policy alerts_insert on alerts
+  for insert with check (campaign_id = public.current_campaign_id());
 drop policy if exists alerts_update on alerts;
 create policy alerts_update on alerts
   for update using (campaign_id = public.current_campaign_id())
   with check (campaign_id = public.current_campaign_id());
+drop policy if exists alerts_delete on alerts;
+create policy alerts_delete on alerts
+  for delete using (campaign_id = public.current_campaign_id());
 
 -- faq_items: itens globais (campaign_id null) ou da campanha
 drop policy if exists faq_items_select on faq_items;
