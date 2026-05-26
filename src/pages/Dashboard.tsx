@@ -29,6 +29,7 @@ import { AlertsList } from '@/components/dashboard/AlertsList';
 import { UpcomingEvents } from '@/components/dashboard/UpcomingEvents';
 import { PulseGauge } from '@/components/dashboard/PulseGauge';
 import { CampaignSignals } from '@/components/dashboard/CampaignSignals';
+import { IntelligenceTeaser } from '@/components/dashboard/IntelligenceTeaser';
 import { WeeklyRadar } from '@/components/dashboard/WeeklyRadar';
 import { AlertsHistory } from '@/components/alerts/AlertsHistory';
 import { useAlertas } from '@/hooks/useAlertas';
@@ -288,6 +289,9 @@ export default function DashboardPage() {
               <CampaignSignals signals={signals} onRefresh={refreshStrategic} />
             </div>
           </div>
+
+          {/* Mini-seção da Inteligência IA — aponta pra /inteligencia */}
+          <IntelligenceTeaser />
 
           {/* Radar */}
           <WeeklyRadar data={radar} />

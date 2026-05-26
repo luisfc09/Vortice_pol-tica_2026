@@ -130,7 +130,8 @@ export type AiFeature =
   | 'mention_sentiment'
   | 'mention_insights'
   | 'reply_suggestions'
-  | 'interview_analysis';
+  | 'interview_analysis'
+  | 'campaign_intelligence';
 
 export interface AiFeatureConfig {
   campaign_id: string;
@@ -146,6 +147,7 @@ export const AI_FEATURE_LABEL: Record<AiFeature, string> = {
   mention_insights: 'Insights de menções',
   reply_suggestions: 'Sugestões de resposta',
   interview_analysis: 'Análise de entrevista aprofundada',
+  campaign_intelligence: 'Inteligência eleitoral por IA',
 };
 
 export const AI_FEATURE_HELP: Record<AiFeature, string> = {
@@ -153,6 +155,7 @@ export const AI_FEATURE_HELP: Record<AiFeature, string> = {
   mention_insights: 'Resumo agregado das últimas 50 menções (tópicos, sentimento líquido).',
   reply_suggestions: 'Gera respostas sugeridas com tom adequado para o contexto.',
   interview_analysis: 'Analisa entrevista aprofundada e sugere perfil + próximo passo.',
+  campaign_intelligence: 'Agente especialista que cruza entrevistas e gera relatório estratégico.',
 };
 
 export interface Integration {
@@ -413,6 +416,200 @@ export interface FieldInterview {
 export function isInterviewDeepened(i: FieldInterview): boolean {
   return i.status === 'complete' && !!i.age_range;
 }
+
+// ============================================================================
+// Inteligência Eleitoral por IA (migration 019)
+// ============================================================================
+
+export interface DistributionItem {
+  label: string;       // chave do enum (ex.: '35-44') ou nome amigável
+  count: number;       // qtde de entrevistas com este valor
+  pct: number;         // percentual (0..100, uma casa decimal)
+}
+
+// Tabela cruzada: para cada combinação (rowKey × colKey) guarda count e pct
+// relativo ao total da linha. Permite "X% das mulheres 35-44 são apoiadoras".
+export interface CrossTabRow {
+  rowKey: string;      // ex.: 'feminino' (gender)
+  total: number;
+  cells: { colKey: string; count: number; pct: number }[];
+}
+export type CrossTab = CrossTabRow[];
+
+export interface ThemeRow {
+  theme: string;
+  count: number;
+  pct: number;
+}
+
+export type ImpactLevel = 'alto' | 'medio' | 'baixo';
+export type InsightCategory = 'base' | 'territorio' | 'mensagem' | 'equipe' | 'risco';
+
+export interface StrategicInsight {
+  titulo: string;
+  insight: string;
+  dado_de_suporte: string;
+  impacto: ImpactLevel;
+  categoria: InsightCategory;
+}
+
+export interface RiskAlert {
+  alerta: string;
+  evidencia: string;
+  severidade: 'critico' | 'alto' | 'medio';
+  acao_mitigadora: string;
+}
+
+export interface Opportunity {
+  oportunidade: string;
+  potencial_votos: string;
+  como_capturar: string;
+  prazo: string;
+}
+
+export interface AgendaAction {
+  acao: string;
+  justificativa: string;
+  local_sugerido: string;
+  publico_alvo: string;
+  prioridade: number; // 1-5 (5 = mais urgente)
+}
+
+export interface PrioritySegment {
+  segmento: string;
+  tamanho_pct: number;
+  potencial: ImpactLevel;
+  mensagem_recomendada: string;
+  canal_preferencial: 'WhatsApp' | 'presencial' | 'redes' | 'evento' | string;
+}
+
+export interface ConversionSegmentBreakdown {
+  total: number;
+  pct: number;
+  by_age: DistributionItem[];
+  by_religion: DistributionItem[];
+  by_income: DistributionItem[];
+  themes: ThemeRow[];
+  top_conversion_argument: string | null;
+}
+
+export interface RiskSegment {
+  segmento: string;
+  tamanho_pct: number;
+  motivo: string;
+  acao_mitigadora: string;
+}
+
+export interface GovRatings {
+  state: number | null;   // 1..5
+  federal: number | null;
+  city: number | null;
+}
+
+export interface SentimentByTheme {
+  [theme: string]: {
+    positivo: number;
+    neutro: number;
+    negativo: number;
+  };
+}
+
+export interface ComparacaoInstitutos {
+  metodologia: string;
+  margem_erro_estimada: string;
+  confiabilidade: string;
+  ressalvas: string;
+}
+
+// Resposta da IA combinada (parte que vem direto do Claude)
+export interface IntelligenceAIPayload {
+  resumo_executivo: string;
+  campaign_health_score: number;        // 0-100
+  conversion_probability: number;       // 0..1
+  strategic_insights: StrategicInsight[];
+  segmentos_prioritarios: PrioritySegment[];
+  temas_criticos: {
+    tema: string;
+    frequencia_pct: number;
+    sentimento: 'positivo' | 'neutro' | 'negativo';
+    acao_recomendada: string;
+    urgencia: 'imediata' | 'esta_semana' | 'este_mes';
+  }[];
+  risk_alerts: RiskAlert[];
+  opportunities: Opportunity[];
+  agenda_recomendada: AgendaAction[];
+  mensagens_por_segmento: Record<string, string>;
+  comparacao_institutos: ComparacaoInstitutos;
+}
+
+// Linha persistida em campaign_intelligence
+export interface CampaignIntelligence {
+  id: string;
+  campaign_id: string;
+  generated_at: string;
+  total_interviews: number;
+
+  vote_intention_dist: DistributionItem[];
+  age_dist: DistributionItem[];
+  gender_dist: DistributionItem[];
+  religion_dist: DistributionItem[];
+  income_dist: DistributionItem[];
+  education_dist: DistributionItem[];
+
+  crossings: {
+    intention_by_age: CrossTab;
+    intention_by_religion: CrossTab;
+    intention_by_income: CrossTab;
+    intention_by_gender: CrossTab;
+    intention_by_municipality: CrossTab;
+    themes_by_intention: CrossTab;
+  };
+
+  themes_ranking: ThemeRow[];
+  themes_by_region: Record<string, ThemeRow[]>;
+  themes_by_profile: Record<string, ThemeRow[]>;
+  gov_ratings: GovRatings;
+  sentiment_analysis: SentimentByTheme | null;
+
+  // IA
+  resumo_executivo: string | null;
+  strategic_insights: StrategicInsight[];
+  risk_alerts: RiskAlert[];
+  opportunities: Opportunity[];
+  recommended_actions: AgendaAction[];
+  segments_to_convert: ConversionSegmentBreakdown | null;
+  segments_at_risk: RiskSegment[];
+  mensagens_por_segmento: Record<string, string> | null;
+  comparacao_institutos: ComparacaoInstitutos | null;
+
+  conversion_probability: number | null;
+  campaign_health_score: number | null;
+  raw_analysis: string | null;
+}
+
+// Nível de confiabilidade da análise — função do tamanho da amostra.
+export type IntelligenceReliability =
+  | 'preliminary'  // < 50 entrevistas
+  | 'partial'      // 50-199
+  | 'consistent'   // 200-499
+  | 'high'         // 500-999
+  | 'institute';   // 1000+
+
+export function reliabilityOf(total: number): IntelligenceReliability {
+  if (total < 50) return 'preliminary';
+  if (total < 200) return 'partial';
+  if (total < 500) return 'consistent';
+  if (total < 1000) return 'high';
+  return 'institute';
+}
+
+export const RELIABILITY_LABEL: Record<IntelligenceReliability, string> = {
+  preliminary: 'Dados preliminares',
+  partial: 'Análise parcial — tendências iniciais',
+  consistent: 'Análise consistente',
+  high: 'Alta confiabilidade — equivalente a pesquisa regional',
+  institute: 'Nível instituto profissional',
+};
 
 export interface CampaignEvent {
   id: string;

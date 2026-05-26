@@ -19,6 +19,7 @@ const TITLES: Record<string, string> = {
   '/campo/entrevista': 'Nova entrevista',
   '/campo/faq': 'FAQ de argumentação',
   '/agenda': 'Agenda do candidato',
+  '/inteligencia': 'Inteligência Eleitoral',
   '/usuarios': 'Usuários',
   '/equipe': 'Usuários', // legado
   '/campo/historico': 'Minhas entrevistas',

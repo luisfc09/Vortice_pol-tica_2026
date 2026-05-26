@@ -16,6 +16,7 @@ import RespostaRapidaHistoricoPage from '@/pages/RespostaRapidaHistorico';
 import CampoHubPage from '@/pages/Campo';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoEntrevistaDetalhePage from '@/pages/CampoEntrevistaDetalhe';
+import InteligenciaPage from '@/pages/Inteligencia';
 import CampoQuestionarioPage from '@/pages/CampoQuestionario';
 import CampoFaqPage from '@/pages/CampoFaq';
 import CampoHistoricoPage from '@/pages/CampoHistorico';
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="/liderancas" element={<LiderancasPage />} />
             <Route path="/eleitores" element={<EleitoresPage />} />
             <Route path="/mapa" element={<MapaPage />} />
+            <Route path="/inteligencia" element={<InteligenciaPage />} />
             <Route path="/campo" element={<CampoHubPage />} />
             <Route path="/campo/hoje" element={<CampoHojePage />} />
             <Route path="/campo/historico" element={<CampoHistoricoPage />} />

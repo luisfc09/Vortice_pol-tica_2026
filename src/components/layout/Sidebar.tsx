@@ -13,6 +13,7 @@ import {
   Settings,
   Plug,
   Palette,
+  Brain,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,13 @@ interface NavItem {
 
 const ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, requiresCampaign: true },
+  {
+    to: '/inteligencia',
+    label: 'Inteligência Eleitoral',
+    icon: Brain,
+    roles: ['admin', 'candidate', 'coordinator', 'researcher'],
+    requiresCampaign: true,
+  },
   { to: '/liderancas', label: 'Lideranças', icon: Users, requiresCampaign: true },
   { to: '/eleitores', label: 'Eleitores', icon: UserCheck, requiresCampaign: true },
   { to: '/mapa', label: 'Mapa político', icon: Map, requiresCampaign: true },
