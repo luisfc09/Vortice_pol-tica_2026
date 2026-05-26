@@ -164,7 +164,7 @@ export function MunicipalityCombobox({
       )}
 
       {open ? (
-        <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-md border border-vortex-border bg-vortex-surface/95 shadow-lg backdrop-blur">
+        <div className="absolute left-0 right-0 z-[1300] mt-1 overflow-hidden rounded-md border border-vortex-border bg-vortex-surface/95 shadow-lg backdrop-blur">
           {selected ? (
             <button
               type="button"
