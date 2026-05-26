@@ -10,8 +10,9 @@ import {
 } from '@/data/municipalities-mg-coords';
 
 const LEGEND = [
-  { color: '#7F1D1D', label: '0–10% — território frio' },
-  { color: '#DC2626', label: '10–30% — atenção' },
+  { color: '#1E293B', label: 'Sem cadastros' },
+  { color: '#B91C1C', label: '0–10% — território frio' },
+  { color: '#EF4444', label: '10–30% — atenção' },
   { color: '#F59E0B', label: '30–50% — disputa' },
   { color: '#84CC16', label: '50–70% — força crescente' },
   { color: '#A3E635', label: '70–100% — base consolidada' },

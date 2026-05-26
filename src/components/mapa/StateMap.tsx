@@ -30,22 +30,38 @@ const MG_CENTER: [number, number] = [-18.5, -44.5];
 const MG_ZOOM = 6;
 const GEOJSON_URL = '/data/mg-municipios.geojson';
 
-function colorFor(strength: number | undefined): string {
-  if (strength === undefined) return '#1F2937'; // sem dado: cinza-azulado
-  if (strength <= 0.1) return '#7F1D1D';
-  if (strength <= 0.3) return '#DC2626';
-  if (strength <= 0.5) return '#F59E0B';
-  if (strength <= 0.7) return '#84CC16';
-  return '#A3E635';
+// Um município "sem cadastros" (0 lideranças + 0 eleitores) é diferente de
+// um "cadastrado mas fraco". O primeiro é falta de inteligência; o segundo
+// é território conhecidamente frio. Visualmente eles precisam contrastar.
+function isUnknown(stat: MuniStat | undefined): boolean {
+  if (!stat) return true;
+  return stat.supporters === 0 && stat.voters === 0;
 }
 
-function styleFor(strength: number | undefined, isSelected: boolean): PathOptions {
-  const fill = colorFor(strength);
+function colorFor(strength: number): string {
+  // Escala diverging: vermelho escuro (frio) → âmbar (disputa) → lime (forte)
+  if (strength <= 0.1) return '#B91C1C'; // red-700  — frio
+  if (strength <= 0.3) return '#EF4444'; // red-500  — atenção
+  if (strength <= 0.5) return '#F59E0B'; // amber-500 — disputa
+  if (strength <= 0.7) return '#84CC16'; // lime-500 — crescente
+  return '#A3E635'; //                       lime-400 / brand — consolidada
+}
+
+function styleFor(stat: MuniStat | undefined, isSelected: boolean): PathOptions {
+  if (isUnknown(stat)) {
+    // Cinza neutro semi-transparente — município sem dado, deixa o mapa "respirar"
+    return {
+      color: isSelected ? '#A3E635' : '#475569', // slate-600
+      weight: isSelected ? 2 : 0.4,
+      fillColor: '#1E293B', // slate-800
+      fillOpacity: 0.35,
+    };
+  }
   return {
-    color: isSelected ? '#A3E635' : '#0A0F1E',
-    weight: isSelected ? 2 : 0.5,
-    fillColor: fill,
-    fillOpacity: strength === undefined ? 0.18 : 0.62,
+    color: isSelected ? '#A3E635' : '#0F172A', // slate-900 — borda crisp
+    weight: isSelected ? 2 : 0.6,
+    fillColor: colorFor(stat!.strength),
+    fillOpacity: 0.78,
   };
 }
 
@@ -93,7 +109,7 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
       const stat = statByCode.get(code);
       const isSelected = code === selectedCode;
       (sub as unknown as { setStyle: (s: PathOptions) => void }).setStyle(
-        styleFor(stat?.strength, isSelected),
+        styleFor(stat, isSelected),
       );
     });
   }, [statByCode, selectedCode]);
@@ -127,7 +143,7 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
               (feature as Feature<Geometry, MuniProperties>).properties.id,
             );
             const stat = statByCode.get(code);
-            return styleFor(stat?.strength, code === selectedCode);
+            return styleFor(stat, code === selectedCode);
           }}
           onEachFeature={(feature, layer: Layer) => {
             const f = feature as Feature<Geometry, MuniProperties>;
@@ -148,7 +164,7 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
                 const target = layer as unknown as {
                   setStyle: (s: PathOptions) => void;
                 };
-                target.setStyle(styleFor(stat?.strength, code === selectedCode));
+                target.setStyle(styleFor(stat, code === selectedCode));
               },
             });
             const stat = statByCode.get(code);
