@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, Pencil, MapPin } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Pencil, MapPin, Sparkles } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import { collections, useCollection } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import { MUNI_COORDS } from '@/data/municipalities-mg-coords';
-import { VOTE_INTENTION_LABEL } from '@/types';
+import { VOTE_INTENTION_LABEL, isInterviewDeepened } from '@/types';
 
 export default function CampoHistoricoPage() {
   const session = useAuthStore((s) => s.session);
@@ -78,6 +78,20 @@ export default function CampoHistoricoPage() {
                     <p className="truncate font-semibold text-foreground">
                       {i.voter_name}
                     </p>
+                    {isInterviewDeepened(i) ? (
+                      <Badge variant="success" className="gap-1">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        Completa
+                      </Badge>
+                    ) : (
+                      <Link
+                        to={`/campo/entrevista/${i.id}/questionario`}
+                        className="inline-flex items-center rounded-full border border-vortex-border bg-vortex-surface/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                        title="Clique para responder o questionário aprofundado"
+                      >
+                        Básica
+                      </Link>
+                    )}
                     <Badge variant="outline">
                       {VOTE_INTENTION_LABEL[i.vote_intention]}
                     </Badge>

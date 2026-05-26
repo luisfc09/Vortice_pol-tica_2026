@@ -129,7 +129,8 @@ export type IntegrationType =
 export type AiFeature =
   | 'mention_sentiment'
   | 'mention_insights'
-  | 'reply_suggestions';
+  | 'reply_suggestions'
+  | 'interview_analysis';
 
 export interface AiFeatureConfig {
   campaign_id: string;
@@ -144,12 +145,14 @@ export const AI_FEATURE_LABEL: Record<AiFeature, string> = {
   mention_sentiment: 'Classificação de sentimento',
   mention_insights: 'Insights de menções',
   reply_suggestions: 'Sugestões de resposta',
+  interview_analysis: 'Análise de entrevista aprofundada',
 };
 
 export const AI_FEATURE_HELP: Record<AiFeature, string> = {
   mention_sentiment: 'Avalia cada menção como positiva, neutra ou negativa.',
   mention_insights: 'Resumo agregado das últimas 50 menções (tópicos, sentimento líquido).',
   reply_suggestions: 'Gera respostas sugeridas com tom adequado para o contexto.',
+  interview_analysis: 'Analisa entrevista aprofundada e sugere perfil + próximo passo.',
 };
 
 export interface Integration {
@@ -294,6 +297,72 @@ export interface Voter {
   created_at: string;
 }
 
+// Status do ciclo de vida do questionário:
+//   'basic'    → só formulário rápido salvo
+//   'draft'    → usuário escolheu "Salvar e aprofundar" mas não finalizou
+//   'complete' → questionário aprofundado respondido (ou registro pré-migration)
+export type InterviewStatus = 'basic' | 'draft' | 'complete';
+
+export type AgeRange = '16-24' | '25-34' | '35-44' | '45-59' | '60+';
+
+export type Gender = 'masculino' | 'feminino' | 'outro' | 'prefere_nao_dizer';
+
+export type Education = 'fundamental' | 'medio' | 'superior' | 'pos';
+
+export type IncomeRange = 'ate_1sm' | '1_3sm' | '3_6sm' | '6_10sm' | '10sm_mais';
+
+export type WorkStatus =
+  | 'empregado'
+  | 'autonomo'
+  | 'desempregado'
+  | 'aposentado'
+  | 'estudante';
+
+export type Religion =
+  | 'catolico'
+  | 'evangelico'
+  | 'espirita'
+  | 'sem_religiao'
+  | 'outra';
+
+export type VoteDecision =
+  | 'decidido'
+  | 'inclinado'
+  | 'indeciso'
+  | 'nao_vai_votar';
+
+export type CandidateAwareness = 'conhece_bem' | 'ja_ouviu' | 'nao_conhece';
+
+export type CandidateOpinion =
+  | 'muito_positiva'
+  | 'positiva'
+  | 'neutra'
+  | 'negativa'
+  | 'muito_negativa';
+
+export type GovRating = 'otimo' | 'bom' | 'regular' | 'ruim' | 'pessimo';
+
+export type CountryDirection = 'certo' | 'errado' | 'nao_sabe';
+
+export type CityProblem =
+  | 'saude'
+  | 'seguranca'
+  | 'educacao'
+  | 'emprego'
+  | 'transporte'
+  | 'infraestrutura'
+  | 'corrupcao'
+  | 'outro';
+
+// Resposta da IA ao analisar a entrevista completa.
+export interface InterviewAIAnalysis {
+  perfil_resumido: string;
+  argumento_chave: string;
+  potencial_conversao: 'alto' | 'medio' | 'baixo';
+  tags: string[];
+  proximo_passo: string;
+}
+
 export interface FieldInterview {
   id: string;
   campaign_id: string;
@@ -310,6 +379,39 @@ export interface FieldInterview {
   lng: number | null;
   created_by: string;
   created_at: string;
+  // Questionário aprofundado (migration 018). Todos nullable —
+  // registros 'basic' têm tudo isso null.
+  status: InterviewStatus;
+  age_range: AgeRange | null;
+  gender: Gender | null;
+  education: Education | null;
+  income_range: IncomeRange | null;
+  work_status: WorkStatus | null;
+  religion: Religion | null;
+  vote_decision: VoteDecision | null;
+  candidate_awareness: CandidateAwareness | null;
+  candidate_opinion: CandidateOpinion | null;
+  conversion_argument: string | null;
+  main_city_problem: CityProblem | null;
+  important_themes: string[] | null;
+  health_rating: number | null; // 1-5
+  security_rating: number | null; // 1-5
+  employment_rating: number | null; // 1-5
+  neighborhood_complaint: string | null;
+  state_gov_rating: GovRating | null;
+  federal_gov_rating: GovRating | null;
+  city_gov_rating: GovRating | null;
+  country_direction: CountryDirection | null;
+  is_potential_leader: boolean | null;
+  accepted_contact: boolean | null;
+  ai_analysis: InterviewAIAnalysis | null;
+  interview_duration_seconds: number | null;
+}
+
+// Helper: entrevista é considerada "completa" quando tem questionário
+// aprofundado (qualquer campo do bloco Perfil preenchido).
+export function isInterviewDeepened(i: FieldInterview): boolean {
+  return i.status === 'complete' && !!i.age_range;
 }
 
 export interface CampaignEvent {
@@ -521,6 +623,101 @@ export const FAQ_CATEGORY_LABEL: Record<FaqCategory, string> = {
   politica: 'Política',
   partido: 'Partido',
   local_mg: 'Local / MG',
+};
+
+// ----------------------------------------------------------------------------
+// Labels do questionário aprofundado (migration 018)
+// ----------------------------------------------------------------------------
+export const AGE_RANGE_LABEL: Record<AgeRange, string> = {
+  '16-24': '16 a 24 anos',
+  '25-34': '25 a 34 anos',
+  '35-44': '35 a 44 anos',
+  '45-59': '45 a 59 anos',
+  '60+': '60 anos ou mais',
+};
+
+export const GENDER_LABEL: Record<Gender, string> = {
+  masculino: 'Masculino',
+  feminino: 'Feminino',
+  outro: 'Outro',
+  prefere_nao_dizer: 'Prefere não dizer',
+};
+
+export const EDUCATION_LABEL: Record<Education, string> = {
+  fundamental: 'Fundamental',
+  medio: 'Médio',
+  superior: 'Superior',
+  pos: 'Pós-graduação',
+};
+
+export const INCOME_LABEL: Record<IncomeRange, string> = {
+  ate_1sm: 'Até 1 salário mínimo',
+  '1_3sm': '1 a 3 salários',
+  '3_6sm': '3 a 6 salários',
+  '6_10sm': '6 a 10 salários',
+  '10sm_mais': 'Acima de 10 salários',
+};
+
+export const WORK_STATUS_LABEL: Record<WorkStatus, string> = {
+  empregado: 'Empregado',
+  autonomo: 'Autônomo',
+  desempregado: 'Desempregado',
+  aposentado: 'Aposentado',
+  estudante: 'Estudante',
+};
+
+export const RELIGION_LABEL: Record<Religion, string> = {
+  catolico: 'Católico',
+  evangelico: 'Evangélico',
+  espirita: 'Espírita',
+  sem_religiao: 'Sem religião',
+  outra: 'Outra',
+};
+
+export const VOTE_DECISION_LABEL: Record<VoteDecision, string> = {
+  decidido: 'Já decidi',
+  inclinado: 'Inclinado, posso mudar',
+  indeciso: 'Indeciso',
+  nao_vai_votar: 'Não vou votar',
+};
+
+export const CANDIDATE_AWARENESS_LABEL: Record<CandidateAwareness, string> = {
+  conhece_bem: 'Conhece bem',
+  ja_ouviu: 'Já ouviu falar',
+  nao_conhece: 'Não conhece',
+};
+
+export const CANDIDATE_OPINION_LABEL: Record<CandidateOpinion, string> = {
+  muito_positiva: 'Muito positiva',
+  positiva: 'Positiva',
+  neutra: 'Neutra/indiferente',
+  negativa: 'Negativa',
+  muito_negativa: 'Muito negativa',
+};
+
+export const GOV_RATING_LABEL: Record<GovRating, string> = {
+  otimo: 'Ótimo',
+  bom: 'Bom',
+  regular: 'Regular',
+  ruim: 'Ruim',
+  pessimo: 'Péssimo',
+};
+
+export const COUNTRY_DIRECTION_LABEL: Record<CountryDirection, string> = {
+  certo: 'Caminho certo',
+  errado: 'Caminho errado',
+  nao_sabe: 'Não sabe / não opinou',
+};
+
+export const CITY_PROBLEM_LABEL: Record<CityProblem, string> = {
+  saude: 'Saúde',
+  seguranca: 'Segurança pública',
+  educacao: 'Educação',
+  emprego: 'Emprego e renda',
+  transporte: 'Transporte',
+  infraestrutura: 'Infraestrutura urbana',
+  corrupcao: 'Combate à corrupção',
+  outro: 'Outro',
 };
 
 export const PRIORITY_THEMES = [

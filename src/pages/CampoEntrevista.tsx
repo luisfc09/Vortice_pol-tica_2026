@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InterviewForm } from '@/components/field/InterviewForm';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
+import { BoasPraticasCard } from '@/components/field/BoasPraticasCard';
 import { EmptyState } from '@/components/data/EmptyState';
 import { toast } from 'sonner';
 import { getQueue } from '@/lib/offline-queue';
@@ -107,13 +108,26 @@ export default function CampoEntrevistaPage() {
         </div>
       ) : null}
 
-      {!editing ? <OfflineBanner onSyncRequest={handleSync} syncing={syncing} /> : null}
+      {!editing ? (
+        <>
+          <BoasPraticasCard />
+          <OfflineBanner onSyncRequest={handleSync} syncing={syncing} />
+        </>
+      ) : null}
 
       <InterviewForm
         editing={editing}
         onSaved={() => {
           if (editing) navigate('/campo/historico');
         }}
+        onDeepen={
+          editing
+            ? undefined
+            : (id) => {
+                toast.success('Entrevista salva. Vamos aprofundar.');
+                navigate(`/campo/entrevista/${id}/questionario`);
+              }
+        }
       />
     </div>
   );

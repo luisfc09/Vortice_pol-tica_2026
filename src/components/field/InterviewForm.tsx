@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MapPin, Save, Loader2 } from 'lucide-react';
+import { ArrowRight, MapPin, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useOnline } from '@/hooks/useOnline';
 import { useAuthStore } from '@/stores/auth';
-import { collections } from '@/lib/data';
+import { collections, createInterviewReturningId } from '@/lib/data';
 import { enqueueInterview } from '@/lib/offline-queue';
 import { formatPhone } from '@/lib/utils';
 import {
@@ -43,9 +43,17 @@ const EMPTY: FieldInterviewInput = {
 interface InterviewFormProps {
   editing?: FieldInterview | null;
   onSaved?: () => void;
+  // Renderiza o segundo botão "Salvar e aprofundar". Chamado depois
+  // que a entrevista é inserida no banco com status='draft' e devolveu
+  // o id real. Só aparece quando não estiver em modo edição.
+  onDeepen?: (interviewId: string) => void;
 }
 
-export function InterviewForm({ editing = null, onSaved }: InterviewFormProps) {
+export function InterviewForm({
+  editing = null,
+  onSaved,
+  onDeepen,
+}: InterviewFormProps) {
   const session = useAuthStore((s) => s.session);
   const online = useOnline();
   // Em modo "editar" não queremos atropelar lat/lng — desliga GPS.
@@ -108,17 +116,63 @@ export function InterviewForm({ editing = null, onSaved }: InterviewFormProps) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!session || !session.campaign) return;
+  // Validação reaproveitada nos dois botões (rápido e aprofundar).
+  function validate(): boolean {
+    if (!session || !session.campaign) return false;
     if (!form.voter_name.trim()) {
       toast.error('Informe o nome do entrevistado.');
-      return;
+      return false;
     }
     if (!form.municipality_code) {
       toast.error('Selecione o município.');
+      return false;
+    }
+    return true;
+  }
+
+  // "Salvar e aprofundar": insere a entrevista no banco com status='draft',
+  // recupera o id real e passa pra quem orquestra a navegação (CampoEntrevista).
+  // Bypassa a fila offline porque o questionário aprofundado precisa de
+  // conexão (vai atualizar a linha existente e chamar IA).
+  async function handleDeepen() {
+    if (!validate()) return;
+    if (!session?.campaign) return;
+    if (!online) {
+      toast.error('Aprofundar exige conexão. Use "Salvar rápido" agora e complete depois.');
       return;
     }
+    setSubmitting(true);
+    try {
+      const id = await createInterviewReturningId({
+        campaign_id: session.campaign.id,
+        voter_name: form.voter_name,
+        voter_phone: form.voter_phone || null,
+        municipality_code: form.municipality_code || null,
+        neighborhood: form.neighborhood || null,
+        vote_intention: form.vote_intention,
+        receptivity_score: form.receptivity_score,
+        priority_themes: form.priority_themes,
+        vote_decided: form.vote_decided,
+        notes: form.notes || null,
+        lat: form.lat,
+        lng: form.lng,
+        created_by: session.id,
+        status: 'draft',
+      });
+      onDeepen?.(id);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Falha ao salvar entrevista.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validate()) return;
+    if (!session?.campaign) return;
 
     setSubmitting(true);
     try {
@@ -312,14 +366,44 @@ export function InterviewForm({ editing = null, onSaved }: InterviewFormProps) {
         />
       </div>
 
-      <Button type="submit" size="lg" className="w-full" disabled={submitting}>
-        <Save className="h-4 w-4" />
-        {submitting
-          ? 'Salvando…'
-          : editing
-            ? 'Atualizar entrevista'
-            : 'Salvar entrevista'}
-      </Button>
+      {editing ? (
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+          <Save className="h-4 w-4" />
+          {submitting ? 'Salvando…' : 'Atualizar entrevista'}
+        </Button>
+      ) : onDeepen ? (
+        // Dois botões lado a lado. "Salvar rápido" mantém o comportamento
+        // original (fila offline). "Salvar e aprofundar" insere com
+        // status='draft' e navega pro questionário.
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Button
+            type="submit"
+            size="lg"
+            variant="outline"
+            disabled={submitting}
+          >
+            <Save className="h-4 w-4" />
+            {submitting ? 'Salvando…' : 'Salvar rápido'}
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => {
+              void handleDeepen();
+            }}
+            disabled={submitting || !online}
+            title={!online ? 'Aprofundar exige conexão' : undefined}
+          >
+            {submitting ? 'Salvando…' : 'Salvar e aprofundar'}
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+          <Save className="h-4 w-4" />
+          {submitting ? 'Salvando…' : 'Salvar entrevista'}
+        </Button>
+      )}
     </form>
   );
 }

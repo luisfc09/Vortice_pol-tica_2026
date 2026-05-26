@@ -107,8 +107,10 @@ export async function flushInterviewQueue(): Promise<FlushResult> {
 
     try {
       if (USE_MOCKS) {
-        // Mock é síncrono — não há como falhar
-        collections.interviews.create({ data: payload });
+        // Mock é síncrono — não há como falhar.
+        // Cast pra evitar exigir todos os campos novos do questionário
+        // aprofundado (são todos NULL por default no mock).
+        collections.interviews.create({ data: payload } as never);
       } else {
         const { error } = await supabase.from('field_interviews').insert(payload);
         if (error) throw new Error(error.message);
@@ -131,6 +133,31 @@ export function discardInterviewQueue(): number {
   const count = getQueue().length;
   clearQueue();
   return count;
+}
+
+// Insere uma entrevista no banco e devolve o ID real (server-generated).
+// Usado pelo fluxo "Salvar e aprofundar" — precisa do id pra navegar
+// pra /campo/entrevista/:id/questionario imediatamente.
+//
+// Bypassa a fila offline porque o questionário aprofundado precisa de
+// conexão (chama IA, atualiza linha existente). Se estiver offline, o
+// usuário deve usar "Salvar rápido".
+export async function createInterviewReturningId(
+  data: Record<string, unknown>,
+): Promise<string> {
+  if (USE_MOCKS) {
+    // MockCollection.create é síncrono e retorna o objeto com id.
+    const row = collections.interviews.create({ data } as never);
+    return row.id;
+  }
+  const { data: inserted, error } = await supabase
+    .from('field_interviews')
+    .insert(data)
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  if (!inserted?.id) throw new Error('Insert sem id retornado.');
+  return inserted.id as string;
 }
 
 // Called by useAuth on signout so the next user lands on clean local state.
