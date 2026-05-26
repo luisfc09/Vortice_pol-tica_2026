@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, UserPlus } from 'lucide-react';
+import { Plus, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -32,6 +33,12 @@ export default function UsuariosPage() {
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CampaignUser | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileLite>>({});
+  // IDs dos super admins atuais (renderiza badge + estado do toggle).
+  // Só super admin recebe a lista; demais ficam com Set vazio.
+  const [superAdminIds, setSuperAdminIds] = useState<Set<string>>(new Set());
+  const [updatingSuperId, setUpdatingSuperId] = useState<string | null>(null);
+
+  const callerIsSuperAdmin = !!session?.is_super_admin;
 
   const userIds = useMemo(() => members.map((m) => m.user_id), [members]);
 
@@ -82,6 +89,79 @@ export default function UsuariosPage() {
       active = false;
     };
   }, [userIds]);
+
+  // Carrega quem é super admin (apenas se o caller for super admin —
+  // a RPC é security definer mas só faz sentido quando o usuário pode
+  // mexer no toggle).
+  useEffect(() => {
+    let active = true;
+    async function loadSuperAdmins() {
+      if (!callerIsSuperAdmin) {
+        setSuperAdminIds(new Set());
+        return;
+      }
+      if (isMockMode()) {
+        setSuperAdminIds(new Set([session?.id ?? '']));
+        return;
+      }
+      const { data, error } = await supabase.rpc('list_super_admin_user_ids');
+      if (!active) return;
+      if (error) {
+        console.warn('list_super_admin_user_ids:', error.message);
+        return;
+      }
+      // RPC devolve setof uuid → array de { user_id } no Supabase JS
+      const ids = ((data ?? []) as Array<{ list_super_admin_user_ids?: string } | string>)
+        .map((row) =>
+          typeof row === 'string' ? row : (row.list_super_admin_user_ids ?? ''),
+        )
+        .filter(Boolean);
+      setSuperAdminIds(new Set(ids));
+    }
+    void loadSuperAdmins();
+    return () => {
+      active = false;
+    };
+  }, [callerIsSuperAdmin, session?.id]);
+
+  async function toggleSuperAdmin(userId: string) {
+    if (!callerIsSuperAdmin) return;
+    const currentlyIs = superAdminIds.has(userId);
+    const next = !currentlyIs;
+
+    // Otimista — atualiza UI, faz rollback se falhar
+    setUpdatingSuperId(userId);
+    const previous = new Set(superAdminIds);
+    setSuperAdminIds((prev) => {
+      const copy = new Set(prev);
+      if (next) copy.add(userId);
+      else copy.delete(userId);
+      return copy;
+    });
+
+    if (isMockMode()) {
+      // Mock: aceita qualquer alteração
+      toast.success(
+        next ? 'Promovido a Super Admin.' : 'Privilégio Super Admin removido.',
+      );
+      setUpdatingSuperId(null);
+      return;
+    }
+
+    const { error } = await supabase.rpc('set_super_admin', {
+      p_user_id: userId,
+      p_value: next,
+    });
+    setUpdatingSuperId(null);
+    if (error) {
+      setSuperAdminIds(previous);
+      toast.error(`Falha: ${error.message}`);
+      return;
+    }
+    toast.success(
+      next ? 'Promovido a Super Admin.' : 'Privilégio Super Admin removido.',
+    );
+  }
 
   function profileFor(userId: string): ProfileLite {
     if (userId === session?.id) {
@@ -174,6 +254,12 @@ export default function UsuariosPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-semibold text-foreground">{p.full_name}</p>
                       {isSelf ? <Badge variant="outline">Você</Badge> : null}
+                      {superAdminIds.has(m.user_id) ? (
+                        <Badge variant="warning" className="gap-1">
+                          <ShieldCheck className="h-3 w-3" />
+                          Super Admin
+                        </Badge>
+                      ) : null}
                       {!m.is_active ? <Badge variant="destructive">Desativado</Badge> : null}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
@@ -199,6 +285,37 @@ export default function UsuariosPage() {
                       ))}
                     </SelectContent>
                   </Select>
+
+                  {callerIsSuperAdmin ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void toggleSuperAdmin(m.user_id)}
+                      disabled={updatingSuperId === m.user_id}
+                      title={
+                        superAdminIds.has(m.user_id)
+                          ? 'Remover privilégio de Super Admin Vórtice'
+                          : 'Promover a Super Admin Vórtice'
+                      }
+                      className={
+                        superAdminIds.has(m.user_id)
+                          ? 'border-amber-500/40 text-amber-200 hover:bg-amber-500/10'
+                          : ''
+                      }
+                    >
+                      {superAdminIds.has(m.user_id) ? (
+                        <>
+                          <ShieldOff className="h-3.5 w-3.5" />
+                          Remover Super
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Promover Super
+                        </>
+                      )}
+                    </Button>
+                  ) : null}
 
                   <Button
                     variant={m.is_active ? 'outline' : 'default'}
