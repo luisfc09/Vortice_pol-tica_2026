@@ -57,7 +57,7 @@ export default function MapaPage() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        {stats.length} municípios monitorados · clique em um ponto para ver o detalhe.
+        {stats.length} municípios mapeados (IBGE) · clique no município para ver o detalhe.
       </p>
 
       <div className="relative">

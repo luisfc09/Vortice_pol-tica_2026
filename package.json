@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0 --port ${PORT:-4173}",
     "start": "vite preview --host 0.0.0.0 --port ${PORT:-4173}",
     "lint": "eslint .",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "build:municipalities": "node scripts/build-municipalities.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
