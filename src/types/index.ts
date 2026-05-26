@@ -21,7 +21,100 @@ export type VoteIntention =
   | 'tendencia_oposicao'
   | 'oposicao';
 
-export type SupporterRoleType = 'lider' | 'cabo' | 'militante' | 'apoiador';
+// Conjunto completo de papéis disponíveis para Lideranças (migration 020).
+// Valores legados ('lider', 'cabo', 'militante') continuam aceitos para
+// dados pré-existentes mas não aparecem nos selects (mapeados para
+// 'lideranca' / 'cabo_eleitoral' / 'apoiador' na UI).
+export type SupporterRoleType =
+  // Cargos políticos
+  | 'prefeito'
+  | 'vice_prefeito'
+  | 'vereador'
+  // Cargos da campanha
+  | 'administrador'
+  | 'candidato'
+  | 'coord_geral'
+  | 'coord_politico'
+  | 'coord_juridico'
+  | 'coord_financeiro'
+  | 'coord_marketing'
+  | 'coord_mobilizacao'
+  | 'coord_regional'
+  | 'coord_local'
+  // Gabinete
+  | 'chefe_gabinete'
+  | 'assessor_gabinete'
+  | 'secretario'
+  | 'procurador'
+  // Base
+  | 'pesquisador'
+  | 'cabo_eleitoral'
+  | 'lideranca'
+  | 'apoiador'
+  | 'militante'
+  | 'eleitor'
+  | 'outro'
+  // Legados — não aparecem em UI nova, mas existem no enum do Postgres
+  | 'lider'
+  | 'cabo';
+
+export const SUPPORTER_ROLE_LABEL: Record<SupporterRoleType, string> = {
+  prefeito: 'Prefeito',
+  vice_prefeito: 'Vice-Prefeito',
+  vereador: 'Vereador',
+  administrador: 'Administrador',
+  candidato: 'Candidato',
+  coord_geral: 'Coordenador Geral',
+  coord_politico: 'Coordenador Político',
+  coord_juridico: 'Coordenador Jurídico',
+  coord_financeiro: 'Coordenador Financeiro',
+  coord_marketing: 'Coordenador de Marketing',
+  coord_mobilizacao: 'Coordenador de Mobilização',
+  coord_regional: 'Coordenador Regional',
+  coord_local: 'Coordenador Local',
+  chefe_gabinete: 'Chefe de Gabinete',
+  assessor_gabinete: 'Assessor de Gabinete',
+  secretario: 'Secretário',
+  procurador: 'Procurador',
+  pesquisador: 'Pesquisador',
+  cabo_eleitoral: 'Cabo Eleitoral',
+  lideranca: 'Liderança',
+  apoiador: 'Apoiador',
+  militante: 'Militante',
+  eleitor: 'Eleitor',
+  outro: 'Outro (especificar)',
+  // Legados
+  lider: 'Liderança',
+  cabo: 'Cabo Eleitoral',
+};
+
+// Opções oferecidas no select (ordem editorial). Esconde os legados.
+export const SUPPORTER_ROLE_OPTIONS: readonly SupporterRoleType[] = [
+  'administrador',
+  'candidato',
+  'coord_geral',
+  'coord_politico',
+  'coord_juridico',
+  'coord_financeiro',
+  'coord_marketing',
+  'coord_mobilizacao',
+  'coord_regional',
+  'coord_local',
+  'cabo_eleitoral',
+  'pesquisador',
+  'lideranca',
+  'apoiador',
+  'militante',
+  'eleitor',
+  'prefeito',
+  'vice_prefeito',
+  'vereador',
+  'chefe_gabinete',
+  'assessor_gabinete',
+  'secretario',
+  'procurador',
+  'outro',
+] as const;
 
 export type SupporterStatus = 'ativo' | 'inativo' | 'pendente';
 
@@ -286,6 +379,8 @@ export interface Supporter {
   numero: string | null;
   complemento: string | null;
   role: SupporterRoleType;
+  // Quando role === 'outro', guarda o cargo livre digitado pelo usuário.
+  role_custom: string | null;
   status: SupporterStatus;
   created_by: string;
   created_at: string;

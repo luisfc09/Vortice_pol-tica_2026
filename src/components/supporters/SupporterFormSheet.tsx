@@ -24,14 +24,13 @@ import { collections } from '@/lib/data';
 import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
-import type { Supporter, SupporterRoleType, SupporterStatus } from '@/types';
-
-const ROLE_OPTIONS: { value: SupporterRoleType; label: string }[] = [
-  { value: 'lider', label: 'Líder' },
-  { value: 'cabo', label: 'Cabo eleitoral' },
-  { value: 'militante', label: 'Militante' },
-  { value: 'apoiador', label: 'Apoiador' },
-];
+import {
+  SUPPORTER_ROLE_LABEL,
+  SUPPORTER_ROLE_OPTIONS,
+  type Supporter,
+  type SupporterRoleType,
+  type SupporterStatus,
+} from '@/types';
 
 const STATUS_OPTIONS: { value: SupporterStatus; label: string }[] = [
   { value: 'ativo', label: 'Ativo' },
@@ -53,7 +52,8 @@ const EMPTY: FormState = {
   logradouro: null,
   numero: null,
   complemento: null,
-  role: 'militante',
+  role: 'lideranca',
+  role_custom: null,
   status: 'ativo',
 };
 
@@ -82,6 +82,7 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
         numero: editing.numero,
         complemento: editing.complemento,
         role: editing.role,
+        role_custom: editing.role_custom,
         status: editing.status,
       });
     } else if (open) {
@@ -119,6 +120,11 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
 
     // city = nome do município (deriva do código IBGE) — preserva o campo legado.
     const muniName = MG_MUNICIPALITIES.find((m) => m.code === form.municipality_code)?.name;
+    // Quando o usuário escolhe 'outro', exige o texto livre.
+    if (form.role === 'outro' && !form.role_custom?.trim()) {
+      toast.error('Especifique o papel personalizado.');
+      return;
+    }
     const payload = {
       ...form,
       phone: form.phone || null,
@@ -129,6 +135,7 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
       logradouro: form.logradouro?.trim() || null,
       numero: form.numero?.trim() || null,
       complemento: form.complemento?.trim() || null,
+      role_custom: form.role === 'outro' ? form.role_custom?.trim() || null : null,
     };
 
     if (editing) {
@@ -169,24 +176,40 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Papel</Label>
               <Select
                 value={form.role}
-                onValueChange={(v) => update('role', v as SupporterRoleType)}
+                onValueChange={(v) => {
+                  const next = v as SupporterRoleType;
+                  setForm((f) => ({
+                    ...f,
+                    role: next,
+                    // Limpa role_custom se sair de 'outro'
+                    role_custom: next === 'outro' ? f.role_custom : null,
+                  }));
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
+                  {SUPPORTER_ROLE_OPTIONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {SUPPORTER_ROLE_LABEL[r]}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {form.role === 'outro' ? (
+                <Input
+                  placeholder="Especifique o cargo / papel"
+                  value={form.role_custom ?? ''}
+                  onChange={(e) => update('role_custom', e.target.value)}
+                  required
+                />
+              ) : null}
             </div>
 
             <div className="space-y-2">

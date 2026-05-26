@@ -3,30 +3,54 @@ import { Plus, Pencil, Trash2, Phone, MapPin, Mail, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SearchBar } from '@/components/data/SearchBar';
-import { FilterPill } from '@/components/data/FilterPill';
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SupporterFormSheet } from '@/components/supporters/SupporterFormSheet';
 import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { collections, useCollection } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
-import type { Supporter, SupporterRoleType } from '@/types';
+import {
+  SUPPORTER_ROLE_LABEL,
+  SUPPORTER_ROLE_OPTIONS,
+  type Supporter,
+  type SupporterRoleType,
+} from '@/types';
 
 type RoleFilter = 'all' | SupporterRoleType;
 
-const ROLE_LABEL: Record<SupporterRoleType, string> = {
-  lider: 'Líder',
-  cabo: 'Cabo',
-  militante: 'Militante',
-  apoiador: 'Apoiador',
-};
+// Variante do badge por categoria de papel (visual).
+function badgeVariantFor(r: SupporterRoleType): 'default' | 'secondary' | 'outline' | 'warning' {
+  if (r === 'candidato' || r === 'administrador') return 'default';
+  if (r.startsWith('coord_')) return 'secondary';
+  if (
+    r === 'prefeito' ||
+    r === 'vice_prefeito' ||
+    r === 'vereador' ||
+    r === 'chefe_gabinete' ||
+    r === 'assessor_gabinete' ||
+    r === 'secretario' ||
+    r === 'procurador'
+  ) {
+    return 'warning';
+  }
+  return 'outline';
+}
 
-const ROLE_BADGE: Record<SupporterRoleType, 'default' | 'secondary' | 'outline' | 'warning'> = {
-  lider: 'default',
-  cabo: 'secondary',
-  militante: 'outline',
-  apoiador: 'outline',
-};
+// Label que mostra o cargo do supporter — se for "outro", devolve o
+// texto custom em vez do label genérico.
+function displayRole(s: Supporter): string {
+  if (s.role === 'outro' && s.role_custom && s.role_custom.trim()) {
+    return s.role_custom;
+  }
+  return SUPPORTER_ROLE_LABEL[s.role] ?? s.role;
+}
 
 export default function LiderancasPage() {
   const session = useAuthStore((s) => s.session);
@@ -47,16 +71,10 @@ export default function LiderancasPage() {
     });
   }, [supporters, query, roleFilter]);
 
-  const counts = useMemo(() => {
-    const base: Record<RoleFilter, number> = {
-      all: supporters.length,
-      lider: 0,
-      cabo: 0,
-      militante: 0,
-      apoiador: 0,
-    };
-    for (const s of supporters) base[s.role] += 1;
-    return base;
+  const countByRole = useMemo(() => {
+    const m = new Map<SupporterRoleType, number>();
+    for (const s of supporters) m.set(s.role, (m.get(s.role) ?? 0) + 1);
+    return m;
   }, [supporters]);
 
   function openNew() {
@@ -91,17 +109,29 @@ export default function LiderancasPage() {
         placeholder="Buscar por nome, cidade, bairro ou telefone"
       />
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
-        <FilterPill label="Todas" count={counts.all} active={roleFilter === 'all'} onClick={() => setRoleFilter('all')} />
-        {(Object.keys(ROLE_LABEL) as SupporterRoleType[]).map((r) => (
-          <FilterPill
-            key={r}
-            label={ROLE_LABEL[r]}
-            count={counts[r]}
-            active={roleFilter === r}
-            onClick={() => setRoleFilter(r)}
-          />
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={roleFilter}
+          onValueChange={(v) => setRoleFilter(v as RoleFilter)}
+        >
+          <SelectTrigger className="h-9 w-full sm:w-72">
+            <SelectValue placeholder="Filtrar por papel" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">
+              Todos os papéis ({supporters.length})
+            </SelectItem>
+            {SUPPORTER_ROLE_OPTIONS.map((r) => {
+              const c = countByRole.get(r) ?? 0;
+              if (c === 0 && roleFilter !== r) return null;
+              return (
+                <SelectItem key={r} value={r}>
+                  {SUPPORTER_ROLE_LABEL[r]} ({c})
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -130,7 +160,7 @@ export default function LiderancasPage() {
                     {s.neighborhood ? ` · ${s.neighborhood}` : ''}
                   </p>
                 </div>
-                <Badge variant={ROLE_BADGE[s.role]}>{ROLE_LABEL[s.role]}</Badge>
+                <Badge variant={badgeVariantFor(s.role)}>{displayRole(s)}</Badge>
               </div>
 
               <div className="space-y-1.5 text-sm">
