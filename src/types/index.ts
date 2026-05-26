@@ -167,6 +167,24 @@ export type EventType = 'comicio' | 'reuniao' | 'visita' | 'midia' | 'outro';
 
 export type CampaignStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
 
+// Planos comercializáveis do SaaS. Por enquanto todos os planos veem
+// todos os módulos do cliente (menos a área Admin Vórtice). Diferenciação
+// real entre planos fica no backlog (limites de entrevistas, features
+// de IA, integrações premium etc.).
+export type CampaignPlan = 'basico' | 'intermediario' | 'top';
+
+export const CAMPAIGN_PLAN_LABEL: Record<CampaignPlan, string> = {
+  basico: 'Básico',
+  intermediario: 'Intermediário',
+  top: 'TOP',
+};
+
+export const CAMPAIGN_PLAN_DESCRIPTION: Record<CampaignPlan, string> = {
+  basico: 'Acesso aos módulos essenciais da operação.',
+  intermediario: 'Adiciona inteligência avançada e integrações premium.',
+  top: 'Tudo do Vórtice + suporte dedicado.',
+};
+
 export interface Campaign {
   id: string;
   name: string;
@@ -180,6 +198,7 @@ export interface Campaign {
   vote_target: number;
   slogan: string | null;
   status: CampaignStatus;
+  plan: CampaignPlan;
   trial_ends_at: string | null;
   notes: string | null;
   brand_logo_url: string | null;
@@ -197,6 +216,7 @@ export interface CampaignOverview {
   office: string;
   election_year: number;
   status: CampaignStatus;
+  plan: CampaignPlan;
   trial_ends_at: string | null;
   notes: string | null;
   created_at: string;

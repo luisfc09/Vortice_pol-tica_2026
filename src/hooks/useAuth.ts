@@ -4,6 +4,7 @@ import { supabase, USE_MOCKS } from '@/lib/supabase';
 import { resolveMockLogin } from '@/lib/mocks';
 import { resetCollections } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
+import { useViewAsStore } from '@/stores/viewAs';
 import type { Campaign, Profile, SessionUser, UserRole } from '@/types';
 
 interface LoginResult {
@@ -197,6 +198,8 @@ export function useAuth() {
     }
     logout();
     resetCollections();
+    // Limpa o view-as do super admin pra não sobrar entre logins.
+    useViewAsStore.getState().exit();
   }, [logout]);
 
   return { session, isLoading, login, loginWithGoogle, signOut };

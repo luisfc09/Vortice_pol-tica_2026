@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus,
   Shield,
@@ -12,6 +12,7 @@ import {
   XCircle,
   ChevronRight,
   Clock,
+  Eye,
   RefreshCcw,
   Zap,
 } from 'lucide-react';
@@ -23,7 +24,14 @@ import { SearchBar } from '@/components/data/SearchBar';
 import { FilterPill } from '@/components/data/FilterPill';
 import { CampaignProvisionSheet } from '@/components/admin/CampaignProvisionSheet';
 import { supabase } from '@/lib/supabase';
-import { CAMPAIGN_STATUS_LABEL, type CampaignOverview, type CampaignStatus } from '@/types';
+import { useViewAsStore } from '@/stores/viewAs';
+import {
+  CAMPAIGN_PLAN_LABEL,
+  CAMPAIGN_STATUS_LABEL,
+  type Campaign,
+  type CampaignOverview,
+  type CampaignStatus,
+} from '@/types';
 
 type StatusFilter = 'all' | CampaignStatus;
 
@@ -52,6 +60,9 @@ interface ExpiringRow {
 }
 
 export default function AdminCampaignsPage() {
+  const navigate = useNavigate();
+  const enterViewAs = useViewAsStore((s) => s.enter);
+
   const [rows, setRows] = useState<CampaignOverview[]>([]);
   const [expiring, setExpiring] = useState<ExpiringRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +70,24 @@ export default function AdminCampaignsPage() {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [runningExpire, setRunningExpire] = useState(false);
+
+  // Entra no modo "ver como cliente": busca a campanha completa pelo id,
+  // grava no view-as store e navega pra /dashboard — o useEffectiveSession
+  // vai sobrescrever a session.campaign pra essa.
+  async function enterAsClient(campaignId: string) {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*')
+      .eq('id', campaignId)
+      .single();
+    if (error || !data) {
+      toast.error(`Falha ao entrar como cliente: ${error?.message ?? 'sem dados'}`);
+      return;
+    }
+    enterViewAs(data as Campaign);
+    toast.success(`Visualizando como ${data.candidate_name}.`);
+    navigate('/dashboard');
+  }
 
   async function load() {
     setLoading(true);
@@ -291,6 +320,7 @@ export default function AdminCampaignsPage() {
                         <StatusIcon className="h-3 w-3" />
                         {CAMPAIGN_STATUS_LABEL[r.status]}
                       </Badge>
+                      <Badge variant="outline">{CAMPAIGN_PLAN_LABEL[r.plan]}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {r.party} {r.party_number} · {r.office} {r.state} {r.election_year} ·
@@ -314,6 +344,15 @@ export default function AdminCampaignsPage() {
                 </Link>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void enterAsClient(r.id)}
+                    title="Visualizar como admin desta campanha"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Ver como cliente
+                  </Button>
                   {r.status !== 'active' ? (
                     <Button size="sm" onClick={() => changeStatus(r.id, 'active')}>
                       Ativar

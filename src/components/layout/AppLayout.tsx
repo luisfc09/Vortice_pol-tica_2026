@@ -4,7 +4,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { TrialBanner } from './TrialBanner';
-import { useAuthStore } from '@/stores/auth';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -33,7 +33,8 @@ const TITLES: Record<string, string> = {
 };
 
 export function AppLayout() {
-  const session = useAuthStore((s) => s.session);
+  // useEffectiveSession já considera o view-as do super admin.
+  const session = useEffectiveSession();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 

@@ -13,6 +13,7 @@ export const MOCK_CAMPAIGN: Campaign = {
   vote_target: 350_000,
   slogan: 'Estratégia que move eleições.',
   status: 'active',
+  plan: 'top',
   trial_ends_at: null,
   notes: null,
   brand_logo_url: null,

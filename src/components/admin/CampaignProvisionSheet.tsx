@@ -22,6 +22,11 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import { formatPhone } from '@/lib/utils';
+import {
+  CAMPAIGN_PLAN_DESCRIPTION,
+  CAMPAIGN_PLAN_LABEL,
+  type CampaignPlan,
+} from '@/types';
 
 interface Props {
   open: boolean;
@@ -41,6 +46,7 @@ interface FormState {
   vote_target: string;
   slogan: string;
   status: 'trial' | 'active';
+  plan: CampaignPlan;
   // Admin do cliente
   admin_email: string;
   admin_full_name: string;
@@ -58,6 +64,7 @@ const EMPTY: FormState = {
   vote_target: '350000',
   slogan: 'Estratégia que move eleições.',
   status: 'trial',
+  plan: 'basico',
   admin_email: '',
   admin_full_name: '',
   admin_phone: '',
@@ -119,6 +126,7 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
           vote_target: Number(form.vote_target) || 0,
           slogan: form.slogan || undefined,
           status: form.status,
+          plan: form.plan,
           admin_email: form.admin_email.trim(),
           admin_full_name: form.admin_full_name.trim(),
           admin_phone: form.admin_phone || undefined,
@@ -372,6 +380,27 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
                     <SelectItem value="active">Ativa</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Plano contratado</Label>
+                <Select
+                  value={form.plan}
+                  onValueChange={(v) => update('plan', v as CampaignPlan)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(CAMPAIGN_PLAN_LABEL) as CampaignPlan[]).map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {CAMPAIGN_PLAN_LABEL[p]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  {CAMPAIGN_PLAN_DESCRIPTION[form.plan]}
+                </p>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="slogan">Slogan (opcional)</Label>

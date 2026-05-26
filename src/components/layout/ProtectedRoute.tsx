@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import type { UserRole } from '@/types';
 
 interface ProtectedRouteProps {
@@ -13,7 +14,7 @@ export function ProtectedRoute({
   requireSuperAdmin = false,
   requireCampaign = false,
 }: ProtectedRouteProps) {
-  const session = useAuthStore((s) => s.session);
+  const session = useEffectiveSession();
   const isLoading = useAuthStore((s) => s.isLoading);
   const location = useLocation();
 

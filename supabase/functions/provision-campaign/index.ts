@@ -18,6 +18,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
 type CampaignStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
+type CampaignPlan = 'basico' | 'intermediario' | 'top';
 
 interface ProvisionCampaignRequest {
   // Campos da campanha
@@ -31,6 +32,7 @@ interface ProvisionCampaignRequest {
   vote_target?: number;
   slogan?: string;
   status?: CampaignStatus;
+  plan?: CampaignPlan;
   trial_ends_at?: string | null;
 
   // Admin inicial do cliente
@@ -187,6 +189,7 @@ Deno.serve(async (req: Request) => {
       vote_target: payload.vote_target ?? 0,
       slogan: payload.slogan ?? null,
       status: payload.status ?? 'trial',
+      plan: payload.plan ?? 'basico',
       trial_ends_at: payload.trial_ends_at ?? null,
     })
     .select()
