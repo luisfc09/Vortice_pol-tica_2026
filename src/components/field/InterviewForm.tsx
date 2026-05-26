@@ -7,20 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useOnline } from '@/hooks/useOnline';
 import { useAuthStore } from '@/stores/auth';
 import { enqueueInterview } from '@/lib/offline-queue';
-import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import { formatPhone } from '@/lib/utils';
 import {
   PRIORITY_THEMES,
@@ -172,21 +165,11 @@ export function InterviewForm() {
 
         <div className="space-y-2 sm:col-span-2">
           <Label>Município</Label>
-          <Select
+          <MunicipalityCombobox
             value={form.municipality_code}
-            onValueChange={(value) => update('municipality_code', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione o município" />
-            </SelectTrigger>
-            <SelectContent>
-              {MG_MUNICIPALITIES.map((m) => (
-                <SelectItem key={m.code} value={m.code}>
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(code) => update('municipality_code', code)}
+            placeholder="Buscar município…"
+          />
         </div>
       </div>
 

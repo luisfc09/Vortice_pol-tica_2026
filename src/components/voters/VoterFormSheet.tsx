@@ -19,9 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { collections } from '@/lib/data';
 import { formatPhone } from '@/lib/utils';
-import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import { useAuthStore } from '@/stores/auth';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { VOTE_INTENTION_LABEL, type Voter, type VoteIntention } from '@/types';
@@ -80,12 +80,11 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function handleMunicipalityChange(code: string) {
-    const m = MG_MUNICIPALITIES.find((x) => x.code === code);
+  function handleMunicipalityChange(code: string, name: string) {
     setForm((f) => ({
       ...f,
-      municipality_code: code,
-      city: f.city || m?.name || '',
+      municipality_code: code || null,
+      city: f.city || name || '',
     }));
   }
 
@@ -184,21 +183,11 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Município</Label>
-              <Select
+              <MunicipalityCombobox
                 value={form.municipality_code ?? ''}
-                onValueChange={handleMunicipalityChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MG_MUNICIPALITIES.map((m) => (
-                    <SelectItem key={m.code} value={m.code}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={handleMunicipalityChange}
+                placeholder="Buscar município…"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="city">Cidade</Label>
