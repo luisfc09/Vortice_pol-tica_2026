@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Vórtice dark-only design tokens. HSL values for Tailwind alpha utilities. */
+    --background: 224 47% 7%;
+    --foreground: 210 40% 98%;
+
+    --card: 224 38% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 224 38% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 83 76% 56%;
+    --primary-foreground: 224 47% 7%;
+
+    --secondary: 224 30% 16%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 224 25% 14%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 83 76% 56%;
+    --accent-foreground: 224 47% 7%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+
+    --border: 224 30% 20%;
+    --input: 224 30% 18%;
+    --ring: 83 76% 56%;
+
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-color: #0a0f1e;
+    background-image:
+      radial-gradient(at 0% 0%, rgba(163, 230, 53, 0.06) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.05) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  .font-display {
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 0.02em;
+  }
+
+  /* Inputs */
+  input,
+  textarea,
+  select {
+    @apply bg-transparent;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer components {
+  .vortex-card {
+    @apply rounded-xl border border-vortex-border bg-vortex-surface/60 backdrop-blur;
+  }
+
+  .vortex-glow {
+    box-shadow: 0 0 0 1px rgba(163, 230, 53, 0.2), 0 8px 24px -8px rgba(163, 230, 53, 0.25);
+  }
+}
