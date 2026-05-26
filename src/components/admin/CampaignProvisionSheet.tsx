@@ -67,7 +67,10 @@ interface ProvisionResult {
   campaign_id: string;
   candidate_name: string;
   admin_email: string;
-  temporary_password: string;
+  // Null quando o admin já existia (reusamos o user) — não há senha
+  // temporária pra exibir nesse caso.
+  temporary_password: string | null;
+  admin_already_existed?: boolean;
   login_url: string;
 }
 
@@ -122,13 +125,42 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
         },
       });
 
+      // Quando a edge function retorna non-2xx, supabase-js seta `error` mas
+      // engole o body. A gente extrai pela `context.response` que está no
+      // FunctionsHttpError. Assim recuperamos { step, error, detail } gerado
+      // no servidor — a mensagem real que ajuda a debugar.
       if (error) {
-        toast.error(`Falha: ${error.message}`);
+        type FnErr = typeof error & {
+          context?: { response?: Response };
+        };
+        let serverMsg: string | null = null;
+        let serverStep: string | null = null;
+        let serverDetail: unknown = undefined;
+        try {
+          const resp = (error as FnErr).context?.response;
+          if (resp) {
+            const body = await resp.clone().json();
+            serverMsg = typeof body?.error === 'string' ? body.error : null;
+            serverStep = typeof body?.step === 'string' ? body.step : null;
+            serverDetail = body?.detail;
+            console.error('[provision-campaign] server error body:', body);
+          }
+        } catch (parseErr) {
+          console.error('[provision-campaign] não consegui ler body:', parseErr);
+        }
+        const human = serverMsg
+          ? `Falha em ${serverStep ?? '?'}: ${serverMsg}`
+          : `Falha: ${error.message}`;
+        toast.error(human, {
+          description: serverDetail
+            ? `Detalhe: ${JSON.stringify(serverDetail).slice(0, 200)}`
+            : 'Veja o console + Edge Function Logs no Supabase Dashboard.',
+        });
         return;
       }
-      const payload = data as { ok?: boolean; error?: string } & ProvisionResult;
+      const payload = data as { ok?: boolean; error?: string; step?: string } & ProvisionResult;
       if (payload.error) {
-        toast.error(payload.error);
+        toast.error(`Falha em ${payload.step ?? '?'}: ${payload.error}`);
         return;
       }
       setResult({
@@ -136,10 +168,15 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
         candidate_name: payload.candidate_name,
         admin_email: payload.admin_email,
         temporary_password: payload.temporary_password,
+        admin_already_existed: payload.admin_already_existed,
         login_url: payload.login_url,
       });
       onCreated?.();
-      toast.success('Campanha provisionada com sucesso.');
+      toast.success(
+        payload.admin_already_existed
+          ? 'Campanha provisionada. Admin já existia — sem senha temporária.'
+          : 'Campanha provisionada com sucesso.',
+      );
     } finally {
       setSending(false);
     }
@@ -147,7 +184,10 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
 
   async function copyCreds() {
     if (!result) return;
-    const text = `Acesso ao Vórtice — campanha ${result.candidate_name}\nE-mail: ${result.admin_email}\nSenha temporária: ${result.temporary_password}\nLink: ${result.login_url}\n\nNo primeiro acesso a senha precisará ser alterada.`;
+    const pwdLine = result.temporary_password
+      ? `Senha temporária: ${result.temporary_password}\n`
+      : `(Admin já existia — use a senha atual.)\n`;
+    const text = `Acesso ao Vórtice — campanha ${result.candidate_name}\nE-mail: ${result.admin_email}\n${pwdLine}Link: ${result.login_url}\n\nNo primeiro acesso a senha precisará ser alterada (quando aplicável).`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -181,7 +221,18 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
               </p>
               <div className="mt-3 space-y-2 text-foreground/90">
                 <Row label="E-mail do admin" value={result.admin_email} />
-                <Row label="Senha temporária" value={result.temporary_password} mono />
+                {result.temporary_password ? (
+                  <Row
+                    label="Senha temporária"
+                    value={result.temporary_password}
+                    mono
+                  />
+                ) : (
+                  <Row
+                    label="Senha"
+                    value="Admin já existia — use a senha atual."
+                  />
+                )}
                 <Row label="Link de acesso" value={result.login_url} mono breakAll />
               </div>
             </div>
@@ -191,13 +242,20 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
               {copied ? 'Copiado' : 'Copiar credenciais'}
             </Button>
 
-            <p className="rounded-lg border border-vortex-border bg-vortex-surface/40 p-3 text-xs text-muted-foreground">
-              Envie ao candidato/coordenador. A senha{' '}
-              <Badge variant="warning" className="mx-1 align-middle">
-                {result.temporary_password}
-              </Badge>
-              expira no primeiro acesso — o sistema obrigará a definição de senha pessoal.
-            </p>
+            {result.temporary_password ? (
+              <p className="rounded-lg border border-vortex-border bg-vortex-surface/40 p-3 text-xs text-muted-foreground">
+                Envie ao candidato/coordenador. A senha{' '}
+                <Badge variant="warning" className="mx-1 align-middle">
+                  {result.temporary_password}
+                </Badge>
+                expira no primeiro acesso — o sistema obrigará a definição de senha pessoal.
+              </p>
+            ) : (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100/90">
+                O e-mail já existia no Vórtice — o usuário foi apenas vinculado a essa
+                campanha como admin. Use a senha atual dele para login.
+              </p>
+            )}
 
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => reset()}>
