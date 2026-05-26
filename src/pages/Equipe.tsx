@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -14,16 +13,17 @@ import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { ProvisionSheet } from '@/components/team/ProvisionSheet';
 import { PendingUsersSection } from '@/components/team/PendingUsersSection';
+import { AvatarUpload } from '@/components/team/AvatarUpload';
 import { collections, isMockMode, useCollection } from '@/lib/data';
 import { SEED_TEAMMATE_PROFILES } from '@/data/seeds';
 import { supabase } from '@/lib/supabase';
-import { initials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { ROLE_LABEL, type CampaignUser, type UserRole } from '@/types';
 
 interface ProfileLite {
   full_name: string;
   phone: string | null;
+  avatar_url: string | null;
 }
 
 export default function EquipePage() {
@@ -47,19 +47,33 @@ export default function EquipePage() {
         const next: Record<string, ProfileLite> = {};
         for (const id of userIds) {
           const seed = SEED_TEAMMATE_PROFILES[id];
-          if (seed) next[id] = { full_name: seed.full_name, phone: seed.phone };
+          if (seed)
+            next[id] = {
+              full_name: seed.full_name,
+              phone: seed.phone,
+              avatar_url: null,
+            };
         }
         if (active) setProfiles(next);
         return;
       }
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone')
+        .select('id, full_name, phone, avatar_url')
         .in('id', userIds);
       if (!active || error || !data) return;
       const next: Record<string, ProfileLite> = {};
-      for (const row of data as Array<{ id: string; full_name: string; phone: string | null }>) {
-        next[row.id] = { full_name: row.full_name, phone: row.phone };
+      for (const row of data as Array<{
+        id: string;
+        full_name: string;
+        phone: string | null;
+        avatar_url: string | null;
+      }>) {
+        next[row.id] = {
+          full_name: row.full_name,
+          phone: row.phone,
+          avatar_url: row.avatar_url,
+        };
       }
       setProfiles(next);
     }
@@ -74,16 +88,35 @@ export default function EquipePage() {
       return {
         full_name: session.profile.full_name,
         phone: session.profile.phone,
+        avatar_url: session.profile.avatar_url ?? profiles[userId]?.avatar_url ?? null,
       };
     }
     if (profiles[userId]) return profiles[userId];
-    return (
-      SEED_TEAMMATE_PROFILES[userId] ?? {
-        full_name: `Membro ${userId.slice(-4)}`,
-        phone: null,
-      }
-    );
+    const seed = SEED_TEAMMATE_PROFILES[userId];
+    if (seed) {
+      return { full_name: seed.full_name, phone: seed.phone, avatar_url: null };
+    }
+    return {
+      full_name: `Membro ${userId.slice(-4)}`,
+      phone: null,
+      avatar_url: null,
+    };
   }
+
+  function handleAvatarUpdated(userId: string, newUrl: string | null) {
+    setProfiles((prev) => {
+      const current = prev[userId];
+      if (!current) return prev;
+      return { ...prev, [userId]: { ...current, avatar_url: newUrl } };
+    });
+  }
+
+  const canEditAvatarOf = (userId: string) => {
+    if (!session) return false;
+    if (userId === session.id) return true;
+    if (session.is_super_admin) return true;
+    return session.role === 'admin' || session.role === 'coordinator';
+  };
 
   function changeRole(id: string, role: UserRole) {
     collections.campaign_users.update(id, { role });
@@ -129,9 +162,14 @@ export default function EquipePage() {
                 className="flex flex-col gap-3 rounded-xl border border-vortex-border bg-vortex-surface/60 p-4 backdrop-blur sm:flex-row sm:items-center"
               >
                 <div className="flex flex-1 items-center gap-3 min-w-0">
-                  <Avatar>
-                    <AvatarFallback>{initials(p.full_name)}</AvatarFallback>
-                  </Avatar>
+                  <AvatarUpload
+                    userId={m.user_id}
+                    name={p.full_name}
+                    currentUrl={p.avatar_url}
+                    canEdit={canEditAvatarOf(m.user_id)}
+                    size="md"
+                    onUpdated={(url) => handleAvatarUpdated(m.user_id, url)}
+                  />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-semibold text-foreground">{p.full_name}</p>
