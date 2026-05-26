@@ -5,12 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MentionsFeed } from '@/components/mencoes/MentionsFeed';
 import { InsightsPanel } from '@/components/mencoes/InsightsPanel';
+import { CollectButton } from '@/components/mencoes/CollectButton';
 import { isMockMode } from '@/lib/data';
 
 export default function MencoesPage() {
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 className="font-display text-3xl tracking-wide text-foreground">
             Monitor de menções
@@ -19,17 +20,20 @@ export default function MencoesPage() {
             Feed com sentimento, insights e Resposta Rápida para crises.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild>
-            <Link to="/mencoes/resposta-rapida">
-              <Zap className="h-4 w-4" /> Resposta Rápida
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link to="/mencoes/resposta-rapida/historico">
-              <History className="h-4 w-4" /> Histórico
-            </Link>
-          </Button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <CollectButton />
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link to="/mencoes/resposta-rapida">
+                <Zap className="h-4 w-4" /> Resposta Rápida
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/mencoes/resposta-rapida/historico">
+                <History className="h-4 w-4" /> Histórico
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
