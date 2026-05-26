@@ -79,7 +79,22 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
         if (error || !row) {
           this.snapshot = this.snapshot.filter((r) => r.id !== optimistic.id);
           this.emit();
-          toast.error(`Falha ao salvar em ${this.table}: ${error?.message ?? 'erro desconhecido'}`);
+          // Postgres code 23505 = unique_violation. Acontece quando um
+          // autodetector (ex.: useAlertas) tenta inserir um registro que
+          // já existe via outro caminho. Não é erro de usuário — logamos
+          // no console e seguimos.
+          const isDuplicate =
+            (error?.code as string | undefined) === '23505' ||
+            /duplicate key|unique constraint/i.test(error?.message ?? '');
+          if (!isDuplicate) {
+            toast.error(
+              `Falha ao salvar em ${this.table}: ${error?.message ?? 'erro desconhecido'}`,
+            );
+          } else {
+            console.warn(
+              `[${this.table}] insert ignorado por duplicate key: ${error?.message}`,
+            );
+          }
           return;
         }
         // Swap temp record with the canonical row from the server.

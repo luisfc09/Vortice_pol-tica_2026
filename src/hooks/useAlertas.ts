@@ -5,6 +5,11 @@ import { detectAll, bucketByPriority, type AlertDraft } from '@/lib/alertDetecto
 import type { Alert, AlertPriority } from '@/types';
 
 const DETECTION_INTERVAL_MS = 30 * 60 * 1000;
+// Delay até a primeira detecção. Dá tempo das coleções (alerts, supporters,
+// voters, interviews, …) hidratarem do Supabase — sem isso, o set de
+// dedup_keys "abertos" fica vazio e tentamos inserir alertas que JÁ existem
+// no banco, batendo no índice único alerts_dedup_open_idx.
+const INITIAL_DETECTION_DELAY_MS = 2500;
 
 export function useAlertas() {
   const session = useAuthStore((s) => s.session);
@@ -77,10 +82,17 @@ export function useAlertas() {
 
   useEffect(() => {
     if (!session?.campaign) return;
-    // Roda uma vez no boot
-    runRef.current();
+    // Primeiro disparo com delay (espera hidratação). Os disparos
+    // seguintes seguem o intervalo normal.
+    const first = window.setTimeout(
+      () => runRef.current(),
+      INITIAL_DETECTION_DELAY_MS,
+    );
     const id = window.setInterval(() => runRef.current(), DETECTION_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(id);
+    };
   }, [session?.campaign?.id]);
 
   const open = useMemo(
