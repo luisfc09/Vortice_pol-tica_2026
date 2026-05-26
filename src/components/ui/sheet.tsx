@@ -15,7 +15,9 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      // z-[1200] supera o z-index 1000 dos controles internos do Leaflet,
+      // evitando que o mapa transpareça por trás do drawer.
+      'fixed inset-0 z-[1200] bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className,
     )}
     {...props}
@@ -25,7 +27,8 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  'fixed z-50 gap-4 bg-vortex-surface border-vortex-border shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300',
+  // z-[1200] alinhado ao overlay — fica acima do Leaflet (z-1000 dos controles).
+  'fixed z-[1200] gap-4 bg-vortex-surface border-vortex-border shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300',
   {
     variants: {
       side: {
