@@ -96,3 +96,52 @@
     box-shadow: 0 0 0 1px rgba(163, 230, 53, 0.2), 0 8px 24px -8px rgba(163, 230, 53, 0.25);
   }
 }
+
+/* ----------------------------------------------------------------------------
+   Impressão / Exportar PDF — usado na página de detalhe da entrevista.
+   Esconde sidebar/header e força fundo branco com texto escuro pro PDF
+   sair legível via window.print(). Container principal usa `.print-area`.
+   ---------------------------------------------------------------------------- */
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 16mm 12mm;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .print-area * {
+    color: #0f172a !important;
+  }
+  .print-area .bg-vortex-surface,
+  .print-area [class*='bg-vortex-surface'],
+  .print-area [class*='bg-amber'],
+  .print-area [class*='bg-emerald'],
+  .print-area [class*='bg-red'],
+  .print-area [class*='bg-primary'] {
+    background: #f8fafc !important;
+  }
+  .print-area [class*='border'] {
+    border-color: #cbd5e1 !important;
+  }
+  .print-area a {
+    text-decoration: none !important;
+  }
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
+}

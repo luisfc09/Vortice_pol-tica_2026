@@ -1,13 +1,22 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, Pencil, MapPin, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  ClipboardList,
+  Download,
+  Eye,
+  ListChecks,
+  MapPin,
+  Pencil,
+  Sparkles,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/data/EmptyState';
-import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import { collections, useCollection } from '@/lib/data';
+import { exportInterviewAsJson } from '@/lib/interview-export';
 import { useAuthStore } from '@/stores/auth';
 import { MUNI_COORDS } from '@/data/municipalities-mg-coords';
 import { VOTE_INTENTION_LABEL, isInterviewDeepened } from '@/types';
@@ -115,25 +124,35 @@ export default function CampoHistoricoPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm">
+                    <Link to={`/campo/entrevista/${i.id}/ver`}>
+                      <Eye className="h-3.5 w-3.5" />
+                      Ver tudo
+                    </Link>
+                  </Button>
                   <Button asChild size="sm" variant="outline">
                     <Link to={`/campo/entrevista/${i.id}`}>
                       <Pencil className="h-3.5 w-3.5" />
-                      Editar
+                      Editar dados
                     </Link>
                   </Button>
-                  <OpenInMapsButton
+                  {isInterviewDeepened(i) ? null : (
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/campo/entrevista/${i.id}/questionario`}>
+                        <ListChecks className="h-3.5 w-3.5" />
+                        Aprofundar
+                      </Link>
+                    </Button>
+                  )}
+                  <Button
                     size="sm"
                     variant="outline"
-                    label="Local"
-                    mode="search"
-                    target={{
-                      lat: i.lat,
-                      lng: i.lng,
-                      bairro: i.neighborhood,
-                      cidade: muni,
-                      uf: 'MG',
-                    }}
-                  />
+                    onClick={() => exportInterviewAsJson(i)}
+                    aria-label="Exportar JSON"
+                    title="Baixar JSON desta entrevista"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </li>
             );

@@ -23,6 +23,7 @@ const TITLES: Record<string, string> = {
   '/equipe': 'Usuários', // legado
   '/campo/historico': 'Minhas entrevistas',
   '/campo/entrevista/questionario': 'Questionário aprofundado',
+  '/campo/entrevista/ver': 'Entrevista completa',
   '/integracoes': 'Integrações',
   '/campanha/branding': 'Identidade da campanha',
   '/admin/campaigns': 'Admin Vórtice — Campanhas',
