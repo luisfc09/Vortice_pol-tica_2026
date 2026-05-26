@@ -10,9 +10,12 @@ import LiderancasPage from '@/pages/Liderancas';
 import EleitoresPage from '@/pages/Eleitores';
 import MapaPage from '@/pages/Mapa';
 import MencoesPage from '@/pages/Mencoes';
+import RespostaRapidaPage from '@/pages/RespostaRapida';
+import RespostaRapidaHistoricoPage from '@/pages/RespostaRapidaHistorico';
 import CampoHubPage from '@/pages/Campo';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoFaqPage from '@/pages/CampoFaq';
+import CampoHojePage from '@/pages/CampoHoje';
 import AgendaPage from '@/pages/Agenda';
 import EquipePage from '@/pages/Equipe';
 import IntegracoesPage from '@/pages/Integracoes';
@@ -47,6 +50,7 @@ export default function App() {
             <Route path="/eleitores" element={<EleitoresPage />} />
             <Route path="/mapa" element={<MapaPage />} />
             <Route path="/campo" element={<CampoHubPage />} />
+            <Route path="/campo/hoje" element={<CampoHojePage />} />
             <Route path="/campo/entrevista" element={<CampoEntrevistaPage />} />
             <Route path="/campo/faq" element={<CampoFaqPage />} />
             <Route path="/agenda" element={<AgendaPage />} />
@@ -63,6 +67,11 @@ export default function App() {
         >
           <Route element={<AppLayout />}>
             <Route path="/mencoes" element={<MencoesPage />} />
+            <Route path="/mencoes/resposta-rapida" element={<RespostaRapidaPage />} />
+            <Route
+              path="/mencoes/resposta-rapida/historico"
+              element={<RespostaRapidaHistoricoPage />}
+            />
           </Route>
         </Route>
 

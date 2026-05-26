@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ClipboardCheck, BookOpenText, MapPin } from 'lucide-react';
+import { ClipboardCheck, BookOpenText, MapPin, Sunrise } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
 import { useState } from 'react';
@@ -44,12 +44,18 @@ export default function CampoHubPage() {
 
       <OfflineBanner onSyncRequest={handleSync} syncing={syncing} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <HubAction
           to="/campo/entrevista"
           title="Nova entrevista"
           description="Registre o contato com GPS, intenção de voto e observações."
           icon={<ClipboardCheck className="h-7 w-7 text-primary" />}
+        />
+        <HubAction
+          to="/campo/hoje"
+          title="Campo Hoje"
+          description="Visão em tempo real: mapa, sentimento, temas e ranking da equipe."
+          icon={<Sunrise className="h-7 w-7 text-primary" />}
         />
         <HubAction
           to="/campo/faq"

@@ -21,10 +21,31 @@ export type MentionSource = 'twitter' | 'google_news' | 'manual';
 export type Sentiment = 'positivo' | 'neutro' | 'negativo';
 
 export type AlertType =
+  // legacy (mantidos por compatibilidade)
   | 'spike_negativo'
   | 'municipio_inativo'
   | 'meta_atingida'
-  | 'sistema';
+  | 'sistema'
+  // novos (Central de Alertas)
+  | 'municipio_sem_visita'
+  | 'mencao_viral_negativa'
+  | 'lideranca_inativa'
+  | 'meta_municipio_baixa'
+  | 'evento_sem_confirmacao'
+  | 'cabo_sumido'
+  | 'spike_negativo_mencoes'
+  | 'municipio_sem_lideranca'
+  | 'meta_geral_critica'
+  | 'entrevistas_paradas';
+
+export type AlertPriority = 'urgente' | 'critico' | 'atencao' | 'info';
+
+export const ALERT_PRIORITY_LABEL: Record<AlertPriority, string> = {
+  urgente: 'Urgente',
+  critico: 'Crítico',
+  atencao: 'Atenção',
+  info: 'Informativo',
+};
 
 export type FaqCategory =
   | 'seguranca'
@@ -303,9 +324,70 @@ export interface Alert {
   id: string;
   campaign_id: string;
   type: AlertType;
-  message: string;
+  priority: AlertPriority;
+  title: string | null;
+  description: string | null;
+  acao_sugerida: string | null;
+  acao_label: string | null;
+  acao_route: string | null;
+  message: string; // legacy
   meta: Record<string, unknown> | null;
   is_read: boolean;
+  is_resolved: boolean;
+  expires_at: string | null;
+  dedup_key: string | null;
+  created_at: string;
+}
+
+// ----------------------------------------------------------------------------
+// Resposta Rápida — análise + respostas geradas + registro
+// ----------------------------------------------------------------------------
+
+export interface AnaliseMencao {
+  alegacao_central: string;
+  dados_citados: string[];
+  tom: string;
+  audiencia: string;
+  urgencia: number; // 1-10
+  tipo_ataque: string;
+}
+
+export interface ContextoLegislativo {
+  votacao_real?: string;
+  presenca_real?: string;
+  projetos_apresentados?: string;
+  fonte?: string;
+  contexto_extra?: string;
+}
+
+export type RespostaEstilo = 'DIRETA' | 'HUMANIZADA' | 'PROPOSITIVA';
+export type RespostaRisco = 'baixo' | 'medio' | 'alto';
+export type Plataforma = 'X' | 'Instagram' | 'Facebook' | 'WhatsApp' | 'Outros';
+
+export interface RespostaGerada {
+  estilo: RespostaEstilo | string;
+  titulo: string;
+  texto: string;
+  caracteres: number;
+  adequada_para: string;
+  risco: RespostaRisco;
+  justificativa: string;
+}
+
+export interface MentionResponse {
+  id: string;
+  campaign_id: string;
+  mention_id: string | null;
+  resposta_texto: string;
+  estilo: string | null;
+  editada: boolean;
+  aprovada_por: string | null;
+  aprovada_at: string;
+  publicada: boolean;
+  publicada_em: string | null;
+  tempo_resposta_s: number | null;
+  analise: AnaliseMencao | null;
+  contexto: ContextoLegislativo | null;
   created_at: string;
 }
 

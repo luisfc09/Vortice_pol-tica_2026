@@ -2,6 +2,7 @@ import { Menu, LogOut, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { AlertsBadge } from '@/components/alerts/AlertsBadge';
 import { initials } from '@/lib/utils';
 import { useOnline } from '@/hooks/useOnline';
 import { useAuth } from '@/hooks/useAuth';
@@ -57,6 +58,8 @@ export function Header({ title, onMenuClick }: HeaderProps) {
           <AvatarFallback>{initials(session.profile.full_name)}</AvatarFallback>
         </Avatar>
       </div>
+
+      <AlertsBadge />
 
       <Button
         variant="ghost"

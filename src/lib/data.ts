@@ -25,6 +25,7 @@ import type {
   CampaignUser,
   FieldInterview,
   Mention,
+  MentionResponse,
   Supporter,
   Voter,
 } from '@/types';
@@ -49,6 +50,7 @@ export const collections = {
   mentions: build<Mention>({ table: 'mentions', seed: SEED_MENTIONS }),
   alerts: build<Alert>({ table: 'alerts', seed: SEED_ALERTS }),
   campaign_users: build<CampaignUser>({ table: 'campaign_users', seed: SEED_CAMPAIGN_USERS }),
+  mention_responses: build<MentionResponse>({ table: 'mention_responses', seed: [] }),
 };
 
 export function useCollection<T extends EntityWithId>(collection: Collection<T>): T[] {
