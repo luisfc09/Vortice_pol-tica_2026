@@ -120,7 +120,10 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
       zoom={MG_ZOOM}
       scrollWheelZoom
       className="h-[600px] w-full rounded-xl border border-vortex-border"
-      style={{ backgroundColor: '#0A0F1E' }}
+      // `isolation: isolate` cria stacking context — prende os z-indexes
+      // internos do Leaflet (controles em 1000, attribution em 800) e impede
+      // que se sobreponham a drawers/dialogs renderizados via portal.
+      style={{ backgroundColor: '#0A0F1E', isolation: 'isolate' }}
     >
       <TileLayer
         attribution='&copy; <a href="https://carto.com/">CARTO</a> &amp; OpenStreetMap'
