@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
+import { Map as MapIcon, Satellite } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import type {
   Feature,
@@ -13,7 +14,11 @@ import type {
   LeafletMouseEvent,
   PathOptions,
 } from 'leaflet';
+import { cn } from '@/lib/utils';
 import type { MuniStat } from '@/data/municipalities-mg-coords';
+
+type BaseMode = 'dark' | 'satellite';
+const BASE_MODE_KEY = 'vortice:mapa-base';
 
 interface StateMapProps {
   stats: MuniStat[];
@@ -47,21 +52,29 @@ function colorFor(strength: number): string {
   return '#A3E635'; //                       lime-400 / brand — consolidada
 }
 
-function styleFor(stat: MuniStat | undefined, isSelected: boolean): PathOptions {
+function styleFor(
+  stat: MuniStat | undefined,
+  isSelected: boolean,
+  base: BaseMode,
+): PathOptions {
+  const isSat = base === 'satellite';
   if (isUnknown(stat)) {
-    // Cinza neutro semi-transparente — município sem dado, deixa o mapa "respirar"
+    // No satélite, "sem dado" precisa ser quase transparente pra mostrar o terreno;
+    // no dark, um cinza-aço discreto.
     return {
-      color: isSelected ? '#A3E635' : '#475569', // slate-600
-      weight: isSelected ? 2 : 0.4,
-      fillColor: '#1E293B', // slate-800
-      fillOpacity: 0.35,
+      color: isSelected ? '#A3E635' : isSat ? '#94A3B8' : '#475569',
+      weight: isSelected ? 2 : isSat ? 0.5 : 0.4,
+      fillColor: isSat ? '#0F172A' : '#1E293B',
+      fillOpacity: isSat ? 0.08 : 0.35,
     };
   }
   return {
-    color: isSelected ? '#A3E635' : '#0F172A', // slate-900 — borda crisp
-    weight: isSelected ? 2 : 0.6,
+    // Borda mais grossa no satélite — sem ela, polígonos coloridos se misturam
+    // com a vegetação. No dark, borda fina basta.
+    color: isSelected ? '#A3E635' : isSat ? '#0B1120' : '#0F172A',
+    weight: isSelected ? 2.4 : isSat ? 0.9 : 0.6,
     fillColor: colorFor(stat!.strength),
-    fillOpacity: 0.78,
+    fillOpacity: isSat ? 0.62 : 0.78,
   };
 }
 
@@ -70,7 +83,18 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [base, setBase] = useState<BaseMode>(() => {
+    if (typeof window === 'undefined') return 'dark';
+    const stored = window.localStorage.getItem(BASE_MODE_KEY);
+    return stored === 'satellite' ? 'satellite' : 'dark';
+  });
   const layerRef = useRef<LeafletGeoJSON | null>(null);
+
+  // Persiste a preferência do usuário entre sessões.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(BASE_MODE_KEY, base);
+  }, [base]);
 
   // Index stats por código IBGE — lookup O(1) no styler.
   const statByCode = useMemo(() => {
@@ -98,7 +122,7 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
     };
   }, []);
 
-  // Re-aplica estilo quando stats ou seleção mudam (sem destruir a layer).
+  // Re-aplica estilo quando stats, seleção ou base mudam (sem destruir a layer).
   useEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
@@ -109,10 +133,10 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
       const stat = statByCode.get(code);
       const isSelected = code === selectedCode;
       (sub as unknown as { setStyle: (s: PathOptions) => void }).setStyle(
-        styleFor(stat, isSelected),
+        styleFor(stat, isSelected, base),
       );
     });
-  }, [statByCode, selectedCode]);
+  }, [statByCode, selectedCode, base]);
 
   return (
     <MapContainer
@@ -125,14 +149,35 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
       // que se sobreponham a drawers/dialogs renderizados via portal.
       style={{ backgroundColor: '#0A0F1E', isolation: 'isolate' }}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://carto.com/">CARTO</a> &amp; OpenStreetMap'
-        url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
-      />
-      <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
-        opacity={0.55}
-      />
+      {base === 'dark' ? (
+        <>
+          <TileLayer
+            key="carto-dark-base"
+            attribution='&copy; <a href="https://carto.com/">CARTO</a> &amp; OpenStreetMap'
+            url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+          />
+          <TileLayer
+            key="carto-dark-labels"
+            url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+            opacity={0.55}
+          />
+        </>
+      ) : (
+        <>
+          <TileLayer
+            key="esri-world-imagery"
+            attribution='Tiles &copy; Esri — World Imagery'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={18}
+          />
+          <TileLayer
+            key="esri-boundaries-places"
+            attribution='Boundaries & Places &copy; Esri'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            opacity={0.85}
+          />
+        </>
+      )}
 
       {geo ? (
         <GeoJSON
@@ -146,7 +191,7 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
               (feature as Feature<Geometry, MuniProperties>).properties.id,
             );
             const stat = statByCode.get(code);
-            return styleFor(stat, code === selectedCode);
+            return styleFor(stat, code === selectedCode, base);
           }}
           onEachFeature={(feature, layer: Layer) => {
             const f = feature as Feature<Geometry, MuniProperties>;
@@ -167,7 +212,7 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
                 const target = layer as unknown as {
                   setStyle: (s: PathOptions) => void;
                 };
-                target.setStyle(styleFor(stat, code === selectedCode));
+                target.setStyle(styleFor(stat, code === selectedCode, base));
               },
             });
             const stat = statByCode.get(code);
@@ -191,6 +236,37 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
           Mapa: não foi possível carregar GeoJSON ({error}).
         </div>
       ) : null}
+
+      <div className="absolute right-3 top-3 z-[400] flex overflow-hidden rounded-md border border-vortex-border bg-vortex-surface/90 text-xs shadow-lg backdrop-blur">
+        <button
+          type="button"
+          onClick={() => setBase('dark')}
+          aria-pressed={base === 'dark'}
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1.5 transition-colors',
+            base === 'dark'
+              ? 'bg-vortex-lime/20 text-vortex-lime'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <MapIcon className="h-3.5 w-3.5" />
+          Mapa
+        </button>
+        <button
+          type="button"
+          onClick={() => setBase('satellite')}
+          aria-pressed={base === 'satellite'}
+          className={cn(
+            'flex items-center gap-1.5 border-l border-vortex-border px-2.5 py-1.5 transition-colors',
+            base === 'satellite'
+              ? 'bg-vortex-lime/20 text-vortex-lime'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Satellite className="h-3.5 w-3.5" />
+          Satélite
+        </button>
+      </div>
     </MapContainer>
   );
 }
