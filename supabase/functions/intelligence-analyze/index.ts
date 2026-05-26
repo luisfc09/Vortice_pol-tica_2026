@@ -48,11 +48,31 @@ const LLM_TYPES: IntegrationType[] = [
   'deepseek',
 ];
 
+// Ordem de preferência pra ESTA tarefa (Inteligência Eleitoral):
+// 1. Anthropic — melhor em PT-BR analítico + schema JSON complexo + nuance política
+// 2. OpenAI    — JSON mode confiável, segunda melhor opção
+// 3. Gemini    — contexto grande mas perde precisão em schema aninhado
+// 4. demais    — fallbacks
+// Se a campanha tiver ai_feature_config.feature='campaign_intelligence'
+// explícito, ele sobrescreve essa ordem.
+const PROVIDER_PRIORITY: IntegrationType[] = [
+  'anthropic',
+  'openai',
+  'gemini',
+  'mistral',
+  'groq',
+  'xai',
+  'deepseek',
+];
+
+// Modelo default por provider. Pra esta tarefa, preferimos modelos
+// "sonnet/full" em vez de mini/flash — vale o custo extra pela qualidade
+// dos insights numa análise que roda 1x/dia ou 1x/semana.
 const DEFAULT_MODELS: Record<IntegrationType, string> = {
   anthropic: 'claude-sonnet-4-5',
-  openai: 'gpt-4o-mini',
-  gemini: 'gemini-1.5-flash',
-  mistral: 'mistral-small-latest',
+  openai: 'gpt-4o',
+  gemini: 'gemini-2.5-pro',
+  mistral: 'mistral-large-latest',
   groq: 'llama-3.1-70b-versatile',
   xai: 'grok-2-latest',
   deepseek: 'deepseek-chat',
@@ -374,17 +394,24 @@ Deno.serve(async (req) => {
       }
     }
     if (!providerType) {
+      // Sem ai_feature_config explícito: percorre PROVIDER_PRIORITY e usa o
+      // PRIMEIRO da lista que estiver habilitado pra essa campanha.
+      // Resultado: se a campanha tiver Anthropic + OpenAI, sempre escolhe
+      // Anthropic (melhor pra essa tarefa). Se só tiver Gemini, usa Gemini.
       const { data: ints } = await admin
         .from('integrations')
         .select('type, config')
         .eq('campaign_id', body.campaign_id)
         .eq('is_enabled', true);
-      const first = ints?.find((i) => LLM_TYPES.includes(i.type as IntegrationType));
-      if (first) {
-        providerType = first.type as IntegrationType;
-        apiKey = String((first.config as Record<string, unknown>)?.api_key ?? '');
-        model = DEFAULT_MODELS[providerType];
-        baseUrl = String((first.config as Record<string, unknown>)?.base_url ?? '');
+      for (const preferred of PROVIDER_PRIORITY) {
+        const match = ints?.find((i) => i.type === preferred);
+        if (match) {
+          providerType = preferred;
+          apiKey = String((match.config as Record<string, unknown>)?.api_key ?? '');
+          model = DEFAULT_MODELS[preferred];
+          baseUrl = String((match.config as Record<string, unknown>)?.base_url ?? '');
+          break;
+        }
       }
     }
 

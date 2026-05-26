@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/auth';
 import {
   AI_FEATURE_HELP,
   AI_FEATURE_LABEL,
+  AI_FEATURE_RECOMMENDATION,
   type AiFeature,
   type AiFeatureConfig,
   type IntegrationSafe,
@@ -160,6 +161,9 @@ export function AiFeatureMatrix({ integrations }: Props) {
               <div className="mb-3">
                 <p className="font-semibold text-foreground">{AI_FEATURE_LABEL[feature]}</p>
                 <p className="text-xs text-muted-foreground">{AI_FEATURE_HELP[feature]}</p>
+                <p className="mt-1 text-[11px] text-vortex-lime/80">
+                  ★ Recomendado: {AI_FEATURE_RECOMMENDATION[feature]}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

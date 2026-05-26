@@ -158,6 +158,18 @@ export const AI_FEATURE_HELP: Record<AiFeature, string> = {
   campaign_intelligence: 'Agente especialista que cruza entrevistas e gera relatório estratégico.',
 };
 
+// Recomendação editorial: qual LLM funciona melhor pra cada tarefa.
+// O backend usa essa ordem como fallback quando não há ai_feature_config
+// explícito da campanha.
+export const AI_FEATURE_RECOMMENDATION: Record<AiFeature, string> = {
+  mention_sentiment: 'GPT-4o-mini ou Gemini Flash — classificação rápida e barata.',
+  mention_insights: 'Claude Sonnet — resumo analítico com nuance.',
+  reply_suggestions: 'Claude Sonnet — tom mais humano e político.',
+  interview_analysis: 'Claude Sonnet ou GPT-4o — análise por entrevista.',
+  campaign_intelligence:
+    'Claude Sonnet 4.5 — schema complexo, PT-BR analítico, nuance política. Roda 1x/dia.',
+};
+
 export interface Integration {
   id: string;
   campaign_id: string;
