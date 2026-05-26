@@ -269,22 +269,28 @@ Deno.serve(async (req: Request) => {
   }
 
   // -------------------------------------------------------------------------
-  // Step 10: garante profile (trigger normalmente cria, mas se reusou pode
-  // ser que precisemos só atualizar)
+  // Step 10: garante profile. Só sobrescreve full_name/phone quando o user
+  // foi criado AGORA. Se reusamos um user existente, NUNCA mexemos no
+  // profile dele — evita sobrescrever o nome real de alguém só porque
+  // o admin colocou um nome diferente no form de provisionar.
   // -------------------------------------------------------------------------
-  const { error: profileErr } = await admin
-    .from('profiles')
-    .upsert(
-      {
-        id: adminUserId,
-        full_name: payload.admin_full_name,
-        phone: payload.admin_phone ?? null,
-        must_change_password: !adminUserAlreadyExisted,
-      },
-      { onConflict: 'id' },
-    );
-  if (profileErr) {
-    console.warn(`${TAG} profile upsert falhou (não fatal): ${profileErr.message}`);
+  if (!adminUserAlreadyExisted) {
+    const { error: profileErr } = await admin
+      .from('profiles')
+      .upsert(
+        {
+          id: adminUserId,
+          full_name: payload.admin_full_name,
+          phone: payload.admin_phone ?? null,
+          must_change_password: true,
+        },
+        { onConflict: 'id' },
+      );
+    if (profileErr) {
+      console.warn(`${TAG} profile upsert falhou (não fatal): ${profileErr.message}`);
+    }
+  } else {
+    console.log(`${TAG} user reusado — não mexendo no profile dele`);
   }
 
   // -------------------------------------------------------------------------
