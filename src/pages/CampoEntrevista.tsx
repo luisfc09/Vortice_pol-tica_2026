@@ -7,7 +7,12 @@ import { OfflineBanner } from '@/components/field/OfflineBanner';
 import { EmptyState } from '@/components/data/EmptyState';
 import { toast } from 'sonner';
 import { getQueue } from '@/lib/offline-queue';
-import { collections, flushInterviewQueue, useCollection } from '@/lib/data';
+import {
+  collections,
+  discardInterviewQueue,
+  flushInterviewQueue,
+  useCollection,
+} from '@/lib/data';
 
 export default function CampoEntrevistaPage() {
   const params = useParams();
@@ -28,12 +33,35 @@ export default function CampoEntrevistaPage() {
         toast.info('Nada para sincronizar.');
         return;
       }
-      const flushed = await Promise.resolve(flushInterviewQueue());
-      toast.success(
-        `${flushed} entrevista${flushed > 1 ? 's' : ''} sincronizada${
-          flushed > 1 ? 's' : ''
-        }.`,
-      );
+      const result = await flushInterviewQueue();
+      if (result.succeeded > 0) {
+        toast.success(
+          `${result.succeeded} entrevista${result.succeeded > 1 ? 's' : ''} sincronizada${
+            result.succeeded > 1 ? 's' : ''
+          }.`,
+        );
+      }
+      if (result.failed > 0) {
+        toast.error(
+          `${result.failed} entrevista${result.failed > 1 ? 's' : ''} falhou: ${
+            result.errors[0]
+          }`,
+          {
+            description:
+              result.errors.length > 1
+                ? `e mais ${result.errors.length - 1} erro(s). Veja o console.`
+                : 'Registro mantido na fila — corrija e tente de novo.',
+            action: {
+              label: 'Descartar fila',
+              onClick: () => {
+                const removed = discardInterviewQueue();
+                toast.message(`${removed} entrevista(s) descartada(s).`);
+              },
+            },
+          },
+        );
+        if (result.errors.length > 1) console.error('flush errors:', result.errors);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Falha ao sincronizar.');
     } finally {
