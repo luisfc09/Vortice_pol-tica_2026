@@ -16,6 +16,7 @@ import RespostaRapidaHistoricoPage from '@/pages/RespostaRapidaHistorico';
 import CampoHubPage from '@/pages/Campo';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoFaqPage from '@/pages/CampoFaq';
+import CampoHistoricoPage from '@/pages/CampoHistorico';
 import CampoHojePage from '@/pages/CampoHoje';
 import AgendaPage from '@/pages/Agenda';
 import EquipePage from '@/pages/Equipe';
@@ -53,7 +54,9 @@ export default function App() {
             <Route path="/mapa" element={<MapaPage />} />
             <Route path="/campo" element={<CampoHubPage />} />
             <Route path="/campo/hoje" element={<CampoHojePage />} />
+            <Route path="/campo/historico" element={<CampoHistoricoPage />} />
             <Route path="/campo/entrevista" element={<CampoEntrevistaPage />} />
+            <Route path="/campo/entrevista/:id" element={<CampoEntrevistaPage />} />
             <Route path="/campo/faq" element={<CampoFaqPage />} />
             <Route path="/agenda" element={<AgendaPage />} />
           </Route>

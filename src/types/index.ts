@@ -251,9 +251,13 @@ export interface Supporter {
   cpf: string | null;
   phone: string | null;
   email: string | null;
-  city: string;
+  city: string | null; // derivado do município (legado, mantido pra compat)
   neighborhood: string | null;
   municipality_code: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
   role: SupporterRoleType;
   status: SupporterStatus;
   created_by: string;
@@ -265,9 +269,14 @@ export interface Voter {
   campaign_id: string;
   name: string;
   phone: string | null;
-  address: string | null;
-  city: string;
+  address: string | null; // legado — uso novo via cep+logradouro+numero
+  city: string | null;
+  neighborhood: string | null;
   municipality_code: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
   vote_intention: VoteIntention;
   notes: string | null;
   lat: number | null;

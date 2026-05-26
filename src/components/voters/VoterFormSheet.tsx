@@ -20,10 +20,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
+import { AddressFields, type AddressValue } from '@/components/forms/AddressFields';
 import { collections } from '@/lib/data';
 import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useGeolocation } from '@/hooks/useGeolocation';
+import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import { VOTE_INTENTION_LABEL, type Voter, type VoteIntention } from '@/types';
 
 type FormState = Omit<Voter, 'id' | 'campaign_id' | 'created_by' | 'created_at'>;
@@ -32,8 +34,13 @@ const EMPTY: FormState = {
   name: '',
   phone: '',
   address: '',
-  city: '',
-  municipality_code: '',
+  city: null,
+  neighborhood: null,
+  municipality_code: null,
+  cep: null,
+  logradouro: null,
+  numero: null,
+  complemento: null,
   vote_intention: 'indeciso',
   notes: '',
   lat: null,
@@ -58,7 +65,12 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
         phone: editing.phone ?? '',
         address: editing.address ?? '',
         city: editing.city,
-        municipality_code: editing.municipality_code ?? '',
+        neighborhood: editing.neighborhood,
+        municipality_code: editing.municipality_code,
+        cep: editing.cep,
+        logradouro: editing.logradouro,
+        numero: editing.numero,
+        complemento: editing.complemento,
         vote_intention: editing.vote_intention,
         notes: editing.notes ?? '',
         lat: editing.lat,
@@ -84,23 +96,37 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
     setForm((f) => ({
       ...f,
       municipality_code: code || null,
-      city: f.city || name || '',
+      city: code ? name || f.city : f.city,
     }));
+  }
+
+  function handleAddressChange(next: AddressValue) {
+    setForm((f) => ({ ...f, ...next }));
   }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!session || !session.campaign) return;
-    if (!form.name.trim() || !form.city.trim()) {
-      toast.error('Informe nome e cidade.');
+    if (!form.name.trim()) {
+      toast.error('Informe o nome.');
       return;
     }
+    if (!form.municipality_code) {
+      toast.error('Selecione o município.');
+      return;
+    }
+    const muniName = MG_MUNICIPALITIES.find((m) => m.code === form.municipality_code)?.name;
     const payload = {
       ...form,
       phone: form.phone || null,
       address: form.address || null,
       notes: form.notes || null,
-      municipality_code: form.municipality_code || null,
+      city: muniName ?? form.city ?? null,
+      neighborhood: form.neighborhood?.trim() || null,
+      cep: form.cep?.trim() || null,
+      logradouro: form.logradouro?.trim() || null,
+      numero: form.numero?.trim() || null,
+      complemento: form.complemento?.trim() || null,
     };
     if (editing) {
       collections.voters.update(editing.id, payload);
@@ -171,34 +197,26 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address">Endereço</Label>
-            <Input
-              id="address"
-              value={form.address ?? ''}
-              onChange={(e) => update('address', e.target.value)}
-              placeholder="Rua, número, complemento"
+            <Label>Município</Label>
+            <MunicipalityCombobox
+              value={form.municipality_code ?? ''}
+              onChange={handleMunicipalityChange}
+              placeholder="Buscar município…"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Município</Label>
-              <MunicipalityCombobox
-                value={form.municipality_code ?? ''}
-                onChange={handleMunicipalityChange}
-                placeholder="Buscar município…"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="city">Cidade</Label>
-              <Input
-                id="city"
-                value={form.city}
-                onChange={(e) => update('city', e.target.value)}
-                required
-              />
-            </div>
-          </div>
+          <AddressFields
+            value={{
+              cep: form.cep,
+              logradouro: form.logradouro,
+              numero: form.numero,
+              complemento: form.complemento,
+              neighborhood: form.neighborhood,
+              city: form.city,
+              municipality_code: form.municipality_code,
+            }}
+            onChange={handleAddressChange}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="notes">Observações</Label>

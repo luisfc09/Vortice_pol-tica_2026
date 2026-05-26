@@ -19,9 +19,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
+import { AddressFields, type AddressValue } from '@/components/forms/AddressFields';
 import { collections } from '@/lib/data';
 import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
+import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import type { Supporter, SupporterRoleType, SupporterStatus } from '@/types';
 
 const ROLE_OPTIONS: { value: SupporterRoleType; label: string }[] = [
@@ -44,9 +46,13 @@ const EMPTY: FormState = {
   cpf: null,
   phone: '',
   email: '',
-  city: '',
-  neighborhood: '',
-  municipality_code: '',
+  city: null,
+  neighborhood: null,
+  municipality_code: null,
+  cep: null,
+  logradouro: null,
+  numero: null,
+  complemento: null,
   role: 'militante',
   status: 'ativo',
 };
@@ -69,8 +75,12 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
         phone: editing.phone ?? '',
         email: editing.email ?? '',
         city: editing.city,
-        neighborhood: editing.neighborhood ?? '',
-        municipality_code: editing.municipality_code ?? '',
+        neighborhood: editing.neighborhood,
+        municipality_code: editing.municipality_code,
+        cep: editing.cep,
+        logradouro: editing.logradouro,
+        numero: editing.numero,
+        complemento: editing.complemento,
         role: editing.role,
         status: editing.status,
       });
@@ -87,8 +97,12 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
     setForm((f) => ({
       ...f,
       municipality_code: code || null,
-      city: f.city || name || '',
+      city: code ? name || f.city : f.city,
     }));
+  }
+
+  function handleAddressChange(next: AddressValue) {
+    setForm((f) => ({ ...f, ...next }));
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -98,17 +112,23 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
       toast.error('Informe o nome.');
       return;
     }
-    if (!form.city.trim()) {
-      toast.error('Informe a cidade.');
+    if (!form.municipality_code) {
+      toast.error('Selecione o município.');
       return;
     }
 
+    // city = nome do município (deriva do código IBGE) — preserva o campo legado.
+    const muniName = MG_MUNICIPALITIES.find((m) => m.code === form.municipality_code)?.name;
     const payload = {
       ...form,
       phone: form.phone || null,
       email: form.email || null,
-      neighborhood: form.neighborhood || null,
-      municipality_code: form.municipality_code || null,
+      city: muniName ?? form.city ?? null,
+      neighborhood: form.neighborhood?.trim() || null,
+      cep: form.cep?.trim() || null,
+      logradouro: form.logradouro?.trim() || null,
+      numero: form.numero?.trim() || null,
+      complemento: form.complemento?.trim() || null,
     };
 
     if (editing) {
@@ -220,25 +240,18 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="city">Cidade</Label>
-              <Input
-                id="city"
-                value={form.city}
-                onChange={(e) => update('city', e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="neighborhood">Bairro</Label>
-              <Input
-                id="neighborhood"
-                value={form.neighborhood ?? ''}
-                onChange={(e) => update('neighborhood', e.target.value)}
-              />
-            </div>
-          </div>
+          <AddressFields
+            value={{
+              cep: form.cep,
+              logradouro: form.logradouro,
+              numero: form.numero,
+              complemento: form.complemento,
+              neighborhood: form.neighborhood,
+              city: form.city,
+              municipality_code: form.municipality_code,
+            }}
+            onChange={handleAddressChange}
+          />
 
           <div className="flex gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

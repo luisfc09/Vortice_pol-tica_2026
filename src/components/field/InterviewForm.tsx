@@ -13,11 +13,13 @@ import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useOnline } from '@/hooks/useOnline';
 import { useAuthStore } from '@/stores/auth';
+import { collections } from '@/lib/data';
 import { enqueueInterview } from '@/lib/offline-queue';
 import { formatPhone } from '@/lib/utils';
 import {
   PRIORITY_THEMES,
   VOTE_INTENTION_LABEL,
+  type FieldInterview,
   type FieldInterviewInput,
   type VoteIntention,
 } from '@/types';
@@ -38,27 +40,56 @@ const EMPTY: FieldInterviewInput = {
   lng: null,
 };
 
-export function InterviewForm() {
+interface InterviewFormProps {
+  editing?: FieldInterview | null;
+  onSaved?: () => void;
+}
+
+export function InterviewForm({ editing = null, onSaved }: InterviewFormProps) {
   const session = useAuthStore((s) => s.session);
   const online = useOnline();
-  const geo = useGeolocation(true);
+  // Em modo "editar" não queremos atropelar lat/lng — desliga GPS.
+  const geo = useGeolocation(!editing);
 
   const [form, setForm] = useState<FieldInterviewInput>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
 
-  // Pre-fill municipality from the user's profile when available.
+  // Quando entra em modo edição (ou troca de entrevista), carrega os campos.
   useEffect(() => {
+    if (editing) {
+      setForm({
+        voter_name: editing.voter_name,
+        voter_phone: editing.voter_phone ?? '',
+        neighborhood: editing.neighborhood ?? '',
+        municipality_code: editing.municipality_code ?? '',
+        vote_intention: editing.vote_intention,
+        receptivity_score: editing.receptivity_score,
+        priority_themes: editing.priority_themes,
+        vote_decided: editing.vote_decided,
+        notes: editing.notes ?? '',
+        lat: editing.lat,
+        lng: editing.lng,
+      });
+    } else {
+      setForm(EMPTY);
+    }
+  }, [editing]);
+
+  // Pre-fill municipality from the user's profile when available (criando).
+  useEffect(() => {
+    if (editing) return;
     if (session?.profile.municipality_code && !form.municipality_code) {
       setForm((f) => ({ ...f, municipality_code: session.profile.municipality_code ?? '' }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.profile.municipality_code]);
+  }, [session?.profile.municipality_code, editing]);
 
   useEffect(() => {
+    if (editing) return;
     if (geo.lat != null && geo.lng != null) {
       setForm((f) => ({ ...f, lat: geo.lat, lng: geo.lng }));
     }
-  }, [geo.lat, geo.lng]);
+  }, [geo.lat, geo.lng, editing]);
 
   const themes = useMemo(() => PRIORITY_THEMES.slice(), []);
 
@@ -91,8 +122,28 @@ export function InterviewForm() {
 
     setSubmitting(true);
     try {
-      // Always go through the offline queue first — keeps the flow identical
-      // online/offline. The sync routine elsewhere flushes the queue to Supabase.
+      if (editing) {
+        // Edição grava direto na coleção — não passa pela fila offline pois
+        // a entrevista já está persistida.
+        collections.interviews.update(editing.id, {
+          voter_name: form.voter_name,
+          voter_phone: form.voter_phone || null,
+          municipality_code: form.municipality_code || null,
+          neighborhood: form.neighborhood || null,
+          vote_intention: form.vote_intention,
+          receptivity_score: form.receptivity_score,
+          priority_themes: form.priority_themes,
+          vote_decided: form.vote_decided,
+          notes: form.notes || null,
+          lat: form.lat,
+          lng: form.lng,
+        });
+        toast.success('Entrevista atualizada.');
+        onSaved?.();
+        return;
+      }
+
+      // Criando: sempre passa pela fila offline — mesma rota online/offline.
       enqueueInterview(form, session.campaign.id, session.id);
       toast.success(
         online
@@ -105,6 +156,7 @@ export function InterviewForm() {
         lat: form.lat,
         lng: form.lng,
       });
+      onSaved?.();
     } finally {
       setSubmitting(false);
     }
@@ -262,7 +314,11 @@ export function InterviewForm() {
 
       <Button type="submit" size="lg" className="w-full" disabled={submitting}>
         <Save className="h-4 w-4" />
-        {submitting ? 'Salvando…' : 'Salvar entrevista'}
+        {submitting
+          ? 'Salvando…'
+          : editing
+            ? 'Atualizar entrevista'
+            : 'Salvar entrevista'}
       </Button>
     </form>
   );

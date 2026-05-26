@@ -33,14 +33,14 @@ export function ActivityFeed() {
       id: `s-${s.id}`,
       kind: 'supporter',
       title: `Nova liderança: ${s.name}`,
-      subtitle: `${s.city}${s.neighborhood ? ` · ${s.neighborhood}` : ''}`,
+      subtitle: `${s.city ?? '—'}${s.neighborhood ? ` · ${s.neighborhood}` : ''}`,
       at: s.created_at,
     })),
     ...voters.map<Activity>((v) => ({
       id: `v-${v.id}`,
       kind: 'voter',
       title: `Eleitor cadastrado: ${v.name}`,
-      subtitle: v.city,
+      subtitle: v.city ?? '—',
       at: v.created_at,
     })),
     ...interviews.map<Activity>((i) => ({

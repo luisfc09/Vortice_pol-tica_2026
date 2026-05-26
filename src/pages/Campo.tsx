@@ -1,10 +1,9 @@
 import { Link } from 'react-router-dom';
-import { ClipboardCheck, BookOpenText, MapPin, Sunrise } from 'lucide-react';
+import { ClipboardCheck, BookOpenText, History, MapPin, Sunrise } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { USE_MOCKS } from '@/lib/supabase';
 import { getQueue } from '@/lib/offline-queue';
 import { flushInterviewQueue } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
@@ -21,15 +20,14 @@ export default function CampoHubPage() {
         toast.info('Nada para sincronizar.');
         return;
       }
-      if (USE_MOCKS) {
-        await new Promise((r) => setTimeout(r, 500));
-        const flushed = flushInterviewQueue();
-        toast.success(
-          `${flushed} entrevista${flushed > 1 ? 's' : ''} sincronizada${flushed > 1 ? 's' : ''} para o banco mock.`,
-        );
-        return;
-      }
-      toast.info('Sincronização real será habilitada após conectar o Supabase.');
+      const flushed = await Promise.resolve(flushInterviewQueue());
+      toast.success(
+        `${flushed} entrevista${flushed > 1 ? 's' : ''} sincronizada${
+          flushed > 1 ? 's' : ''
+        }.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao sincronizar.');
     } finally {
       setSyncing(false);
     }
@@ -56,6 +54,12 @@ export default function CampoHubPage() {
           title="Campo Hoje"
           description="Visão em tempo real: mapa, sentimento, temas e ranking da equipe."
           icon={<Sunrise className="h-7 w-7 text-primary" />}
+        />
+        <HubAction
+          to="/campo/historico"
+          title="Minhas entrevistas"
+          description="Reabra entrevistas anteriores para corrigir ou complementar."
+          icon={<History className="h-7 w-7 text-primary" />}
         />
         <HubAction
           to="/campo/faq"
