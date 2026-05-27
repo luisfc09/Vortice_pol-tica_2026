@@ -7,10 +7,10 @@ interface VorticeLogoProps {
   decorative?: boolean;
 }
 
-// Caminhos dos assets em public/brand/. Troque a extensão aqui se você
-// salvar em PNG/WEBP em vez de SVG.
-const SYMBOL_SRC = '/brand/vortice-symbol.svg';
-const FULL_SRC = '/brand/vortice-full.svg';
+// Caminhos dos assets em public/brand/. Troque a extensão aqui se trocar
+// o formato dos arquivos (suportamos PNG / SVG / WEBP).
+const SYMBOL_SRC = '/brand/vortice-symbol.png';
+const FULL_SRC = '/brand/vortice-full.png';
 
 // Símbolo isolado da marca Vórtice. Aponta pra /brand/vortice-symbol.svg.
 // Se o arquivo não existir, faz fallback pra o SVG inline antigo (não quebra
