@@ -1,63 +1,58 @@
 import { Router, Request, Response } from 'express';
-import { tseClient, CARGOS } from '../lib/tseClient';
+import { CARGOS } from '../lib/tseClient';
+import { sbAnon } from '../lib/supabase';
 import { buildCacheKey, cacheStats, flushCache, getCached, setCached } from '../lib/cache';
+
+// As rotas abaixo consultam a tabela `tse_resultados` no Supabase, que é
+// alimentada pelo importer CLI (npm run import:tse). NÃO consultam o CKAN
+// do TSE em request time — o CKAN é lento, instável, e não tem
+// datastore_search ativo nos datasets atuais (todos os resources estão como
+// `datastore_active: false`, ou seja, só dão pra baixar ZIP).
+//
+// Mantemos `/health` e `/cargos` como endpoints leves (sem rede).
 
 const router = Router();
 
-// Útil pra UI: estrutura tipada do resultado normalizado.
-interface NormalizedRecord {
-  municipio: string;
-  municipio_codigo: string;
-  cargo: string;
-  cargo_codigo: string;
-  candidato: string;
-  numero: string;
-  partido: string;
-  votos: number;
-  zona: string;
-  secao: string;
-  ano: string;
-  uf: string;
-}
-
-interface CandidatoAgregado {
-  candidato: string;
-  numero: string;
-  partido: string;
-  votos: number;
-}
-
-// Resposta de erro padronizada — sempre 4xx/5xx com { error, hint?, step? }
+// Resposta de erro padronizada
 function sendError(res: Response, status: number, error: string, extra: Record<string, unknown> = {}) {
   res.status(status).json({ error, ...extra });
 }
 
-// GET /api/tse/health — testa conexão com o CKAN do TSE.
+// GET /api/tse/health
+// Testa conexão com o Supabase (faz um COUNT barato). Não toca o CKAN.
 router.get('/health', async (_req: Request, res: Response) => {
   try {
-    const datasets = await tseClient.listarDatasets();
+    const { count, error } = await sbAnon()
+      .from('tse_resultados')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) throw error;
+
     res.json({
       status: 'ok',
-      tse_conectado: true,
-      datasets_disponiveis: datasets.length,
+      supabase_conectado: true,
+      total_registros: count ?? 0,
       cargos: CARGOS,
     });
   } catch (error) {
     res.status(503).json({
       status: 'erro',
-      tse_conectado: false,
+      supabase_conectado: false,
       error: error instanceof Error ? error.message : String(error),
     });
   }
 });
 
-// GET /api/tse/cargos — lista os cargos suportados pelo enum.
+// GET /api/tse/cargos — lista os cargos suportados (constante in-process).
 router.get('/cargos', (_req: Request, res: Response) => {
   res.json(Object.entries(CARGOS).map(([cd, nm]) => ({ cd, nm })));
 });
 
 // GET /api/tse/resultados
-// Query: ano, uf, municipio, cargo, candidato, limit, offset
+// Query: ano, uf, municipio (nome ou código), cargo, candidato (nome ou número),
+//        turno, partido, limit, offset, order ('votos' | 'nome')
+//
+// Resposta: { records: [...], total, ano, uf, limit, offset }
 router.get('/resultados', async (req: Request, res: Response) => {
   try {
     const {
@@ -66,19 +61,28 @@ router.get('/resultados', async (req: Request, res: Response) => {
       municipio,
       cargo,
       candidato,
+      turno = '1',
+      partido,
       limit = '100',
       offset = '0',
+      order = 'votos',
     } = req.query as Record<string, string>;
+
+    const limitNum = Math.min(parseInt(limit, 10) || 100, 1000);
+    const offsetNum = Math.max(parseInt(offset, 10) || 0, 0);
 
     const cacheKey = buildCacheKey(
       'resultados',
       ano,
       uf,
+      turno,
       municipio || 'todos',
       cargo || 'todos',
       candidato || 'todos',
-      limit,
-      offset,
+      partido || 'todos',
+      String(limitNum),
+      String(offsetNum),
+      order,
     );
 
     const cached = getCached<unknown>(cacheKey);
@@ -86,106 +90,184 @@ router.get('/resultados', async (req: Request, res: Response) => {
       return res.json({ ...(cached as object), from_cache: true });
     }
 
-    const data = await tseClient.buscarResultados({
-      ano,
-      uf,
-      municipio,
-      cargo,
-      candidato,
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
-    });
+    let query = sbAnon()
+      .from('tse_resultados')
+      .select(
+        'ano, turno, uf, municipio_codigo, municipio_nome, cargo_codigo, cargo_label, numero_candidato, nome_candidato, nome_urna, sequencial_candidato, partido_sigla, partido_numero, coligacao, situacao, votos',
+        { count: 'exact' },
+      )
+      .eq('ano', parseInt(ano, 10))
+      .eq('uf', uf.toUpperCase())
+      .eq('turno', parseInt(turno, 10));
 
-    const records: NormalizedRecord[] = data.records.map((r) => ({
-      municipio: r.NM_MUNICIPIO,
-      municipio_codigo: r.CD_MUNICIPIO,
-      cargo: CARGOS[r.CD_CARGO] ?? r.CD_CARGO,
-      cargo_codigo: r.CD_CARGO,
-      candidato: r.NM_CANDIDATO ?? r.NM_VOTAVEL,
-      numero: r.NR_CANDIDATO ?? r.NR_VOTAVEL,
-      partido: r.SG_PARTIDO,
-      votos: parseInt(r.QT_VOTOS || '0', 10),
-      zona: r.NR_ZONA,
-      secao: r.NR_SECAO,
-      ano,
-      uf,
+    if (cargo) query = query.eq('cargo_codigo', cargo);
+    if (partido) query = query.eq('partido_sigla', partido.toUpperCase());
+
+    if (municipio) {
+      // Aceita tanto código IBGE/TSE quanto nome (heurística: só dígitos = código).
+      if (/^\d+$/.test(municipio)) {
+        query = query.eq('municipio_codigo', municipio);
+      } else {
+        query = query.ilike('municipio_nome', `%${municipio}%`);
+      }
+    }
+
+    if (candidato) {
+      if (/^\d+$/.test(candidato)) {
+        query = query.eq('numero_candidato', candidato);
+      } else {
+        query = query.ilike('nome_candidato', `%${candidato}%`);
+      }
+    }
+
+    if (order === 'nome') {
+      query = query.order('nome_candidato', { ascending: true });
+    } else {
+      query = query.order('votos', { ascending: false });
+    }
+
+    query = query.range(offsetNum, offsetNum + limitNum - 1);
+
+    const { data, count, error } = await query;
+    if (error) throw error;
+
+    // Normaliza shape pro frontend (mantém compatibilidade com o
+    // formato antigo que vinha do CKAN, mas já vem agregado por município).
+    const records = (data ?? []).map((r) => ({
+      municipio: r.municipio_nome,
+      municipio_codigo: r.municipio_codigo,
+      cargo: r.cargo_label ?? CARGOS[r.cargo_codigo] ?? r.cargo_codigo,
+      cargo_codigo: r.cargo_codigo,
+      candidato: r.nome_candidato,
+      nome_urna: r.nome_urna,
+      numero: r.numero_candidato,
+      sequencial: r.sequencial_candidato,
+      partido: r.partido_sigla,
+      partido_numero: r.partido_numero,
+      coligacao: r.coligacao,
+      situacao: r.situacao,
+      votos: r.votos,
+      turno: r.turno,
+      ano: String(r.ano),
+      uf: r.uf,
     }));
 
-    const result = { records, total: data.total, ano, uf };
+    const result = {
+      records,
+      total: count ?? records.length,
+      ano,
+      uf,
+      limit: limitNum,
+      offset: offsetNum,
+    };
     setCached(cacheKey, result);
     res.json(result);
   } catch (error) {
-    console.error('Erro TSE /resultados:', error);
-    sendError(res, 500, 'Erro ao buscar dados do TSE', {
+    console.error('Erro /resultados:', error);
+    sendError(res, 500, 'Erro ao buscar resultados', {
       detalhe: error instanceof Error ? error.message : String(error),
     });
   }
 });
 
 // GET /api/tse/municipios/:municipio
-// Resultado completo de um município com agregação por candidato.
+// Ranking de candidatos num município (já vem agregado da tabela).
+// Path param aceita nome OU código. Query: ano, cargo, uf, turno.
 router.get('/municipios/:municipio', async (req: Request, res: Response) => {
   try {
     const { municipio } = req.params;
-    const { ano = '2022', cargo = '7', uf = 'MG' } = req.query as Record<string, string>;
+    const {
+      ano = '2022',
+      cargo = '7',
+      uf = 'MG',
+      turno = '1',
+    } = req.query as Record<string, string>;
 
-    const cacheKey = buildCacheKey('municipio', municipio, ano, cargo, uf);
+    const cacheKey = buildCacheKey('municipio', municipio, ano, cargo, uf, turno);
     const cached = getCached<unknown>(cacheKey);
     if (cached) return res.json({ ...(cached as object), from_cache: true });
 
-    const data = await tseClient.buscarResultados({
-      ano,
-      uf,
-      municipio,
-      cargo,
-      limit: 500,
-    });
+    let query = sbAnon()
+      .from('tse_resultados')
+      .select(
+        'municipio_codigo, municipio_nome, nome_candidato, nome_urna, numero_candidato, sequencial_candidato, partido_sigla, partido_numero, coligacao, situacao, votos, cargo_codigo, cargo_label, turno',
+      )
+      .eq('ano', parseInt(ano, 10))
+      .eq('uf', uf.toUpperCase())
+      .eq('cargo_codigo', cargo)
+      .eq('turno', parseInt(turno, 10))
+      .order('votos', { ascending: false })
+      .limit(2000);
 
-    // Agrega votos por candidato (somando seções/zonas).
-    const porCandidato = data.records.reduce<Record<string, CandidatoAgregado>>(
-      (acc, r) => {
-        const num = r.NR_CANDIDATO ?? r.NR_VOTAVEL;
-        if (!num) return acc;
-        if (!acc[num]) {
-          acc[num] = {
-            candidato: r.NM_CANDIDATO ?? r.NM_VOTAVEL ?? '—',
-            numero: num,
-            partido: r.SG_PARTIDO ?? '—',
-            votos: 0,
-          };
-        }
-        acc[num].votos += parseInt(r.QT_VOTOS || '0', 10);
-        return acc;
-      },
-      {},
-    );
+    if (/^\d+$/.test(municipio)) {
+      query = query.eq('municipio_codigo', municipio);
+    } else {
+      query = query.ilike('municipio_nome', municipio);
+    }
 
-    const ranking = Object.values(porCandidato)
-      .sort((a, b) => b.votos - a.votos)
-      .map((c, i) => ({ ...c, posicao: i + 1 }));
+    const { data, error } = await query;
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return res.json({
+        municipio: municipio.toUpperCase(),
+        ano,
+        uf,
+        cargo: CARGOS[cargo] ?? cargo,
+        cargo_codigo: cargo,
+        total_votos: 0,
+        candidatos: [],
+        empty: true,
+      });
+    }
+
+    const ranking = data.map((r, i) => ({
+      posicao: i + 1,
+      candidato: r.nome_candidato,
+      nome_urna: r.nome_urna,
+      numero: r.numero_candidato,
+      sequencial: r.sequencial_candidato,
+      partido: r.partido_sigla,
+      partido_numero: r.partido_numero,
+      coligacao: r.coligacao,
+      situacao: r.situacao,
+      votos: r.votos,
+    }));
+
+    const totalVotos = ranking.reduce((s, c) => s + (c.votos ?? 0), 0);
+    const first = data[0];
 
     const result = {
-      municipio: municipio.toUpperCase(),
+      municipio: first.municipio_nome,
+      municipio_codigo: first.municipio_codigo,
       ano,
       uf,
-      cargo: CARGOS[cargo] ?? cargo,
+      turno: parseInt(turno, 10),
+      cargo: first.cargo_label ?? CARGOS[cargo] ?? cargo,
       cargo_codigo: cargo,
-      total_votos: ranking.reduce((s, c) => s + c.votos, 0),
+      total_votos: totalVotos,
       candidatos: ranking,
     };
 
     setCached(cacheKey, result);
     res.json(result);
   } catch (error) {
-    console.error('Erro TSE /municipios:', error);
-    sendError(res, 500, 'Erro ao buscar dados do TSE', {
+    console.error('Erro /municipios:', error);
+    sendError(res, 500, 'Erro ao buscar dados do município', {
       detalhe: error instanceof Error ? error.message : String(error),
     });
   }
 });
 
 // GET /api/tse/candidatos
-// Query: ano, uf, cargo, nome, numero
+// Lista candidatos agregados (soma de votos de TODOS os municípios).
+// Query: ano, uf, cargo, nome, numero, partido, turno, limit.
+//
+// Cuidado: como a tabela está em granularidade município × candidato,
+// fazemos a agregação em memória após filtrar. Pra MG (~853 municípios)
+// × ~700 candidatos a deputado, dá ~600k rows no pior caso. Por isso
+// limitamos a busca puxando só os campos que importam e respeitando os
+// filtros (uf+ano+cargo já corta MUITO).
 router.get('/candidatos', async (req: Request, res: Response) => {
   try {
     const {
@@ -194,7 +276,12 @@ router.get('/candidatos', async (req: Request, res: Response) => {
       cargo,
       nome,
       numero,
+      partido,
+      turno = '1',
+      limit = '500',
     } = req.query as Record<string, string>;
+
+    const limitNum = Math.min(parseInt(limit, 10) || 500, 2000);
 
     const cacheKey = buildCacheKey(
       'candidatos',
@@ -203,16 +290,111 @@ router.get('/candidatos', async (req: Request, res: Response) => {
       cargo || '',
       nome || '',
       numero || '',
+      partido || '',
+      turno,
+      String(limitNum),
     );
     const cached = getCached<unknown>(cacheKey);
     if (cached) return res.json({ data: cached, from_cache: true });
 
-    const records = await tseClient.buscarCandidatos({ ano, uf, cargo, nome, numero });
+    let query = sbAnon()
+      .from('tse_resultados')
+      .select(
+        'nome_candidato, nome_urna, numero_candidato, sequencial_candidato, partido_sigla, partido_numero, situacao, votos',
+      )
+      .eq('ano', parseInt(ano, 10))
+      .eq('uf', uf.toUpperCase())
+      .eq('turno', parseInt(turno, 10));
+
+    if (cargo) query = query.eq('cargo_codigo', cargo);
+    if (partido) query = query.eq('partido_sigla', partido.toUpperCase());
+    if (numero) query = query.eq('numero_candidato', numero);
+    if (nome) query = query.ilike('nome_candidato', `%${nome}%`);
+
+    // Puxamos até 50k rows pra agregar. Pra MG/deputado é suficiente.
+    query = query.limit(50_000);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Agrega por sequencial_candidato (chave estável)
+    const map = new Map<
+      string,
+      {
+        candidato: string;
+        nome_urna: string | null;
+        numero: string;
+        sequencial: string;
+        partido: string | null;
+        partido_numero: string | null;
+        situacao: string | null;
+        votos: number;
+        municipios: number;
+      }
+    >();
+
+    for (const r of data ?? []) {
+      const key = r.sequencial_candidato;
+      const prev = map.get(key);
+      if (prev) {
+        prev.votos += r.votos ?? 0;
+        prev.municipios += 1;
+      } else {
+        map.set(key, {
+          candidato: r.nome_candidato,
+          nome_urna: r.nome_urna,
+          numero: r.numero_candidato,
+          sequencial: r.sequencial_candidato,
+          partido: r.partido_sigla,
+          partido_numero: r.partido_numero,
+          situacao: r.situacao,
+          votos: r.votos ?? 0,
+          municipios: 1,
+        });
+      }
+    }
+
+    const records = Array.from(map.values())
+      .sort((a, b) => b.votos - a.votos)
+      .slice(0, limitNum);
+
     setCached(cacheKey, records);
     res.json({ data: records, total: records.length });
   } catch (error) {
-    console.error('Erro TSE /candidatos:', error);
+    console.error('Erro /candidatos:', error);
     sendError(res, 500, 'Erro ao buscar candidatos', {
+      detalhe: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// GET /api/tse/anos — lista os (ano, turno) que existem na tabela.
+// Útil pro frontend popular dropdown sem hardcodar.
+router.get('/anos', async (_req: Request, res: Response) => {
+  try {
+    const cached = getCached<unknown>('anos-disponiveis');
+    if (cached) return res.json({ data: cached, from_cache: true });
+
+    const { data, error } = await sbAnon()
+      .from('tse_resultados')
+      .select('ano, turno, uf')
+      .limit(50_000);
+    if (error) throw error;
+
+    const set = new Map<string, { ano: number; turno: number; uf: string }>();
+    for (const r of data ?? []) {
+      const key = `${r.ano}-${r.turno}-${r.uf}`;
+      if (!set.has(key)) set.set(key, { ano: r.ano, turno: r.turno, uf: r.uf });
+    }
+    const list = Array.from(set.values()).sort(
+      (a, b) => b.ano - a.ano || a.turno - b.turno || a.uf.localeCompare(b.uf),
+    );
+
+    setCached('anos-disponiveis', list);
+    res.json({ data: list });
+  } catch (error) {
+    console.error('Erro /anos:', error);
+    sendError(res, 500, 'Erro ao listar anos disponíveis', {
       detalhe: error instanceof Error ? error.message : String(error),
     });
   }
