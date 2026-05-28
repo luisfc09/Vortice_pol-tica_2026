@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { AsaasBillingCard } from '@/components/admin/AsaasBillingCard';
+import { EvolutionApiCard } from '@/components/admin/EvolutionApiCard';
 import { AsaasWebhookLogs } from '@/components/admin/AsaasWebhookLogs';
 import type { AppSettings } from '@/types';
 import { format } from 'date-fns';
@@ -247,6 +248,9 @@ export default function AdminSettingsPage() {
 
       {/* Cobrança Asaas — config global da Vórtice (fora do form de app_settings) */}
       <AsaasBillingCard />
+
+      {/* Evolution API (WhatsApp) — config global da Vórtice */}
+      <EvolutionApiCard />
 
       {/* Logs de webhook do Asaas (ativação/suspensão automática) */}
       <AsaasWebhookLogs />

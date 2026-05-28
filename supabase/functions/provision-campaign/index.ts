@@ -507,6 +507,36 @@ Deno.serve(async (req: Request) => {
   });
 
   // -------------------------------------------------------------------------
+  // Step 13 (ADITIVO, NÃO-BLOQUEANTE): notificação de boas-vindas (e-mail +
+  // WhatsApp) via send-notification. Falha aqui NÃO derruba o provisionamento.
+  // -------------------------------------------------------------------------
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-token': Deno.env.get('INTERNAL_FN_TOKEN') ?? '',
+        Authorization: `Bearer ${SERVICE_KEY}`,
+      },
+      body: JSON.stringify({
+        template: 'welcome',
+        campaign_id: campaign.id,
+        vars: {
+          admin_email: payload.admin_email,
+          admin_name: payload.admin_full_name,
+          admin_phone: payload.admin_phone ?? null,
+          temporary_password: adminUserAlreadyExisted ? null : TEMP_PASSWORD,
+          payment_link: asaas.payment_link,
+          pix_qr_code: asaas.pix_qr_code,
+        },
+      }),
+    });
+    console.log(`${TAG} notificação welcome disparada`);
+  } catch (e) {
+    console.warn(`${TAG} notificação falhou (não bloqueante): ${(e as Error).message}`);
+  }
+
+  // -------------------------------------------------------------------------
   // Sucesso
   // -------------------------------------------------------------------------
   return json({

@@ -19,7 +19,8 @@ type IntegrationType =
   | 'meta_ads'
   | 'google_ads'
   | 'whatsapp'
-  | 'asaas';
+  | 'asaas'
+  | 'evolution';
 
 interface TestRequest {
   type: IntegrationType;
@@ -86,6 +87,8 @@ Deno.serve(async (req: Request) => {
         return await testWhatsApp(secrets);
       case 'asaas':
         return await testAsaas(secrets, config ?? {});
+      case 'evolution':
+        return await testEvolution(secrets, config ?? {});
       default:
         return json({ ok: false, message: 'Tipo desconhecido.' }, 400);
     }
@@ -375,5 +378,28 @@ async function testAsaas(secrets: Record<string, string>, config: Record<string,
     ok: true,
     message: `Asaas (${env}) conectado: ${accountName}`,
     account_name: accountName,
+  });
+}
+
+// --------- Evolution API (WhatsApp) ------------------------------------------
+async function testEvolution(secrets: Record<string, string>, config: Record<string, unknown>) {
+  const apiKey = secrets.api_key;
+  const url = (config.url as string) || '';
+  const instance = (config.instance as string) || '';
+  if (!apiKey || !url || !instance) {
+    return json({ ok: false, message: 'Faltam URL da instância, nome da instância e API Key.' });
+  }
+  const res = await fetch(
+    `${url.replace(/\/$/, '')}/instance/connectionState/${encodeURIComponent(instance)}`,
+    { headers: { apikey: apiKey } },
+  );
+  if (!res.ok) {
+    return json({ ok: false, message: `Evolution ${res.status}: ${(await res.text()).slice(0, 200)}` });
+  }
+  const data = (await res.json()) as { instance?: { state?: string }; state?: string };
+  const state = data?.instance?.state ?? data?.state ?? 'desconhecido';
+  return json({
+    ok: true,
+    message: `Evolution conectada — instância "${instance}" (estado: ${state}).`,
   });
 }

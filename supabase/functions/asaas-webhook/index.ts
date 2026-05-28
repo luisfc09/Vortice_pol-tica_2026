@@ -165,6 +165,27 @@ Deno.serve(async (req: Request) => {
     console.warn(`${TAG} erro processando ${eventType} (não bloqueante): ${log.error}`);
   }
 
+  // Notificação de pagamento confirmado (não-bloqueante) — só quando ativou.
+  if (
+    (eventType === 'PAYMENT_CONFIRMED' || eventType === 'PAYMENT_RECEIVED') &&
+    log.status_novo === 'active' &&
+    log.campaign_id
+  ) {
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-token': Deno.env.get('INTERNAL_FN_TOKEN') ?? '',
+          Authorization: `Bearer ${SERVICE_KEY}`,
+        },
+        body: JSON.stringify({ template: 'payment_confirmed', campaign_id: log.campaign_id }),
+      });
+    } catch (e) {
+      console.warn(`${TAG} notificação payment_confirmed falhou: ${(e as Error).message}`);
+    }
+  }
+
   // Sempre grava o log e sempre responde 200.
   await saveLog(admin, log);
   return json({ received: true, error: log.error ? true : false }, 200);
