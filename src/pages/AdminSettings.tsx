@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { AsaasBillingCard } from '@/components/admin/AsaasBillingCard';
+import { AsaasWebhookLogs } from '@/components/admin/AsaasWebhookLogs';
 import type { AppSettings } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -246,6 +247,9 @@ export default function AdminSettingsPage() {
 
       {/* Cobrança Asaas — config global da Vórtice (fora do form de app_settings) */}
       <AsaasBillingCard />
+
+      {/* Logs de webhook do Asaas (ativação/suspensão automática) */}
+      <AsaasWebhookLogs />
     </div>
   );
 }
