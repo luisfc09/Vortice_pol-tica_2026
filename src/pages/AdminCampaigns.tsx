@@ -62,6 +62,7 @@ interface ExpiringRow {
 export default function AdminCampaignsPage() {
   const navigate = useNavigate();
   const enterViewAs = useViewAsStore((s) => s.enter);
+  const viewAsId = useViewAsStore((s) => s.campaign?.id ?? null);
 
   const [rows, setRows] = useState<CampaignOverview[]>([]);
   const [expiring, setExpiring] = useState<ExpiringRow[]>([]);
@@ -321,6 +322,12 @@ export default function AdminCampaignsPage() {
                         {CAMPAIGN_STATUS_LABEL[r.status]}
                       </Badge>
                       <Badge variant="outline">{CAMPAIGN_PLAN_LABEL[r.plan]}</Badge>
+                      {r.id === viewAsId ? (
+                        <Badge variant="success" className="gap-1">
+                          <Eye className="h-3 w-3" />
+                          Vendo agora
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {r.party} {r.party_number} · {r.office} {r.state} {r.election_year} ·
@@ -346,12 +353,12 @@ export default function AdminCampaignsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant={r.id === viewAsId ? 'default' : 'outline'}
                     onClick={() => void enterAsClient(r.id)}
-                    title="Visualizar como admin desta campanha"
+                    title="Visualizar o sistema como admin desta campanha"
                   >
                     <Eye className="h-3.5 w-3.5" />
-                    Ver como cliente
+                    {r.id === viewAsId ? 'Continuar vendo' : 'Ver como cliente'}
                   </Button>
                   {r.status !== 'active' ? (
                     <Button size="sm" onClick={() => changeStatus(r.id, 'active')}>
