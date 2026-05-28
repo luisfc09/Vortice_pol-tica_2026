@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { TrialBanner } from './TrialBanner';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
+import { setActiveCampaignId } from '@/lib/data';
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -45,6 +46,14 @@ export function AppLayout() {
       .sort((a, b) => b.length - a.length)[0];
     return match ? TITLES[match] : 'Vórtice';
   }, [location.pathname]);
+
+  // Escopo de dados: amarra TODAS as coleções à campanha efetiva (respeita o
+  // "ver como cliente" do super admin). Trocar de campanha re-hidrata tudo no
+  // escopo certo — impede que dados de uma campanha apareçam em outra.
+  const effectiveCampaignId = session?.campaign?.id ?? null;
+  useEffect(() => {
+    setActiveCampaignId(effectiveCampaignId);
+  }, [effectiveCampaignId]);
 
   if (!session) return null;
 

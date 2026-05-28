@@ -4,7 +4,11 @@
 
 import { useSyncExternalStore } from 'react';
 import { MockCollection } from '@/lib/mock-db';
-import { SupabaseCollection } from '@/lib/supabase-collection';
+import {
+  SupabaseCollection,
+  setActiveCampaignId,
+  getActiveCampaignId,
+} from '@/lib/supabase-collection';
 import type { Collection, EntityWithId } from '@/lib/collection-types';
 import { USE_MOCKS } from '@/lib/supabase';
 // re-export for callers that want to type a Collection ref
@@ -34,13 +38,21 @@ import type {
 interface CollectionConfig<T extends EntityWithId> {
   table: string;
   seed: T[];
+  // Inclui linhas globais (campaign_id IS NULL) — ex.: alerts de sistema.
+  includeGlobal?: boolean;
 }
 
-function build<T extends EntityWithId>({ table, seed }: CollectionConfig<T>): Collection<T> {
+function build<T extends EntityWithId>({
+  table,
+  seed,
+  includeGlobal,
+}: CollectionConfig<T>): Collection<T> {
   if (USE_MOCKS) {
     return new MockCollection<T>(`vortice.db.${table}.v1`, seed);
   }
-  return new SupabaseCollection<T>(table);
+  // campaignScoped = true por padrão: toda coleção é filtrada por campanha
+  // ativa na camada de app (isolamento independente do RLS).
+  return new SupabaseCollection<T>(table, { includeGlobal });
 }
 
 export const collections = {
@@ -49,10 +61,14 @@ export const collections = {
   interviews: build<FieldInterview>({ table: 'field_interviews', seed: SEED_INTERVIEWS }),
   events: build<CampaignEvent>({ table: 'events', seed: SEED_EVENTS }),
   mentions: build<Mention>({ table: 'mentions', seed: SEED_MENTIONS }),
-  alerts: build<Alert>({ table: 'alerts', seed: SEED_ALERTS }),
+  alerts: build<Alert>({ table: 'alerts', seed: SEED_ALERTS, includeGlobal: true }),
   campaign_users: build<CampaignUser>({ table: 'campaign_users', seed: SEED_CAMPAIGN_USERS }),
   mention_responses: build<MentionResponse>({ table: 'mention_responses', seed: [] }),
 };
+
+// Define a campanha ativa pro escopo de dados (login / "ver como cliente").
+// Re-exporta do supabase-collection pra centralizar a fachada de dados.
+export { setActiveCampaignId, getActiveCampaignId };
 
 export function useCollection<T extends EntityWithId>(collection: Collection<T>): T[] {
   return useSyncExternalStore(collection.subscribe, collection.getSnapshot, collection.getSnapshot);
@@ -161,7 +177,10 @@ export async function createInterviewReturningId(
 }
 
 // Called by useAuth on signout so the next user lands on clean local state.
+// Zera a campanha ativa (que também reseta todas as coleções) e garante o
+// reset mesmo em modo mock.
 export function resetCollections(): void {
+  setActiveCampaignId(null);
   for (const c of Object.values(collections)) {
     if (c instanceof SupabaseCollection) {
       c.reset();

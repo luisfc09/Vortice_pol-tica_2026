@@ -11,6 +11,34 @@ interface SupabaseCollectionOptions {
   // Coluna usada para ordenar a lista local. Default: created_at desc.
   orderBy?: string;
   orderAscending?: boolean;
+  // Se a tabela é multi-tenant (tem coluna campaign_id). Default true.
+  // Quando true, TODA query é filtrada por campaign_id = campanha ativa —
+  // isolamento de dados na camada de aplicação, independente do RLS. Crucial
+  // pro super admin (que tem leitura global no RLS): sem isso, ele veria
+  // dados de todas as campanhas misturados.
+  campaignScoped?: boolean;
+  // Inclui também linhas globais (campaign_id IS NULL) — ex.: alerts de sistema.
+  includeGlobal?: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// Campanha ativa (escopo de dados). Toda SupabaseCollection multi-tenant lê
+// daqui. Trocar a campanha ativa (login, "ver como cliente", logout) reseta
+// TODAS as coleções pra re-hidratarem no escopo certo.
+// ----------------------------------------------------------------------------
+let activeCampaignId: string | null = null;
+const liveInstances = new Set<{ reset: () => void }>();
+
+export function getActiveCampaignId(): string | null {
+  return activeCampaignId;
+}
+
+export function setActiveCampaignId(id: string | null): void {
+  if (id === activeCampaignId) return;
+  activeCampaignId = id;
+  // Re-hidrata todas as coleções no novo escopo (evita mostrar dados da
+  // campanha anterior / de outras campanhas).
+  for (const inst of liveInstances) inst.reset();
 }
 
 function tempUuid(): string {
@@ -33,11 +61,17 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
   private readonly realtime: boolean;
   private readonly orderBy: string;
   private readonly orderAscending: boolean;
+  private readonly campaignScoped: boolean;
+  private readonly includeGlobal: boolean;
 
   constructor(private readonly table: string, options: SupabaseCollectionOptions = {}) {
     this.realtime = options.realtime ?? true;
     this.orderBy = options.orderBy ?? 'created_at';
     this.orderAscending = options.orderAscending ?? false;
+    this.campaignScoped = options.campaignScoped ?? true;
+    this.includeGlobal = options.includeGlobal ?? false;
+    // Registra a instância pra ser resetada quando a campanha ativa mudar.
+    liveInstances.add(this);
   }
 
   subscribe = (l: Listener): (() => void) => {
@@ -164,10 +198,28 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
   }
 
   private async hydrate(): Promise<void> {
-    const { data, error } = await supabase
+    // Sem campanha ativa numa tabela multi-tenant → não busca nada. Evita que
+    // o super admin (leitura global no RLS) puxe dados de todas as campanhas
+    // antes de uma campanha estar selecionada.
+    if (this.campaignScoped && !activeCampaignId) {
+      this.snapshot = [];
+      this.hydrated = true;
+      this.emit();
+      return;
+    }
+
+    let query = supabase
       .from(this.table)
       .select('*')
       .order(this.orderBy, { ascending: this.orderAscending });
+
+    if (this.campaignScoped && activeCampaignId) {
+      query = this.includeGlobal
+        ? query.or(`campaign_id.eq.${activeCampaignId},campaign_id.is.null`)
+        : query.eq('campaign_id', activeCampaignId);
+    }
+
+    const { data, error } = await query;
     if (error) {
       // RLS errors return empty for safety. Don't toast on hydration failures
       // (a user with no membership row will hit these on every collection).
@@ -184,11 +236,22 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
 
   private setupRealtime(): void {
     if (this.channel) return;
+    // Filtra o stream realtime pela campanha ativa — sem isso, o super admin
+    // receberia inserts/updates de TODAS as campanhas.
+    const pgChanges: {
+      event: '*';
+      schema: string;
+      table: string;
+      filter?: string;
+    } = { event: '*', schema: 'public', table: this.table };
+    if (this.campaignScoped && activeCampaignId) {
+      pgChanges.filter = `campaign_id=eq.${activeCampaignId}`;
+    }
     this.channel = supabase
-      .channel(`vortice-${this.table}`)
+      .channel(`vortice-${this.table}-${activeCampaignId ?? 'none'}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: this.table },
+        pgChanges,
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const row = payload.new as T;
