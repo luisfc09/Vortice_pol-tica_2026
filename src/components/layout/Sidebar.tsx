@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard,
+  ChartNoAxesCombined,
   Users,
   UserCheck,
   Map,
@@ -31,7 +31,7 @@ interface NavItem {
 }
 
 const ITEMS: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, requiresCampaign: true },
+  { to: '/dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, requiresCampaign: true },
   {
     to: '/inteligencia',
     label: 'Inteligência Eleitoral',
