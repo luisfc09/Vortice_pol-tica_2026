@@ -263,11 +263,9 @@ router.get('/municipios/:municipio', async (req: Request, res: Response) => {
 // Lista candidatos agregados (soma de votos de TODOS os municípios).
 // Query: ano, uf, cargo, nome, numero, partido, turno, limit.
 //
-// Cuidado: como a tabela está em granularidade município × candidato,
-// fazemos a agregação em memória após filtrar. Pra MG (~853 municípios)
-// × ~700 candidatos a deputado, dá ~600k rows no pior caso. Por isso
-// limitamos a busca puxando só os campos que importam e respeitando os
-// filtros (uf+ano+cargo já corta MUITO).
+// Usa a RPC tse_candidatos_agregados — a agregação roda NO BANCO
+// (GROUP BY + SUM). Fazer isso em memória no Node não funciona porque o
+// PostgREST corta a resposta em ~1000 linhas, e dep federal tem 183k+.
 router.get('/candidatos', async (req: Request, res: Response) => {
   try {
     const {
@@ -297,66 +295,31 @@ router.get('/candidatos', async (req: Request, res: Response) => {
     const cached = getCached<unknown>(cacheKey);
     if (cached) return res.json({ data: cached, from_cache: true });
 
-    let query = sbAnon()
-      .from('tse_resultados')
-      .select(
-        'nome_candidato, nome_urna, numero_candidato, sequencial_candidato, partido_sigla, partido_numero, situacao, votos',
-      )
-      .eq('ano', parseInt(ano, 10))
-      .eq('uf', uf.toUpperCase())
-      .eq('turno', parseInt(turno, 10));
-
-    if (cargo) query = query.eq('cargo_codigo', cargo);
-    if (partido) query = query.eq('partido_sigla', partido.toUpperCase());
-    if (numero) query = query.eq('numero_candidato', numero);
-    if (nome) query = query.ilike('nome_candidato', `%${nome}%`);
-
-    // Puxamos até 50k rows pra agregar. Pra MG/deputado é suficiente.
-    query = query.limit(50_000);
-
-    const { data, error } = await query;
+    const { data, error } = await sbAnon().rpc('tse_candidatos_agregados', {
+      p_ano: parseInt(ano, 10),
+      p_uf: uf.toUpperCase(),
+      p_cargo: cargo ?? null,
+      p_turno: parseInt(turno, 10),
+      p_nome: nome ?? null,
+      p_numero: numero ?? null,
+      p_partido: partido ? partido.toUpperCase() : null,
+      p_limit: limitNum,
+    });
     if (error) throw error;
 
-    // Agrega por sequencial_candidato (chave estável)
-    const map = new Map<
-      string,
-      {
-        candidato: string;
-        nome_urna: string | null;
-        numero: string;
-        sequencial: string;
-        partido: string | null;
-        partido_numero: string | null;
-        situacao: string | null;
-        votos: number;
-        municipios: number;
-      }
-    >();
-
-    for (const r of data ?? []) {
-      const key = r.sequencial_candidato;
-      const prev = map.get(key);
-      if (prev) {
-        prev.votos += r.votos ?? 0;
-        prev.municipios += 1;
-      } else {
-        map.set(key, {
-          candidato: r.nome_candidato,
-          nome_urna: r.nome_urna,
-          numero: r.numero_candidato,
-          sequencial: r.sequencial_candidato,
-          partido: r.partido_sigla,
-          partido_numero: r.partido_numero,
-          situacao: r.situacao,
-          votos: r.votos ?? 0,
-          municipios: 1,
-        });
-      }
-    }
-
-    const records = Array.from(map.values())
-      .sort((a, b) => b.votos - a.votos)
-      .slice(0, limitNum);
+    // Normaliza shape (RPC devolve snake_case; mantemos chaves amigáveis)
+    const records = (data ?? []).map((r: Record<string, unknown>) => ({
+      candidato: r.nome_candidato,
+      nome_urna: r.nome_urna,
+      numero: r.numero_candidato,
+      sequencial: r.sequencial_candidato,
+      partido: r.partido_sigla,
+      partido_numero: r.partido_numero,
+      situacao: r.situacao,
+      cargo_codigo: r.cargo_codigo,
+      votos: Number(r.votos ?? 0),
+      municipios: Number(r.municipios ?? 0),
+    }));
 
     setCached(cacheKey, records);
     res.json({ data: records, total: records.length });
@@ -368,33 +331,32 @@ router.get('/candidatos', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/tse/anos — lista os (ano, turno) que existem na tabela.
-// Útil pro frontend popular dropdown sem hardcodar.
+// GET /api/tse/anos — combinações (ano, turno, uf, cargo) presentes na base,
+// com contagem de linhas e municípios. Pro frontend popular dropdowns.
+// Usa a RPC tse_combinacoes (DISTINCT/GROUP BY no banco).
 router.get('/anos', async (_req: Request, res: Response) => {
   try {
-    const cached = getCached<unknown>('anos-disponiveis');
+    const cached = getCached<unknown>('combinacoes-disponiveis');
     if (cached) return res.json({ data: cached, from_cache: true });
 
-    const { data, error } = await sbAnon()
-      .from('tse_resultados')
-      .select('ano, turno, uf')
-      .limit(50_000);
+    const { data, error } = await sbAnon().rpc('tse_combinacoes');
     if (error) throw error;
 
-    const set = new Map<string, { ano: number; turno: number; uf: string }>();
-    for (const r of data ?? []) {
-      const key = `${r.ano}-${r.turno}-${r.uf}`;
-      if (!set.has(key)) set.set(key, { ano: r.ano, turno: r.turno, uf: r.uf });
-    }
-    const list = Array.from(set.values()).sort(
-      (a, b) => b.ano - a.ano || a.turno - b.turno || a.uf.localeCompare(b.uf),
-    );
+    const list = (data ?? []).map((r: Record<string, unknown>) => ({
+      ano: Number(r.ano),
+      turno: Number(r.turno),
+      uf: r.uf,
+      cargo_codigo: r.cargo_codigo,
+      cargo_label: CARGOS[String(r.cargo_codigo)] ?? r.cargo_codigo,
+      linhas: Number(r.linhas ?? 0),
+      municipios: Number(r.municipios ?? 0),
+    }));
 
-    setCached('anos-disponiveis', list);
+    setCached('combinacoes-disponiveis', list);
     res.json({ data: list });
   } catch (error) {
     console.error('Erro /anos:', error);
-    sendError(res, 500, 'Erro ao listar anos disponíveis', {
+    sendError(res, 500, 'Erro ao listar combinações disponíveis', {
       detalhe: error instanceof Error ? error.message : String(error),
     });
   }
