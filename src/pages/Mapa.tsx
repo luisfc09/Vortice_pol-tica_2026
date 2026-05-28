@@ -6,6 +6,7 @@ import { MunicipalityDrawer } from '@/components/mapa/MunicipalityDrawer';
 import { TseControls } from '@/components/mapa/TseControls';
 import { TseResumoPanel } from '@/components/mapa/TseResumoPanel';
 import { TseMunicipioDrawer } from '@/components/mapa/TseMunicipioDrawer';
+import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { collections, useCollection } from '@/lib/data';
 import { useTseEleicao } from '@/hooks/useTseEleicao';
 import { tseApi, type TseMapaMunicipio, type TseMunicipioRanking } from '@/lib/tseApi';
@@ -110,6 +111,16 @@ export default function MapaPage() {
 
   const naoCasados = tse.mapa ? tse.mapa.total_municipios - tseByIbge.size : 0;
 
+  // Opções pro seletor de município (alfabético) — só os que têm dado na
+  // eleição selecionada. code = IBGE (pra casar com selectedTse e o mapa).
+  const tseMuniOptions = useMemo(() => {
+    if (!tse.mapa) return [];
+    return tse.mapa.municipios
+      .map((m) => ({ code: tseNomeToIbge(m.municipio_nome) ?? '', name: m.municipio_nome }))
+      .filter((o) => o.code)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [tse.mapa]);
+
   const tseCells = useMemo(() => {
     const m = new Map<string, MapCell>();
     for (const [ibge, muni] of tseByIbge) {
@@ -200,6 +211,26 @@ export default function MapaPage() {
           />
         ) : null}
       </div>
+
+      {/* Seletor de município (modo TSE) — busca alfabética */}
+      {mode === 'tse' && tse.mapa ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Município
+          </label>
+          <div className="w-[320px] max-w-full">
+            <MunicipalityCombobox
+              value={selectedTse ?? ''}
+              onChange={(code) => setSelectedTse(code || null)}
+              options={tseMuniOptions}
+              placeholder={`Buscar entre ${tseMuniOptions.length} municípios…`}
+            />
+          </div>
+          <span className="text-xs text-muted-foreground">
+            ou clique no mapa pra abrir o ranking
+          </span>
+        </div>
+      ) : null}
 
       <p className="text-sm text-muted-foreground">
         {mode === 'campanha' ? (
