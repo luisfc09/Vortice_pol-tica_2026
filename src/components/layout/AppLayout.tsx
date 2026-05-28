@@ -11,7 +11,7 @@ const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/liderancas': 'Lideranças',
   '/eleitores': 'Eleitores',
-  '/mapa': 'Mapa político',
+  '/mapa': 'Mapa Eleitoral',
   '/mencoes': 'Monitor de menções',
   '/mencoes/resposta-rapida': 'Resposta Rápida',
   '/mencoes/resposta-rapida/historico': 'Histórico de respostas',

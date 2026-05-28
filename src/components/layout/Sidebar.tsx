@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
 import {
   ChartNoAxesCombined,
+  ChartColumnIncreasing,
   Users,
   UserCheck,
-  Map,
+  MapPin,
   Megaphone,
   ClipboardList,
   Calendar,
@@ -13,7 +14,6 @@ import {
   Settings,
   Plug,
   Palette,
-  Brain,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,13 +35,13 @@ const ITEMS: NavItem[] = [
   {
     to: '/inteligencia',
     label: 'Inteligência Eleitoral',
-    icon: Brain,
+    icon: ChartColumnIncreasing,
     roles: ['admin', 'candidate', 'coordinator', 'researcher'],
     requiresCampaign: true,
   },
   { to: '/liderancas', label: 'Lideranças', icon: Users, requiresCampaign: true },
   { to: '/eleitores', label: 'Eleitores', icon: UserCheck, requiresCampaign: true },
-  { to: '/mapa', label: 'Mapa político', icon: Map, requiresCampaign: true },
+  { to: '/mapa', label: 'Mapa Eleitoral', icon: MapPin, requiresCampaign: true },
   {
     to: '/mencoes',
     label: 'Menções',
