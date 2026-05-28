@@ -22,11 +22,11 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import { formatPhone } from '@/lib/utils';
-import {
-  CAMPAIGN_PLAN_DESCRIPTION,
-  CAMPAIGN_PLAN_LABEL,
-  type CampaignPlan,
-} from '@/types';
+import { PlanCards, RadioOption } from '@/components/billing/PlanCards';
+import { PLANS, formatPlanPrice } from '@/lib/plans';
+import type { CampaignPlan } from '@/types';
+
+type ActivationType = 'trial' | 'paid' | 'manual';
 
 interface Props {
   open: boolean;
@@ -45,7 +45,7 @@ interface FormState {
   election_year: string;
   vote_target: string;
   slogan: string;
-  status: 'trial' | 'active';
+  activation_type: ActivationType;
   plan: CampaignPlan;
   // Admin do cliente
   admin_email: string;
@@ -63,12 +63,21 @@ const EMPTY: FormState = {
   election_year: '2026',
   vote_target: '350000',
   slogan: 'Estratégia que move eleições.',
-  status: 'trial',
+  activation_type: 'trial',
   plan: 'basico',
   admin_email: '',
   admin_full_name: '',
   admin_phone: '',
 };
+
+interface AsaasInfo {
+  customer_id: string | null;
+  subscription_id: string | null;
+  payment_link: string | null;
+  pix_qr_code: string | null;
+  skipped: boolean;
+  error: string | null;
+}
 
 interface ProvisionResult {
   campaign_id: string;
@@ -79,6 +88,9 @@ interface ProvisionResult {
   temporary_password: string | null;
   admin_already_existed?: boolean;
   login_url: string;
+  plan: CampaignPlan;
+  activation_type: ActivationType;
+  asaas?: AsaasInfo | null;
 }
 
 const OFFICES = ['Governador', 'Senador', 'Deputado Federal', 'Deputado Estadual', 'Prefeito', 'Vereador'];
@@ -125,7 +137,7 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
           election_year: Number(form.election_year) || new Date().getFullYear(),
           vote_target: Number(form.vote_target) || 0,
           slogan: form.slogan || undefined,
-          status: form.status,
+          activation_type: form.activation_type,
           plan: form.plan,
           admin_email: form.admin_email.trim(),
           admin_full_name: form.admin_full_name.trim(),
@@ -178,6 +190,9 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
         temporary_password: payload.temporary_password,
         admin_already_existed: payload.admin_already_existed,
         login_url: payload.login_url,
+        plan: form.plan,
+        activation_type: form.activation_type,
+        asaas: payload.asaas ?? null,
       });
       onCreated?.();
       toast.success(
@@ -187,6 +202,15 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
       );
     } finally {
       setSending(false);
+    }
+  }
+
+  async function copyText(text: string, okMsg: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(okMsg);
+    } catch {
+      toast.error('Não foi possível copiar.');
     }
   }
 
@@ -249,6 +273,46 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               {copied ? 'Copiado' : 'Copiar credenciais'}
             </Button>
+
+            {result.asaas?.payment_link ? (
+              <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">
+                <p className="mb-1 font-semibold text-emerald-200">💳 Link de pagamento gerado</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Plano {PLANS[result.plan].name} — {formatPlanPrice(result.plan)}/mês.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyText(result.asaas!.payment_link!, 'Link de pagamento copiado')}
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Copiar link de pagamento
+                  </Button>
+                  {result.asaas.pix_qr_code ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyText(result.asaas!.pix_qr_code!, 'QR Code PIX copiado')}
+                    >
+                      <Copy className="h-3.5 w-3.5" /> Copiar QR Code PIX
+                    </Button>
+                  ) : null}
+                  <a
+                    href={result.asaas.payment_link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-1 rounded-md border border-emerald-500/40 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/10"
+                  >
+                    Abrir página de pagamento
+                  </a>
+                </div>
+              </div>
+            ) : result.activation_type === 'paid' && result.asaas?.error ? (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100/90">
+                Asaas indisponível ({result.asaas.error}). A campanha foi criada normalmente —
+                gere o link depois pelo painel.
+              </p>
+            ) : null}
 
             {result.temporary_password ? (
               <p className="rounded-lg border border-vortex-border bg-vortex-surface/40 p-3 text-xs text-muted-foreground">
@@ -366,41 +430,32 @@ export function CampaignProvisionSheet({ open, onOpenChange, onCreated }: Props)
                   onChange={(e) => update('vote_target', e.target.value.replace(/\D/g, ''))}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Status inicial</Label>
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => update('status', v as 'trial' | 'active')}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="trial">Trial</SelectItem>
-                    <SelectItem value="active">Ativa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Plano contratado</Label>
-                <Select
-                  value={form.plan}
-                  onValueChange={(v) => update('plan', v as CampaignPlan)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(CAMPAIGN_PLAN_LABEL) as CampaignPlan[]).map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {CAMPAIGN_PLAN_LABEL[p]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  {CAMPAIGN_PLAN_DESCRIPTION[form.plan]}
-                </p>
+                <PlanCards value={form.plan} onChange={(p) => update('plan', p)} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Ativação</Label>
+                <div className="space-y-2">
+                  <RadioOption
+                    selected={form.activation_type === 'trial'}
+                    onSelect={() => update('activation_type', 'trial')}
+                    title="Trial — 7 dias gratuitos"
+                    description="Cliente acessa imediatamente. Cobrança começa no 8º dia."
+                  />
+                  <RadioOption
+                    selected={form.activation_type === 'paid'}
+                    onSelect={() => update('activation_type', 'paid')}
+                    title="Pago imediato"
+                    description="Gera link PIX + cartão enviado junto com as credenciais."
+                  />
+                  <RadioOption
+                    selected={form.activation_type === 'manual'}
+                    onSelect={() => update('activation_type', 'manual')}
+                    title="Manual (interno)"
+                    description="Sem cobrança. Para testes e uso interno."
+                  />
+                </div>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="slogan">Slogan (opcional)</Label>
