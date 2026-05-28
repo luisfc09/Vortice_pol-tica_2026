@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Building2,
@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Save,
   Shield,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -29,11 +30,13 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import { initials } from '@/lib/utils';
+import { useViewAsStore } from '@/stores/viewAs';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   CAMPAIGN_STATUS_LABEL,
   ROLE_LABEL,
+  type Campaign,
   type CampaignDetail,
   type CampaignStatus,
 } from '@/types';
@@ -49,6 +52,9 @@ const STATUS_VARIANT: Record<CampaignStatus, 'default' | 'secondary' | 'warning'
 
 export default function AdminCampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const enterViewAs = useViewAsStore((s) => s.enter);
+  const viewAsId = useViewAsStore((s) => s.campaign?.id ?? null);
   const [detail, setDetail] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState({
@@ -87,6 +93,24 @@ export default function AdminCampaignDetailPage() {
   useEffect(() => {
     void load();
   }, [id]);
+
+  async function enterAsClient() {
+    if (!detail) return;
+    // Busca a linha completa da campanha (garante o shape de Campaign p/ o
+    // banner do view-as: candidate_name, plan, etc.).
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('*')
+      .eq('id', detail.campaign.id)
+      .single();
+    if (error || !data) {
+      toast.error(`Falha ao entrar como cliente: ${error?.message ?? 'sem dados'}`);
+      return;
+    }
+    enterViewAs(data as Campaign);
+    toast.success(`Visualizando como ${data.candidate_name}.`);
+    navigate('/dashboard');
+  }
 
   async function save() {
     if (!detail) return;
@@ -154,9 +178,20 @@ export default function AdminCampaignDetailPage() {
             {formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: ptBR })}
           </p>
         </div>
-        <Badge variant={STATUS_VARIANT[c.status]} className="h-fit">
-          {CAMPAIGN_STATUS_LABEL[c.status]}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={STATUS_VARIANT[c.status]} className="h-fit">
+            {CAMPAIGN_STATUS_LABEL[c.status]}
+          </Badge>
+          <Button
+            size="sm"
+            variant={c.id === viewAsId ? 'default' : 'outline'}
+            onClick={() => void enterAsClient()}
+            title="Visualizar o sistema como admin desta campanha"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            {c.id === viewAsId ? 'Continuar vendo' : 'Ver como cliente'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
