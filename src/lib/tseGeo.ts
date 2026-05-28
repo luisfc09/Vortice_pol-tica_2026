@@ -21,14 +21,13 @@ export function normalizeMuniName(raw: string): string {
     .trim();
 }
 
-// Exceções conhecidas onde o nome do TSE difere do IBGE. Chave e valor já
-// normalizados. (Lista curta — a maioria casa direto.)
+// Exceções conhecidas onde o nome do TSE difere do IBGE. Chave = nome TSE
+// normalizado; valor = nome IBGE normalizado. (Lista curta — 851/853 casam
+// direto; só estes precisam de-para.)
 const NAME_OVERRIDES: Record<string, string> = {
-  // TSE usa "BRASOPOLIS"; IBGE "BRAZOPOLIS"
-  BRASOPOLIS: 'BRAZOPOLIS',
-  // TSE "SAO THOME DAS LETRAS"; IBGE "SAO TOME DAS LETRAS"
-  'SAO THOME DAS LETRAS': 'SAO TOME DAS LETRAS',
-  // TSE "PASSA VINTE"; IBGE "PASSA-VINTE" → normalização já tira o hífen
+  // TSE "BRAZÓPOLIS" (Z) → IBGE "Brasópolis" (S)
+  BRAZOPOLIS: 'BRASOPOLIS',
+  // "São Thomé das Letras" casa direto (ambos com TH) — sem override.
 };
 
 // Mapa normalizedName → IBGE code (a partir dos 853 municípios do frontend).
