@@ -6,6 +6,7 @@ import { MunicipalityDrawer } from '@/components/mapa/MunicipalityDrawer';
 import { TseControls } from '@/components/mapa/TseControls';
 import { TseResumoPanel } from '@/components/mapa/TseResumoPanel';
 import { TseMunicipioDrawer } from '@/components/mapa/TseMunicipioDrawer';
+import { CampanhaResumoPanel } from '@/components/mapa/CampanhaResumoPanel';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { collections, useCollection } from '@/lib/data';
 import { useTseEleicao } from '@/hooks/useTseEleicao';
@@ -240,6 +241,25 @@ export default function MapaPage() {
         </div>
       ) : null}
 
+      {/* Seletor de município (modo Campanha) — mesma comodidade do TSE */}
+      {mode === 'campanha' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-vortex-border bg-vortex-surface/40 p-3">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            🔎 Buscar município
+          </label>
+          <div className="w-[320px] max-w-full">
+            <MunicipalityCombobox
+              value={selectedCampanha ?? ''}
+              onChange={(code) => setSelectedCampanha(code || null)}
+              placeholder="Buscar entre os 853 municípios…"
+            />
+          </div>
+          <span className="text-xs text-muted-foreground">
+            digite o nome e veja a base local · ou clique direto no mapa
+          </span>
+        </div>
+      ) : null}
+
       <p className="text-sm text-muted-foreground">
         {mode === 'campanha' ? (
           <>
@@ -281,7 +301,9 @@ export default function MapaPage() {
           loading={tse.loadingData}
           error={tse.error}
         />
-      ) : null}
+      ) : (
+        <CampanhaResumoPanel stats={stats} onSelect={setSelectedCampanha} />
+      )}
 
       {/* Drawers */}
       <MunicipalityDrawer
