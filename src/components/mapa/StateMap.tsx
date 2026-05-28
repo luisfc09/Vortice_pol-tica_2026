@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
 import { Map as MapIcon, Satellite } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
@@ -15,15 +15,26 @@ import type {
   PathOptions,
 } from 'leaflet';
 import { cn } from '@/lib/utils';
-import type { MuniStat } from '@/data/municipalities-mg-coords';
 
 type BaseMode = 'dark' | 'satellite';
 const BASE_MODE_KEY = 'vortice:mapa-base';
 
+// Célula genérica do choropleth: cada município (por código IBGE) tem uma
+// cor de preenchimento, um tooltip (HTML) e um flag "known". Quem monta as
+// células é a página (modo Campanha → força; modo TSE → partido líder).
+export interface MapCell {
+  fill: string;
+  fillOpacity?: number;
+  tooltip: string; // HTML
+  known: boolean; // false → estilo "sem dado"
+}
+
 interface StateMapProps {
-  stats: MuniStat[];
+  cells: Map<string, MapCell>;
   onSelect: (code: string) => void;
   selectedCode: string | null;
+  /** Altura do mapa (default h-[600px]). */
+  heightClass?: string;
 }
 
 interface MuniProperties {
@@ -35,32 +46,14 @@ const MG_CENTER: [number, number] = [-18.5, -44.5];
 const MG_ZOOM = 6;
 const GEOJSON_URL = '/data/mg-municipios.geojson';
 
-// Um município "sem cadastros" (0 lideranças + 0 eleitores) é diferente de
-// um "cadastrado mas fraco". O primeiro é falta de inteligência; o segundo
-// é território conhecidamente frio. Visualmente eles precisam contrastar.
-function isUnknown(stat: MuniStat | undefined): boolean {
-  if (!stat) return true;
-  return stat.supporters === 0 && stat.voters === 0;
-}
-
-function colorFor(strength: number): string {
-  // Escala diverging: vermelho escuro (frio) → âmbar (disputa) → lime (forte)
-  if (strength <= 0.1) return '#B91C1C'; // red-700  — frio
-  if (strength <= 0.3) return '#EF4444'; // red-500  — atenção
-  if (strength <= 0.5) return '#F59E0B'; // amber-500 — disputa
-  if (strength <= 0.7) return '#84CC16'; // lime-500 — crescente
-  return '#A3E635'; //                       lime-400 / brand — consolidada
-}
-
 function styleFor(
-  stat: MuniStat | undefined,
+  cell: MapCell | undefined,
   isSelected: boolean,
   base: BaseMode,
 ): PathOptions {
   const isSat = base === 'satellite';
-  if (isUnknown(stat)) {
-    // No satélite, "sem dado" precisa ser quase transparente pra mostrar o terreno;
-    // no dark, um cinza-aço discreto.
+  if (!cell || !cell.known) {
+    // "sem dado": quase transparente no satélite; cinza-aço discreto no dark.
     return {
       color: isSelected ? '#A3E635' : isSat ? '#94A3B8' : '#475569',
       weight: isSelected ? 2 : isSat ? 0.5 : 0.4,
@@ -69,16 +62,14 @@ function styleFor(
     };
   }
   return {
-    // Borda mais grossa no satélite — sem ela, polígonos coloridos se misturam
-    // com a vegetação. No dark, borda fina basta.
     color: isSelected ? '#A3E635' : isSat ? '#0B1120' : '#0F172A',
     weight: isSelected ? 2.4 : isSat ? 0.9 : 0.6,
-    fillColor: colorFor(stat!.strength),
-    fillOpacity: isSat ? 0.62 : 0.78,
+    fillColor: cell.fill,
+    fillOpacity: cell.fillOpacity ?? (isSat ? 0.62 : 0.78),
   };
 }
 
-export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
+export function StateMap({ cells, onSelect, selectedCode, heightClass }: StateMapProps) {
   const [geo, setGeo] = useState<FeatureCollection<Geometry, MuniProperties> | null>(
     null,
   );
@@ -90,18 +81,10 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
   });
   const layerRef = useRef<LeafletGeoJSON | null>(null);
 
-  // Persiste a preferência do usuário entre sessões.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(BASE_MODE_KEY, base);
   }, [base]);
-
-  // Index stats por código IBGE — lookup O(1) no styler.
-  const statByCode = useMemo(() => {
-    const m = new Map<string, MuniStat>();
-    for (const s of stats) m.set(s.code, s);
-    return m;
-  }, [stats]);
 
   // Carrega o GeoJSON dos 853 municípios uma vez.
   useEffect(() => {
@@ -122,7 +105,8 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
     };
   }, []);
 
-  // Re-aplica estilo quando stats, seleção ou base mudam (sem destruir a layer).
+  // Re-aplica estilo + tooltip quando as células, seleção ou base mudam
+  // (sem destruir a layer).
   useEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
@@ -130,23 +114,37 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
       const f = (sub as unknown as { feature?: Feature<Geometry, MuniProperties> }).feature;
       if (!f) return;
       const code = String(f.properties.id);
-      const stat = statByCode.get(code);
+      const cell = cells.get(code);
       const isSelected = code === selectedCode;
       (sub as unknown as { setStyle: (s: PathOptions) => void }).setStyle(
-        styleFor(stat, isSelected, base),
+        styleFor(cell, isSelected, base),
       );
+      // Atualiza tooltip
+      const name = f.properties.name;
+      const html =
+        cell?.tooltip ??
+        `<div style="font-size:11px"><div style="font-weight:600">${name}</div><div>sem dado</div></div>`;
+      const withTip = sub as unknown as {
+        getTooltip?: () => unknown;
+        setTooltipContent?: (h: string) => void;
+        bindTooltip: (h: string, o: Record<string, unknown>) => void;
+      };
+      if (withTip.getTooltip && withTip.getTooltip()) {
+        withTip.setTooltipContent?.(html);
+      } else {
+        withTip.bindTooltip(html, { direction: 'top', sticky: true, opacity: 0.95 });
+      }
     });
-  }, [statByCode, selectedCode, base]);
+  }, [cells, selectedCode, base]);
 
   return (
     <MapContainer
       center={MG_CENTER}
       zoom={MG_ZOOM}
       scrollWheelZoom
-      className="h-[600px] w-full rounded-xl border border-vortex-border"
+      className={cn('w-full rounded-xl border border-vortex-border', heightClass ?? 'h-[600px]')}
       // `isolation: isolate` cria stacking context — prende os z-indexes
-      // internos do Leaflet (controles em 1000, attribution em 800) e impede
-      // que se sobreponham a drawers/dialogs renderizados via portal.
+      // internos do Leaflet e impede que se sobreponham a drawers/dialogs.
       style={{ backgroundColor: '#0A0F1E', isolation: 'isolate' }}
     >
       {base === 'dark' ? (
@@ -182,7 +180,6 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
       {geo ? (
         <GeoJSON
           ref={(node) => {
-            // react-leaflet@4 expõe a layer via ref
             layerRef.current = (node as unknown as LeafletGeoJSON | null) ?? null;
           }}
           data={geo as GeoJsonObject}
@@ -190,8 +187,7 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
             const code = String(
               (feature as Feature<Geometry, MuniProperties>).properties.id,
             );
-            const stat = statByCode.get(code);
-            return styleFor(stat, code === selectedCode, base);
+            return styleFor(cells.get(code), code === selectedCode, base);
           }}
           onEachFeature={(feature, layer: Layer) => {
             const f = feature as Feature<Geometry, MuniProperties>;
@@ -208,25 +204,17 @@ export function StateMap({ stats, onSelect, selectedCode }: StateMapProps) {
                 target.bringToFront();
               },
               mouseout: () => {
-                const stat = statByCode.get(code);
                 const target = layer as unknown as {
                   setStyle: (s: PathOptions) => void;
                 };
-                target.setStyle(styleFor(stat, code === selectedCode, base));
+                target.setStyle(styleFor(cells.get(code), code === selectedCode, base));
               },
             });
-            const stat = statByCode.get(code);
-            const lid = stat?.supporters ?? 0;
-            const ele = stat?.voters ?? 0;
-            const force = stat ? Math.round(stat.strength * 100) : 0;
-            layer.bindTooltip(
-              `<div style="font-size:11px;line-height:1.3">
-                <div style="font-weight:600">${name}</div>
-                <div>Lideranças: ${lid} · Eleitores: ${ele}</div>
-                <div>Força: ${force}%</div>
-              </div>`,
-              { direction: 'top', sticky: true, opacity: 0.95 },
-            );
+            const cell = cells.get(code);
+            const html =
+              cell?.tooltip ??
+              `<div style="font-size:11px"><div style="font-weight:600">${name}</div><div>sem dado</div></div>`;
+            layer.bindTooltip(html, { direction: 'top', sticky: true, opacity: 0.95 });
           }}
         />
       ) : null}

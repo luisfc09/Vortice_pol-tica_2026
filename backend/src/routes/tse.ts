@@ -362,6 +362,67 @@ router.get('/anos', async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/tse/mapa
+// Resumo por município pra colorir o choropleth: 1 linha por município com
+// o candidato líder + totais. Query: ano, cargo, turno, uf.
+// Usa a RPC tse_mapa_resumo (agregação no banco).
+router.get('/mapa', async (req: Request, res: Response) => {
+  try {
+    const {
+      ano = '2022',
+      cargo = '6',
+      turno = '1',
+      uf = 'MG',
+    } = req.query as Record<string, string>;
+
+    const cacheKey = buildCacheKey('mapa', ano, cargo, turno, uf);
+    const cached = getCached<unknown>(cacheKey);
+    if (cached) return res.json({ ...(cached as object), from_cache: true });
+
+    const { data, error } = await sbAnon().rpc('tse_mapa_resumo', {
+      p_ano: parseInt(ano, 10),
+      p_cargo: cargo,
+      p_turno: parseInt(turno, 10),
+      p_uf: uf.toUpperCase(),
+    });
+    if (error) throw error;
+
+    const municipios = (data ?? []).map((r: Record<string, unknown>) => ({
+      municipio_codigo: r.municipio_codigo,
+      municipio_nome: r.municipio_nome,
+      total_votos: Number(r.total_votos ?? 0),
+      n_candidatos: Number(r.n_candidatos ?? 0),
+      lider: {
+        sequencial: r.lider_sequencial,
+        nome: r.lider_nome,
+        nome_urna: r.lider_urna,
+        numero: r.lider_numero,
+        partido: r.lider_partido,
+        partido_numero: r.lider_partido_numero,
+        votos: Number(r.lider_votos ?? 0),
+        situacao: r.lider_situacao,
+      },
+    }));
+
+    const result = {
+      ano: parseInt(ano, 10),
+      cargo,
+      cargo_label: CARGOS[cargo] ?? cargo,
+      turno: parseInt(turno, 10),
+      uf: uf.toUpperCase(),
+      total_municipios: municipios.length,
+      municipios,
+    };
+    setCached(cacheKey, result);
+    res.json(result);
+  } catch (error) {
+    console.error('Erro /mapa:', error);
+    sendError(res, 500, 'Erro ao montar resumo do mapa', {
+      detalhe: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 // GET /api/tse/cache/stats — útil pra debug
 router.get('/cache/stats', (_req: Request, res: Response) => {
   res.json(cacheStats());
