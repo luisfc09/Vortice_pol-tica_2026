@@ -49,7 +49,7 @@ const ITEMS: NavItem[] = [
     roles: ['admin', 'coordinator', 'researcher'],
     requiresCampaign: true,
   },
-  { to: '/campo', label: 'Campo', icon: ClipboardList, requiresCampaign: true },
+  { to: '/campo', label: 'Pesquisas', icon: ClipboardList, requiresCampaign: true },
   { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
   {
     to: '/usuarios',

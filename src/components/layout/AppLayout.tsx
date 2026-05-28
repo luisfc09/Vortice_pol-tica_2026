@@ -14,7 +14,7 @@ const TITLES: Record<string, string> = {
   '/mencoes': 'Monitor de menções',
   '/mencoes/resposta-rapida': 'Resposta Rápida',
   '/mencoes/resposta-rapida/historico': 'Histórico de respostas',
-  '/campo': 'Campo',
+  '/campo': 'Pesquisas',
   '/campo/hoje': 'Campo Hoje',
   '/campo/entrevista': 'Nova entrevista',
   '/campo/faq': 'FAQ de argumentação',
