@@ -17,8 +17,9 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
-type CampaignStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
+type CampaignStatus = 'trial' | 'active' | 'suspended' | 'cancelled' | 'pending';
 type CampaignPlan = 'basico' | 'intermediario' | 'top';
+type ActivationType = 'trial' | 'paid' | 'manual';
 
 interface ProvisionCampaignRequest {
   // Campos da campanha
@@ -34,6 +35,7 @@ interface ProvisionCampaignRequest {
   status?: CampaignStatus;
   plan?: CampaignPlan;
   trial_ends_at?: string | null;
+  activation_type?: ActivationType;
 
   // Admin inicial do cliente
   admin_email: string;
@@ -43,6 +45,166 @@ interface ProvisionCampaignRequest {
 
 const TEMP_PASSWORD = '123456';
 const TAG = '[provision-campaign]';
+
+// Preços e rótulos dos planos (espelha src/lib/plans.ts).
+const PLAN_PRICE: Record<CampaignPlan, number> = {
+  basico: 997,
+  intermediario: 1997,
+  top: 2497,
+};
+const PLAN_LABEL: Record<CampaignPlan, string> = {
+  basico: 'Básico',
+  intermediario: 'Intermediário',
+  top: 'Avançado',
+};
+
+interface AsaasResult {
+  customer_id: string | null;
+  subscription_id: string | null;
+  payment_link: string | null;
+  pix_qr_code: string | null;
+  skipped: boolean;
+  error: string | null;
+}
+
+function ymd(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+// Bloco Asaas — NÃO-BLOQUEANTE. Qualquer falha aqui retorna um AsaasResult
+// com error preenchido, mas nunca derruba a criação da campanha.
+async function runAsaasBlock(
+  admin: ReturnType<typeof createClient>,
+  params: {
+    campaignId: string;
+    plan: CampaignPlan;
+    activationType: ActivationType;
+    candidateName: string;
+    adminName: string;
+    adminEmail: string;
+    adminPhone?: string;
+  },
+): Promise<AsaasResult> {
+  const result: AsaasResult = {
+    customer_id: null,
+    subscription_id: null,
+    payment_link: null,
+    pix_qr_code: null,
+    skipped: false,
+    error: null,
+  };
+
+  // activation_type = manual → não toca o Asaas.
+  if (params.activationType === 'manual') {
+    result.skipped = true;
+    console.log(`${TAG} Asaas skipped: activation_type=manual`);
+    return result;
+  }
+
+  try {
+    // 1) busca config Asaas ativa em platform_integrations
+    const { data: cfg } = await admin
+      .from('platform_integrations')
+      .select('is_enabled, environment, secrets')
+      .eq('key', 'asaas')
+      .maybeSingle();
+
+    const apiKey = (cfg?.secrets as Record<string, string> | null)?.api_key;
+    if (!cfg || !cfg.is_enabled || !apiKey) {
+      result.skipped = true;
+      console.log(`${TAG} Asaas skipped: não configurado (is_enabled=${cfg?.is_enabled})`);
+      return result;
+    }
+
+    const base =
+      cfg.environment === 'production'
+        ? 'https://api.asaas.com/v3'
+        : 'https://api-sandbox.asaas.com/v3';
+
+    const asaas = async (method: string, path: string, body?: unknown) => {
+      const res = await fetch(`${base}${path}`, {
+        method,
+        headers: {
+          access_token: apiKey,
+          'Content-Type': 'application/json',
+          'User-Agent': 'Vortice-SaaS',
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          `Asaas ${res.status}: ${JSON.stringify(json.errors ?? json).slice(0, 200)}`,
+        );
+      }
+      return json;
+    };
+
+    // 2) cria cliente
+    const customer = await asaas('POST', '/customers', {
+      name: params.adminName,
+      email: params.adminEmail,
+      mobilePhone: params.adminPhone?.replace(/\D/g, '') || undefined,
+      externalReference: `vortice_${params.campaignId}`,
+      notificationDisabled: false,
+    });
+    result.customer_id = customer.id;
+    console.log(`✅ Cliente Asaas criado: ${customer.id}`);
+    await admin
+      .from('campaigns')
+      .update({ asaas_customer_id: customer.id })
+      .eq('id', params.campaignId);
+
+    // 3) se for pago, cria assinatura recorrente + cobrança PIX imediata
+    if (params.activationType === 'paid') {
+      const value = PLAN_PRICE[params.plan];
+      const planLabel = PLAN_LABEL[params.plan];
+      const now = new Date();
+
+      const sub = await asaas('POST', '/subscriptions', {
+        customer: customer.id,
+        billingType: 'CREDIT_CARD',
+        value,
+        nextDueDate: ymd(new Date(now.getTime() + 24 * 60 * 60 * 1000)),
+        cycle: 'MONTHLY',
+        description: `Vórtice ${planLabel} - ${params.candidateName}`,
+        externalReference: `vortice_sub_${params.campaignId}`,
+      });
+      result.subscription_id = sub.id;
+      console.log(`✅ Assinatura criada: ${sub.id}`);
+      await admin
+        .from('campaigns')
+        .update({ asaas_subscription_id: sub.id })
+        .eq('id', params.campaignId);
+
+      // cobrança avulsa PIX pro 1º mês (pagamento imediato)
+      const payment = await asaas('POST', '/payments', {
+        customer: customer.id,
+        billingType: 'PIX',
+        value,
+        dueDate: ymd(new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)),
+        description: `Vórtice ${planLabel} - ${params.candidateName} - Primeiro mês`,
+      });
+      result.payment_link = payment.invoiceUrl ?? null;
+      console.log(`✅ PIX gerado: ${payment.id}`);
+
+      // tenta puxar o QR code PIX (endpoint dedicado)
+      try {
+        const qr = await asaas('GET', `/payments/${payment.id}/pixQrCode`);
+        result.pix_qr_code = qr.encodedImage ?? qr.payload ?? null;
+      } catch (qrErr) {
+        console.warn(`${TAG} PIX QR indisponível (não fatal): ${(qrErr as Error).message}`);
+      }
+    }
+
+    return result;
+  } catch (err) {
+    // NÃO-BLOQUEANTE: registra e segue.
+    result.error = (err as Error).message;
+    console.warn(`⚠️ Asaas falhou (não bloqueante): ${result.error}`);
+    return result;
+  }
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -176,6 +338,22 @@ Deno.serve(async (req: Request) => {
   // -------------------------------------------------------------------------
   // Step 8: cria campanha
   // -------------------------------------------------------------------------
+  // Deriva status a partir do activation_type (mantém compat: se não vier
+  // activation_type, usa payload.status ?? 'trial' como antes).
+  const activationType: ActivationType = payload.activation_type ?? 'trial';
+  const plan: CampaignPlan = payload.plan ?? 'basico';
+  const derivedStatus: CampaignStatus =
+    activationType === 'paid'
+      ? 'pending' // aguarda confirmação de pagamento (webhook ativa)
+      : activationType === 'manual'
+        ? 'active'
+        : (payload.status ?? 'trial');
+  // Trial: se não informado, 7 dias a partir de agora.
+  const trialEndsAt =
+    activationType === 'trial'
+      ? (payload.trial_ends_at ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
+      : (payload.trial_ends_at ?? null);
+
   const { data: campaign, error: campaignErr } = await admin
     .from('campaigns')
     .insert({
@@ -188,9 +366,10 @@ Deno.serve(async (req: Request) => {
       election_year: payload.election_year,
       vote_target: payload.vote_target ?? 0,
       slogan: payload.slogan ?? null,
-      status: payload.status ?? 'trial',
-      plan: payload.plan ?? 'basico',
-      trial_ends_at: payload.trial_ends_at ?? null,
+      status: derivedStatus,
+      plan,
+      activation_type: activationType,
+      trial_ends_at: trialEndsAt,
     })
     .select()
     .single();
@@ -314,6 +493,20 @@ Deno.serve(async (req: Request) => {
   console.log(`${TAG} done — campaign=${campaign.id} admin_user=${adminUserId} reused=${adminUserAlreadyExisted}`);
 
   // -------------------------------------------------------------------------
+  // Step 12 (ADITIVO, NÃO-BLOQUEANTE): Asaas — cria cliente + (se paid)
+  // assinatura recorrente e cobrança PIX. Falha aqui NÃO derruba a campanha.
+  // -------------------------------------------------------------------------
+  const asaas = await runAsaasBlock(admin, {
+    campaignId: campaign.id,
+    plan,
+    activationType,
+    candidateName: payload.candidate_name,
+    adminName: payload.admin_full_name,
+    adminEmail: payload.admin_email,
+    adminPhone: payload.admin_phone,
+  });
+
+  // -------------------------------------------------------------------------
   // Sucesso
   // -------------------------------------------------------------------------
   return json({
@@ -326,5 +519,8 @@ Deno.serve(async (req: Request) => {
     temporary_password: adminUserAlreadyExisted ? null : TEMP_PASSWORD,
     admin_already_existed: adminUserAlreadyExisted,
     login_url: LOGIN_URL,
+    activation_type: activationType,
+    status: derivedStatus,
+    asaas,
   });
 });
