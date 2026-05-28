@@ -23,6 +23,15 @@ import 'dotenv/config';
 import { parse } from 'csv-parse';
 import AdmZip from 'adm-zip';
 import axios from 'axios';
+import {
+  createReadStream,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  existsSync,
+} from 'fs';
+import { tmpdir } from 'os';
+import { basename, join } from 'path';
 import { sbAdmin } from '../lib/supabase';
 import { CARGOS } from '../lib/tseClient';
 
@@ -106,7 +115,22 @@ async function downloadZip(url: string): Promise<Buffer> {
   return buf;
 }
 
-function pickCsvForUf(zip: AdmZip, uf: string, ano: string): Buffer {
+interface ExtractedCsv {
+  /** Caminho completo do CSV extraído em /tmp */
+  path: string;
+  /** Diretório temporário pai (pra cleanup com rmSync recursivo). */
+  tmpDir: string;
+  /** Tamanho em bytes do CSV descompactado. */
+  size: number;
+}
+
+/**
+ * Localiza o CSV do UF dentro do ZIP e extrai pra disco em /tmp.
+ * NÃO carrega o conteúdo em memória — pra UFs grandes (MG, SP) o CSV
+ * pode passar de 1 GB, e o Node limita strings a ~512 MB. Por isso
+ * extraímos pra disco e depois lemos como stream.
+ */
+function extractCsvForUf(zip: AdmZip, uf: string, ano: string): ExtractedCsv {
   const entries = zip.getEntries();
   // Procura entry cujo nome contém o UF (ex.: '..._MG.csv'). TSE também publica
   // arquivos BRASIL/_BR.csv (agregado) — esses a gente ignora.
@@ -122,8 +146,20 @@ function pickCsvForUf(zip: AdmZip, uf: string, ano: string): Buffer {
       `CSV do UF ${uf} (${ano}) não encontrado dentro do ZIP. Entries:\n  ${names}`,
     );
   }
-  console.log(`[zip] usando ${target.entryName} (${(target.header.size / 1024).toFixed(0)} KB)`);
-  return target.getData();
+
+  const tmpDir = mkdtempSync(join(tmpdir(), `tse-import-${ano}-${uf}-`));
+  // extractEntryTo (target, targetPath, maintainEntryPath=false, overwrite=true)
+  // grava o arquivo no tmpDir sem reconstruir subpastas.
+  zip.extractEntryTo(target, tmpDir, false, true);
+  const csvPath = join(tmpDir, basename(target.entryName));
+  if (!existsSync(csvPath)) {
+    throw new Error(`Extração falhou — esperado ${csvPath} mas arquivo não existe.`);
+  }
+  const stats = statSync(csvPath);
+  console.log(
+    `[zip] extraído ${target.entryName} → ${csvPath} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`,
+  );
+  return { path: csvPath, tmpDir, size: stats.size };
 }
 
 // ----------------------------------------------------------------------------
@@ -191,8 +227,14 @@ function safeStr(v: unknown): string | null {
   return s.length === 0 || s === '#NULO#' || s === '#NULO' ? null : s;
 }
 
-function aggregateRows(
-  csvBuf: Buffer,
+/**
+ * Lê o CSV via stream (encoding latin1) e agrega votos por
+ * (município × candidato). Nunca carrega o arquivo todo em string —
+ * fundamental pra UFs grandes (MG/SP) onde o CSV passa de 1 GB e
+ * estouraria o limite de string do V8 (~512 MB).
+ */
+function aggregateRowsFromFile(
+  csvPath: string,
   filter: { cargo?: string; turno?: string; ano: string; uf: string },
 ): Promise<AggregatedRow[]> {
   return new Promise((resolve, reject) => {
@@ -257,10 +299,18 @@ function aggregateRows(
           map.set(k, { ...key, votos });
         }
         matched += 1;
+
+        // Feedback de progresso em arquivos enormes (linhas a cada 500k)
+        if (totalLines % 500_000 === 0) {
+          process.stdout.write(
+            `\r[parse] ${totalLines.toLocaleString('pt-BR')} linhas lidas...`,
+          );
+        }
       }
     });
 
     parser.on('end', () => {
+      process.stdout.write('\r');
       console.log(
         `[parse] ${totalLines.toLocaleString('pt-BR')} linhas lidas, ${matched.toLocaleString('pt-BR')} bateram no filtro, ${map.size.toLocaleString('pt-BR')} candidatos × municípios agregados.`,
       );
@@ -269,10 +319,11 @@ function aggregateRows(
 
     parser.on('error', reject);
 
-    // CSV do TSE é em ISO-8859-1 (latin1). Buffer.toString converte e a gente
-    // alimenta o parser com string.
-    parser.write(csvBuf.toString('latin1'));
-    parser.end();
+    // Stream do disco com encoding latin1 — chunks de ~64KB chegam no
+    // parser que emite registros conforme acumula linhas completas.
+    const source = createReadStream(csvPath, { encoding: 'latin1' });
+    source.on('error', reject);
+    source.pipe(parser);
   });
 }
 
@@ -314,17 +365,33 @@ async function main() {
   // 2. Baixa
   const zipBuf = await downloadZip(zipUrl);
 
-  // 3. Descompacta e pega CSV do UF
+  // 3. Descompacta e extrai SÓ o CSV do UF pra /tmp
   const zip = new AdmZip(zipBuf);
-  const csvBuf = pickCsvForUf(zip, args.uf, args.ano);
+  const extracted = extractCsvForUf(zip, args.uf, args.ano);
 
-  // 4. Parseia + filtra + agrega
-  const rows = await aggregateRows(csvBuf, {
-    ano: args.ano,
-    uf: args.uf,
-    cargo: args.cargo,
-    turno: args.turno,
-  });
+  // Libera referência ao Buffer do ZIP (~500MB+) — agora que o CSV já
+  // está no disco, o GC pode coletar isso e o objeto adm-zip interno.
+  // (Não há free explícito em Node, mas dropar refs ajuda o V8.)
+  void zip;
+  void zipBuf;
+
+  let rows: AggregatedRow[];
+  try {
+    // 4. Parseia (via stream do disco) + filtra + agrega
+    rows = await aggregateRowsFromFile(extracted.path, {
+      ano: args.ano,
+      uf: args.uf,
+      cargo: args.cargo,
+      turno: args.turno,
+    });
+  } finally {
+    // Cleanup do tmp dir, sempre — mesmo se o parse der erro.
+    try {
+      rmSync(extracted.tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      console.warn(`[cleanup] falha ao remover ${extracted.tmpDir}:`, e);
+    }
+  }
 
   if (rows.length === 0) {
     console.log('[import] zero linhas agregadas — nada pra inserir.');

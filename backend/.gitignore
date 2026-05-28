@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Todas as variantes de .env (incl. backups do nano: .env.save, .env.swp)
 .env
-.env.local
+.env.*
+!.env.example
 *.log
