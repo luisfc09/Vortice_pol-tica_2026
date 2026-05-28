@@ -19,7 +19,8 @@ import {
 import { cn } from '@/lib/utils';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useBrand } from '@/hooks/useBrand';
-import type { UserRole } from '@/types';
+import { hasFeature } from '@/lib/plans';
+import type { CampaignPlan, UserRole } from '@/types';
 
 interface NavItem {
   to: string;
@@ -28,6 +29,8 @@ interface NavItem {
   roles?: UserRole[];
   requiresSuperAdmin?: boolean;
   requiresCampaign?: boolean;
+  /** Módulo do plano. Se setado, só aparece quando o plano inclui (gating). */
+  module?: string;
 }
 
 const ITEMS: NavItem[] = [
@@ -38,6 +41,7 @@ const ITEMS: NavItem[] = [
     icon: ChartColumnIncreasing,
     roles: ['admin', 'candidate', 'coordinator', 'researcher'],
     requiresCampaign: true,
+    module: 'inteligencia', // só plano Avançado (top)
   },
   { to: '/liderancas', label: 'Lideranças', icon: Users, requiresCampaign: true },
   { to: '/eleitores', label: 'Eleitores', icon: UserCheck, requiresCampaign: true },
@@ -48,6 +52,7 @@ const ITEMS: NavItem[] = [
     icon: Megaphone,
     roles: ['admin', 'coordinator', 'researcher'],
     requiresCampaign: true,
+    module: 'mencoes', // Intermediário e Avançado
   },
   { to: '/campo', label: 'Pesquisas', icon: ClipboardList, requiresCampaign: true },
   { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
@@ -81,6 +86,7 @@ interface SidebarProps {
   isSuperAdmin: boolean;
   candidateName: string;
   partyNumber: string;
+  plan?: CampaignPlan | null;
   onNavigate?: () => void;
 }
 
@@ -89,6 +95,7 @@ export function Sidebar({
   isSuperAdmin,
   candidateName,
   partyNumber,
+  plan,
   onNavigate,
 }: SidebarProps) {
   const { logoUrl } = useBrand();
@@ -96,6 +103,8 @@ export function Sidebar({
     if (item.requiresSuperAdmin) return isSuperAdmin;
     if (item.requiresCampaign && role === null) return false;
     if (item.roles && role && !item.roles.includes(role)) return false;
+    // Gating por plano: esconde módulos que o plano não inclui.
+    if (item.module && !hasFeature(plan, item.module)) return false;
     return true;
   });
 

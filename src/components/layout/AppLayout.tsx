@@ -62,6 +62,7 @@ export function AppLayout() {
     isSuperAdmin: session.is_super_admin,
     candidateName: session.campaign?.candidate_name ?? 'Vórtice (Admin)',
     partyNumber: session.campaign?.party_number ?? '—',
+    plan: session.campaign?.plan ?? null,
   };
 
   return (
