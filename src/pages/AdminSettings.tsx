@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
+import { AsaasBillingCard } from '@/components/admin/AsaasBillingCard';
 import type { AppSettings } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -71,7 +72,8 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <form onSubmit={save} className="space-y-5">
+    <div className="space-y-5">
+      <form onSubmit={save} className="space-y-5">
       <div>
         <div className="mb-1 flex items-center gap-2">
           <Shield className="h-4 w-4 text-vortex-violet" />
@@ -240,7 +242,11 @@ export default function AdminSettingsPage() {
           {saving ? 'Salvando...' : 'Salvar configurações'}
         </Button>
       </div>
-    </form>
+      </form>
+
+      {/* Cobrança Asaas — config global da Vórtice (fora do form de app_settings) */}
+      <AsaasBillingCard />
+    </div>
   );
 }
 

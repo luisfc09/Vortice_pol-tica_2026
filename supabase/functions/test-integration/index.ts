@@ -18,7 +18,8 @@ type IntegrationType =
   | 'google_news'
   | 'meta_ads'
   | 'google_ads'
-  | 'whatsapp';
+  | 'whatsapp'
+  | 'asaas';
 
 interface TestRequest {
   type: IntegrationType;
@@ -83,6 +84,8 @@ Deno.serve(async (req: Request) => {
         return json({ ok: false, message: 'Teste de Google Ads ainda não implementado.' });
       case 'whatsapp':
         return await testWhatsApp(secrets);
+      case 'asaas':
+        return await testAsaas(secrets, config ?? {});
       default:
         return json({ ok: false, message: 'Tipo desconhecido.' }, 400);
     }
@@ -332,5 +335,45 @@ async function testWhatsApp(secrets: Record<string, string>) {
   return json({
     ok: true,
     message: `Conectado: ${data.verified_name ?? 'sem nome'} · ${data.display_phone_number ?? ''}`,
+  });
+}
+
+// --------- Asaas (cobrança / pagamentos) -------------------------------------
+async function testAsaas(secrets: Record<string, string>, config: Record<string, unknown>) {
+  const apiKey = secrets.api_key;
+  if (!apiKey) return json({ ok: false, message: 'Falta a API Key do Asaas.' });
+
+  const env = (config.environment as string) === 'production' ? 'production' : 'sandbox';
+  const base =
+    env === 'production'
+      ? 'https://api.asaas.com/v3'
+      : 'https://api-sandbox.asaas.com/v3';
+
+  // GET /myAccount confirma que a chave é válida e devolve os dados da conta.
+  const res = await fetch(`${base}/myAccount`, {
+    headers: {
+      access_token: apiKey,
+      'User-Agent': 'Vortice-SaaS',
+      Accept: 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return json({ ok: false, message: `Asaas ${res.status}: ${text.slice(0, 200)}` });
+  }
+
+  const data = (await res.json()) as {
+    name?: string;
+    companyName?: string;
+    email?: string;
+    tradingName?: string;
+  };
+  const accountName =
+    data.companyName || data.tradingName || data.name || data.email || 'conta Asaas';
+  return json({
+    ok: true,
+    message: `Asaas (${env}) conectado: ${accountName}`,
+    account_name: accountName,
   });
 }
