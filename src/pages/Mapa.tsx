@@ -212,22 +212,30 @@ export default function MapaPage() {
         ) : null}
       </div>
 
-      {/* Seletor de município (modo TSE) — busca alfabética */}
-      {mode === 'tse' && tse.mapa ? (
-        <div className="flex flex-wrap items-center gap-3">
+      {/* Seletor de município (modo TSE) — busca alfabética. Sempre visível
+          no modo TSE; desabilita enquanto a eleição não foi escolhida. */}
+      {mode === 'tse' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-vortex-border bg-vortex-surface/40 p-3">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Município
+            🔎 Buscar município
           </label>
           <div className="w-[320px] max-w-full">
             <MunicipalityCombobox
               value={selectedTse ?? ''}
               onChange={(code) => setSelectedTse(code || null)}
               options={tseMuniOptions}
-              placeholder={`Buscar entre ${tseMuniOptions.length} municípios…`}
+              disabled={!tse.mapa || tse.loadingData}
+              placeholder={
+                !tse.selected
+                  ? 'Selecione a eleição acima primeiro'
+                  : tse.loadingData
+                    ? 'Carregando municípios…'
+                    : `Buscar entre ${tseMuniOptions.length} municípios…`
+              }
             />
           </div>
           <span className="text-xs text-muted-foreground">
-            ou clique no mapa pra abrir o ranking
+            digite o nome e veja quem ganhou · ou clique direto no mapa
           </span>
         </div>
       ) : null}
