@@ -165,7 +165,7 @@ export type EventType = 'comicio' | 'reuniao' | 'visita' | 'midia' | 'outro';
 // Entidades
 // ----------------------------------------------------------------------------
 
-export type CampaignStatus = 'trial' | 'active' | 'suspended' | 'cancelled';
+export type CampaignStatus = 'trial' | 'active' | 'suspended' | 'cancelled' | 'pending';
 
 // Planos comercializáveis do SaaS. Por enquanto todos os planos veem
 // todos os módulos do cliente (menos a área Admin Vórtice). Diferenciação
@@ -354,6 +354,7 @@ export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
   active: 'Ativa',
   suspended: 'Suspensa',
   cancelled: 'Cancelada',
+  pending: 'Pendente',
 };
 
 export interface Profile {

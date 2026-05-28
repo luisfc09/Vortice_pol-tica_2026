@@ -48,6 +48,7 @@ const STATUS_VARIANT: Record<CampaignStatus, 'default' | 'secondary' | 'warning'
   active: 'default',
   suspended: 'warning',
   cancelled: 'destructive',
+  pending: 'warning',
 };
 
 export default function AdminCampaignDetailPage() {

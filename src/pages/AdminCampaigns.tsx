@@ -43,6 +43,7 @@ const STATUS_VARIANT: Record<CampaignStatus, 'default' | 'secondary' | 'warning'
   active: 'default',
   suspended: 'warning',
   cancelled: 'destructive',
+  pending: 'warning',
 };
 
 const STATUS_ICON: Record<CampaignStatus, React.ComponentType<{ className?: string }>> = {
@@ -50,6 +51,7 @@ const STATUS_ICON: Record<CampaignStatus, React.ComponentType<{ className?: stri
   active: CheckCircle2,
   suspended: PauseCircle,
   cancelled: XCircle,
+  pending: Clock,
 };
 
 interface ExpiringRow {
@@ -193,6 +195,7 @@ export default function AdminCampaignsPage() {
     active: rows.filter((r) => r.status === 'active').length,
     suspended: rows.filter((r) => r.status === 'suspended').length,
     cancelled: rows.filter((r) => r.status === 'cancelled').length,
+    pending: rows.filter((r) => r.status === 'pending').length,
   };
 
   const totalSupporters = rows.reduce((acc, r) => acc + Number(r.supporters_count ?? 0), 0);

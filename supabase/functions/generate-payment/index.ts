@@ -78,20 +78,37 @@ Deno.serve(async (req: Request) => {
   const callerUser = userData?.user;
   if (!callerUser) return json({ error: 'Sessão inválida' }, 401);
 
-  // RLS: só retorna a campanha se o caller é admin/coord dela (ou super admin).
-  const { data: campaign, error: campErr } = await caller
+  // Service-role pra ler credenciais Asaas + escrever na campanha. Criado ANTES
+  // da verificação de acesso de propósito: a checagem de membership NÃO pode
+  // depender do RLS de `campaigns`, que esconde campanhas suspended/pending
+  // (current_campaign_id só enxerga trial/active) — justamente os casos que
+  // precisam renovar. Confirmamos o vínculo do caller via service-role.
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  // Acesso: super admin OU membro ativo da campanha (qualquer papel).
+  const { data: isSuper } = await caller.rpc('is_super_admin');
+  if (isSuper !== true) {
+    const { data: membership } = await admin
+      .from('campaign_users')
+      .select('is_active')
+      .eq('user_id', callerUser.id)
+      .eq('campaign_id', body.campaign_id)
+      .maybeSingle();
+    if (!membership || membership.is_active !== true) {
+      return json({ error: 'Sem acesso a esta campanha' }, 403);
+    }
+  }
+
+  const { data: campaign, error: campErr } = await admin
     .from('campaigns')
     .select('id, candidate_name, asaas_customer_id')
     .eq('id', body.campaign_id)
     .maybeSingle();
   if (campErr || !campaign) {
-    return json({ error: 'Sem acesso a esta campanha' }, 403);
+    return json({ error: 'Campanha não encontrada' }, 404);
   }
-
-  // Service-role pra ler credenciais Asaas + escrever na campanha.
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
 
   const { data: cfg } = await admin
     .from('platform_integrations')

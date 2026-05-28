@@ -35,6 +35,18 @@ export function ProtectedRoute({
     return <Navigate to="/trocar-senha" replace />;
   }
 
+  // Campanha suspensa ou com 1º pagamento pendente → trava 100% do app em
+  // /renovar. Super admin nunca é travado (ele gerencia todas as campanhas).
+  const campaignStatus = session.campaign?.status;
+  if (
+    !session.is_super_admin &&
+    session.campaign &&
+    (campaignStatus === 'suspended' || campaignStatus === 'pending') &&
+    location.pathname !== '/renovar'
+  ) {
+    return <Navigate to="/renovar" replace />;
+  }
+
   if (requireSuperAdmin && !session.is_super_admin) {
     return <Navigate to="/dashboard" replace />;
   }

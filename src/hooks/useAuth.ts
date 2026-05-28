@@ -36,18 +36,15 @@ export function useAuth() {
         setSession(null);
         return { ok: false, error: 'Sua conta foi desativada pelo admin da campanha.' };
       }
-      // Campanha suspensa/cancelada → desloga
+      // Campanha CANCELADA (terminal) → desloga. Suspensa/pending continuam
+      // logando: ProtectedRoute trava o acesso e manda pra /renovar.
       const campaignStatus = membership?.campaign.status ?? 'active';
-      if (
-        membership &&
-        campaignStatus !== 'active' &&
-        campaignStatus !== 'trial'
-      ) {
+      if (membership && campaignStatus === 'cancelled') {
         await supabase.auth.signOut();
         setSession(null);
         return {
           ok: false,
-          error: 'Esta campanha está suspensa. Entre em contato com a Vórtice.',
+          error: 'Esta campanha foi cancelada. Entre em contato com a Vórtice.',
         };
       }
 
@@ -138,15 +135,11 @@ export function useAuth() {
           await supabase.auth.signOut();
           return { ok: false, error: 'Conta desativada pelo admin da campanha.' };
         }
-        if (
-          membership &&
-          membership.campaign.status !== 'active' &&
-          membership.campaign.status !== 'trial'
-        ) {
+        if (membership && membership.campaign.status === 'cancelled') {
           await supabase.auth.signOut();
           return {
             ok: false,
-            error: 'Campanha suspensa. Entre em contato com a Vórtice.',
+            error: 'Campanha cancelada. Entre em contato com a Vórtice.',
           };
         }
         const next: SessionUser = {
