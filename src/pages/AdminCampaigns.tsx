@@ -71,6 +71,7 @@ export default function AdminCampaignsPage() {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [runningExpire, setRunningExpire] = useState(false);
+  const [runningReminders, setRunningReminders] = useState(false);
 
   // Entra no modo "ver como cliente": busca a campanha completa pelo id,
   // grava no view-as store e navega pra /dashboard — o useEffectiveSession
@@ -144,6 +145,25 @@ export default function AdminCampaignsPage() {
     }
   }
 
+  async function runDueRemindersNow() {
+    setRunningReminders(true);
+    try {
+      const { data, error } = await supabase.rpc('run_due_reminders_now');
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const count = (data as Array<unknown> | null)?.length ?? 0;
+      toast.success(
+        count === 0
+          ? 'Nenhum aviso de vencimento pra enviar hoje.'
+          : `${count} aviso${count > 1 ? 's' : ''} de vencimento disparado${count > 1 ? 's' : ''}.`,
+      );
+    } finally {
+      setRunningReminders(false);
+    }
+  }
+
   async function changeStatus(id: string, status: CampaignStatus) {
     const { error } = await supabase
       .from('campaigns')
@@ -203,6 +223,14 @@ export default function AdminCampaignsPage() {
               <Zap className="h-4 w-4" />
             )}
             {runningExpire ? 'Processando…' : 'Rodar expirar trials agora'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={runDueRemindersNow} disabled={runningReminders}>
+            {runningReminders ? (
+              <RefreshCcw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
+            {runningReminders ? 'Enviando…' : 'Rodar régua agora'}
           </Button>
           <Button onClick={() => setProvisionOpen(true)}>
             <Plus className="h-4 w-4" /> Nova campanha
