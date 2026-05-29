@@ -21,7 +21,10 @@
     --secondary-foreground: 210 40% 98%;
 
     --muted: 224 25% 14%;
-    --muted-foreground: 215 20% 65%;
+    /* Texto secundário: L 65%->72% para margem de contraste + legibilidade
+       sob luz solar (uso em campo no celular). Já passava AA (~7:1); agora
+       fica mais folgado sem competir com o foreground quase-branco. */
+    --muted-foreground: 215 22% 72%;
 
     --accent: 83 76% 56%;
     --accent-foreground: 224 47% 7%;
