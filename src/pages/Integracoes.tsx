@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plug, Filter, Sparkles } from 'lucide-react';
+import { Plug, Filter, Sparkles, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,6 +7,7 @@ import { FilterPill } from '@/components/data/FilterPill';
 import { IntegrationCard } from '@/components/integrations/IntegrationCard';
 import { IntegrationDrawer } from '@/components/integrations/IntegrationDrawer';
 import { AiFeatureMatrix } from '@/components/integrations/AiFeatureMatrix';
+import { AgentsConfig } from '@/components/agents/AgentsConfig';
 import { supabase } from '@/lib/supabase';
 import { INTEGRATION_CATALOG, type IntegrationSpec } from '@/data/integration-catalog';
 import type { IntegrationSafe, IntegrationType } from '@/types';
@@ -116,6 +117,10 @@ export default function IntegracoesPage() {
             <Sparkles className="mr-1 h-4 w-4" />
             IA por funcionalidade
           </TabsTrigger>
+          <TabsTrigger value="agents">
+            <Bot className="mr-1 h-4 w-4" />
+            Agentes de IA
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="connections" className="space-y-4">
@@ -149,6 +154,10 @@ export default function IntegracoesPage() {
 
         <TabsContent value="ai-features">
           <AiFeatureMatrix integrations={list} />
+        </TabsContent>
+
+        <TabsContent value="agents">
+          <AgentsConfig integrations={list} />
         </TabsContent>
       </Tabs>
 
