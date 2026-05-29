@@ -543,4 +543,223 @@ supabase functions deploy <nome> --project-ref iemajqwnlkmrubikhqas
 
 ---
 
+---
+
+## 15. Diagrama ER (entidades e relacionamentos)
+
+> Núcleo do schema (`supabase/schema.sql`) + tabelas adicionadas por migrations.
+> `auth.users` é gerenciada pelo Supabase Auth (GoTrue); `profiles` é 1:1 com ela.
+
+```mermaid
+erDiagram
+  AUTH_USERS ||--|| PROFILES : "1:1 (id)"
+  AUTH_USERS ||--o{ CAMPAIGN_USERS : "user_id"
+  AUTH_USERS ||--o{ SUPER_ADMINS : "user_id"
+
+  CAMPAIGNS ||--o{ CAMPAIGN_USERS : "campaign_id"
+  CAMPAIGNS ||--o{ SUPPORTERS : "campaign_id"
+  CAMPAIGNS ||--o{ VOTERS : "campaign_id"
+  CAMPAIGNS ||--o{ FIELD_INTERVIEWS : "campaign_id"
+  CAMPAIGNS ||--o{ EVENTS : "campaign_id"
+  CAMPAIGNS ||--o{ MENTIONS : "campaign_id"
+  CAMPAIGNS ||--o{ MENTION_RESPONSES : "campaign_id"
+  CAMPAIGNS ||--o{ ALERTS : "campaign_id"
+  CAMPAIGNS ||--o{ INTEGRATIONS : "campaign_id"
+  CAMPAIGNS ||--o{ AI_FEATURE_CONFIG : "campaign_id"
+  CAMPAIGNS ||--o{ AI_AGENTS : "campaign_id"
+  CAMPAIGNS ||--o{ AGENT_CONVERSATIONS : "campaign_id"
+  CAMPAIGNS ||--o{ CAMPAIGN_INTELLIGENCE : "campaign_id"
+  CAMPAIGNS ||--o{ CAMPAIGN_QUESTIONS : "campaign_id"
+  CAMPAIGNS ||--o{ CAMPAIGN_DELETION_LOGS : "campaign_id"
+  CAMPAIGNS ||--o{ FAQ_ITEMS : "campaign_id (null=global)"
+
+  MUNICIPALITIES ||--o{ SUPPORTERS : "municipality_code"
+  MUNICIPALITIES ||--o{ VOTERS : "municipality_code"
+  MUNICIPALITIES ||--o{ FIELD_INTERVIEWS : "municipality_code"
+  MUNICIPALITIES ||--o{ TSE_RESULTADOS : "ibge_code"
+
+  CAMPAIGN_QUESTIONS ||--o{ INTERVIEW_CUSTOM_ANSWERS : "question_id"
+  FIELD_INTERVIEWS ||--o{ INTERVIEW_CUSTOM_ANSWERS : "interview_id"
+
+  CAMPAIGNS {
+    uuid id PK
+    text candidate_name
+    text party
+    text party_number
+    text office
+    text state
+    int  vote_target
+    text status "trial|active|suspended|cancelled|pending"
+    text plan "basico|intermediario|top"
+    timestamptz trial_ends_at
+    text brand_logo_url
+    bool onboarding_completed
+    text[] target_municipalities
+    timestamptz deleted_at
+  }
+  CAMPAIGN_USERS {
+    uuid id PK
+    uuid campaign_id FK
+    uuid user_id FK
+    user_role role
+    bool is_active
+    bool must_change_password
+  }
+  VOTERS {
+    uuid id PK
+    uuid campaign_id FK
+    text name
+    text phone
+    text city
+    text municipality_code FK
+    text cep
+    text logradouro
+    text numero
+    vote_intention vote_intention
+    text age_range
+    double lat
+    double lng
+    text geo_source "gps|address|manual"
+  }
+  INTEGRATIONS {
+    uuid id PK
+    uuid campaign_id FK
+    integration_type type
+    bool is_enabled
+    jsonb config "model, organization..."
+    jsonb secrets "api_key (protegido por RLS)"
+  }
+  AI_AGENTS {
+    uuid id PK
+    uuid campaign_id FK
+    text agent_key "steve|carlos"
+    text name
+    text avatar_url
+    bool is_active
+    text llm_provider "anthropic|openai|null"
+  }
+```
+
+> O Mermaid acima renderiza no GitHub/VS Code. Tabelas auxiliares não desenhadas
+> aqui mas existentes: `app_settings`, `asaas_webhook_logs`, `notification_logs`,
+> `geocode_cache` (independente, chaveada por `cep`).
+
+---
+
+## 16. Referência de colunas — tabelas-núcleo
+
+Extraído de `supabase/schema.sql` + colunas adicionadas por migrations (indicadas).
+
+**`campaigns`** — base + `vote_target` (003), branding (008), `status` (004),
+`plan` (021), pagamento (029), `deleted_at/deleted_by` (033),
+`onboarding_completed`/`target_municipalities` (036).
+
+**`profiles`** (1:1 com `auth.users`) — `id, full_name, phone, avatar_url,
+municipality_code, created_at` + `must_change_password` (031/auth).
+Criado automaticamente pelo trigger `handle_new_user()` no insert em `auth.users`.
+
+**`campaign_users`** — `id, campaign_id FK, user_id FK, role(user_role),
+invited_by, created_at`, `unique(campaign_id, user_id)` + `is_active` (031).
+
+**`municipalities`** — `ibge_code PK, name, state, population, region` (853 de MG; leitura pública).
+
+**`supporters`** — `id, campaign_id FK, name, cpf, phone, email, city,
+neighborhood, municipality_code FK, role(supporter_role_type), status,
+created_by, created_at` + endereço estruturado (014: `cep, logradouro, numero,
+complemento`) + `role_custom` (020).
+
+**`voters`** — `id, campaign_id FK, name, phone, address, city,
+municipality_code FK, vote_intention, notes, lat, lng, created_by, created_at`
++ endereço (014) + `age_range` (037) + `geo_source` (038).
+
+**`field_interviews`** — base (`voter_name, voter_phone, municipality_code,
+neighborhood, vote_intention, receptivity_score 1-5, priority_themes text[],
+vote_decided, notes, lat, lng`) + colunas do questionário aprofundado (018:
+perfil/cenário/temas/governo, ratings, `state_gov_rating/federal_gov_rating/city_gov_rating`).
+
+**`events`** — `id, campaign_id FK, title, location, city, date, type(event_type),
+description, created_by, created_at`.
+
+**`mentions`** — `id, campaign_id FK, source(mention_source), content, url,
+author, sentiment, sentiment_score numeric(4,3), published_at, created_at`.
+
+**`alerts`** — `id, campaign_id FK, type(alert_type), message, meta jsonb,
+is_read, created_at` (expandido em 010/017).
+
+**`faq_items`** — `id, campaign_id (null=global), category(faq_category),
+question, suggested_answer, support_data, avoid_saying, is_active, created_at`.
+
+**ENUMs do banco** (`schema.sql`): `user_role`, `vote_intention`,
+`supporter_role_type` (expandido p/ 23 cargos em 020), `supporter_status`,
+`mention_source`, `sentiment`, `alert_type`, `event_type`, `faq_category`,
+`integration_type` (006/069), `campaign_plan` (021).
+
+**Trigger crítico:** `handle_new_user()` cria a linha em `profiles`
+automaticamente quando um usuário nasce em `auth.users` — por isso o
+`provision-user` não precisa inserir profile manualmente.
+
+**Realtime:** `schema.sql` adiciona à publicação `supabase_realtime` as tabelas
+`voters`, `supporters`, `field_interviews`, `mentions`, `alerts` (o
+`SupabaseCollection` escuta `postgres_changes` dessas).
+
+---
+
+## 17. Runbook — subir um ambiente do zero
+
+### A) Banco (Supabase novo)
+1. Criar projeto no Supabase; anotar `Project URL` e `anon key` (Settings → API).
+2. No **SQL Editor**, rodar **em ordem**:
+   1. `supabase/schema.sql` (tabelas-núcleo, enums, RLS base, trigger, realtime).
+   2. `supabase/migration-002` … `migration-040` (em ordem numérica).
+   3. `supabase/seed-faq.sql` (FAQ global, opcional).
+3. Criar o **primeiro super admin / admin**: rodar `bootstrap-super-admin.sql`
+   (ajustando o e-mail) — depois de o usuário existir em `auth.users`.
+4. Conferir os `select` de verificação no fim de cada migration.
+
+### B) Storage
+- Os buckets `avatars` (013) e `brand-assets` (008) são criados pelas migrations.
+  Verificar em Storage que estão **públicos para leitura**.
+
+### C) Edge Functions
+```bash
+supabase login
+supabase link --project-ref <NOVO_REF>
+for fn in provision-user provision-campaign agent-chat mention-respond \
+          intelligence-analyze interview-analyze collect-mentions \
+          test-integration generate-payment asaas-webhook send-notification; do
+  supabase functions deploy $fn --project-ref <NOVO_REF>
+done
+# secrets opcionais:
+supabase secrets set APP_LOGIN_URL="https://SEU-DOMINIO/login"
+# (Asaas / Resend conforme uso)
+```
+
+### D) Frontend
+1. `cp .env.example .env` e preencher:
+   ```
+   VITE_USE_MOCKS=false
+   VITE_SUPABASE_URL=https://<NOVO_REF>.supabase.co
+   VITE_SUPABASE_ANON_KEY=<anon key>
+   ```
+2. `npm install && npm run build`
+3. Deploy no Railway (ou `npm run preview` local). Deploy automático ao push em `main`.
+
+### E) Configurar a 1ª campanha
+1. Logar como super admin → **Admin Vórtice → Campanhas → provisionar** (ou
+   Edge `provision-campaign`).
+2. Em **Integrações → Conexões**, conectar ao menos uma IA (Anthropic/OpenAI) com
+   `api_key` → habilita Steve/Carlos/Resposta Rápida/Inteligência.
+3. Provisionar a equipe em **Usuários**.
+
+### F) Checklist de fumaça (smoke test)
+- [ ] Login + troca de senha forçada funcionam.
+- [ ] Cadastro de eleitor/liderança grava e aparece em tempo real.
+- [ ] Import CSV mostra preview e dedup.
+- [ ] "Geocodificar pendentes" preenche coordenadas.
+- [ ] Steve responde citando números reais.
+- [ ] Carlos abre o balão e responde dúvida.
+- [ ] Super admin "Ver como cliente" troca o contexto (Integrações mostram a campanha certa).
+
+---
+
 *Documento gerado a partir da leitura do código em `main`. Para detalhes de implementação, abrir os arquivos referenciados.*
