@@ -25,7 +25,7 @@ export function useAuth() {
     async function hydrateFromSession(sb: Session): Promise<{ ok: boolean; error?: string }> {
       const [profile, membership, isSuperAdmin] = await Promise.all([
         fetchProfile(sb.user.id),
-        fetchMembership(sb.user.id),
+        fetchMembership(),
         fetchIsSuperAdmin(),
       ]);
       if (!active) return { ok: false };
@@ -128,7 +128,7 @@ export function useAuth() {
         }
         const [profile, membership, isSuperAdmin] = await Promise.all([
           fetchProfile(data.user.id),
-          fetchMembership(data.user.id),
+          fetchMembership(),
           fetchIsSuperAdmin(),
         ]);
         if (membership && !membership.is_active) {
@@ -214,17 +214,21 @@ interface Membership {
   is_active: boolean;
 }
 
-async function fetchMembership(userId: string): Promise<Membership | null> {
-  const { data, error } = await supabase
-    .from('campaign_users')
-    .select('role, is_active, campaign:campaigns(*)')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (error || !data || !data.campaign) return null;
+// Usa a RPC get_my_membership() (security definer) em vez de ler campaign_users
+// direto: o RLS de campaign_users/campaigns só enxerga campanhas trial/active
+// (via current_campaign_id), então o select na tabela NÃO carregava campanhas
+// suspended/pending — e o cliente caía em /aguardando-ativacao em vez de
+// /renovar. A RPC devolve a própria membership independente do status (menos
+// soft-deleted), sem ampliar acesso a dados operacionais. (migration-035)
+async function fetchMembership(): Promise<Membership | null> {
+  const { data, error } = await supabase.rpc('get_my_membership');
+  if (error || !data) return null;
+  const row = data as { campaign?: Campaign | null; role?: UserRole; is_active?: boolean };
+  if (!row.campaign) return null;
   return {
-    campaign: data.campaign as unknown as Campaign,
-    role: data.role as UserRole,
-    is_active: data.is_active ?? true,
+    campaign: row.campaign as unknown as Campaign,
+    role: row.role as UserRole,
+    is_active: row.is_active ?? true,
   };
 }
 
