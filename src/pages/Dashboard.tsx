@@ -139,6 +139,27 @@ export default function DashboardPage() {
         </Button>
       </div>
 
+      {/* CTA de onboarding — só admin, enquanto não concluído */}
+      {session?.role === 'admin' && session.campaign && session.campaign.onboarding_completed === false ? (
+        <Link
+          to="/onboarding"
+          className="flex items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/10 p-4 transition-colors hover:bg-primary/15"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/20">
+              <Target className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-foreground">Configure sua campanha</p>
+              <p className="text-xs text-muted-foreground">
+                Meta de votos, municípios-alvo e importação de lideranças em 3 passos.
+              </p>
+            </div>
+          </div>
+          <span className="shrink-0 text-sm font-medium text-primary">Começar →</span>
+        </Link>
+      ) : null}
+
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">

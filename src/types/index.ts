@@ -207,6 +207,8 @@ export interface Campaign {
   created_at: string;
   deleted_at?: string | null;
   deleted_by?: string | null;
+  onboarding_completed?: boolean;
+  target_municipalities?: string[] | null;
 }
 
 // ----------------------------------------------------------------------------

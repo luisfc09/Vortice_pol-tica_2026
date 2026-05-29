@@ -16,6 +16,7 @@ import RespostaRapidaPage from '@/pages/RespostaRapida';
 import RespostaRapidaHistoricoPage from '@/pages/RespostaRapidaHistorico';
 import CampoHubPage from '@/pages/Campo';
 import PerguntasRegionaisPage from '@/pages/PerguntasRegionaisPage';
+import OnboardingPage from '@/pages/Onboarding';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoEntrevistaDetalhePage from '@/pages/CampoEntrevistaDetalhe';
 import InteligenciaPage from '@/pages/Inteligencia';
@@ -102,6 +103,7 @@ export default function App() {
               path="/pesquisas/perguntas-regionais"
               element={<PerguntasRegionaisPage />}
             />
+            <Route path="/onboarding" element={<OnboardingPage />} />
           </Route>
         </Route>
 
