@@ -469,6 +469,7 @@ export interface Voter {
   numero: string | null;
   complemento: string | null;
   vote_intention: VoteIntention;
+  age_range?: AgeRange | null;
   notes: string | null;
   lat: number | null;
   lng: number | null;

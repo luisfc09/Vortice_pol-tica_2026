@@ -21,8 +21,10 @@ import { collections, useCollection } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
 import {
+  AGE_RANGE_LABEL,
   VOTE_INTENTION_COLOR,
   VOTE_INTENTION_LABEL,
+  type AgeRange,
   type Voter,
   type VoteIntention,
 } from '@/types';
@@ -40,6 +42,7 @@ export default function EleitoresPage() {
   // Filtros avançados (#4)
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [bairroFilter, setBairroFilter] = useState<string>('all');
+  const [ageFilter, setAgeFilter] = useState<AgeRange | 'all'>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -51,6 +54,7 @@ export default function EleitoresPage() {
       if (filter !== 'all' && v.vote_intention !== filter) return false;
       if (cityFilter !== 'all' && v.city !== cityFilter) return false;
       if (bairroFilter !== 'all' && v.neighborhood !== bairroFilter) return false;
+      if (ageFilter !== 'all' && v.age_range !== ageFilter) return false;
       if (fromTs !== null || toTs !== null) {
         const t = new Date(v.created_at).getTime();
         if (fromTs !== null && t < fromTs) return false;
@@ -60,7 +64,7 @@ export default function EleitoresPage() {
       const haystack = `${v.name} ${v.city} ${v.address ?? ''} ${v.phone ?? ''}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [voters, query, filter, cityFilter, bairroFilter, dateFrom, dateTo]);
+  }, [voters, query, filter, cityFilter, bairroFilter, ageFilter, dateFrom, dateTo]);
 
   // Valores distintos pros selects (cidade/bairro).
   const cities = useMemo(
@@ -77,10 +81,16 @@ export default function EleitoresPage() {
       ),
     [voters],
   );
-  const advancedActive = cityFilter !== 'all' || bairroFilter !== 'all' || !!dateFrom || !!dateTo;
+  const advancedActive =
+    cityFilter !== 'all' ||
+    bairroFilter !== 'all' ||
+    ageFilter !== 'all' ||
+    !!dateFrom ||
+    !!dateTo;
   function clearAdvanced() {
     setCityFilter('all');
     setBairroFilter('all');
+    setAgeFilter('all');
     setDateFrom('');
     setDateTo('');
   }
@@ -105,6 +115,7 @@ export default function EleitoresPage() {
       { header: 'Nome', value: (v) => v.name },
       { header: 'Telefone', value: (v) => v.phone },
       { header: 'Intenção de voto', value: (v) => VOTE_INTENTION_LABEL[v.vote_intention] },
+      { header: 'Faixa etária', value: (v) => (v.age_range ? AGE_RANGE_LABEL[v.age_range] : '') },
       { header: 'Cidade', value: (v) => v.city },
       { header: 'Bairro', value: (v) => v.neighborhood },
       { header: 'CEP', value: (v) => v.cep },
@@ -184,6 +195,22 @@ export default function EleitoresPage() {
               {bairros.map((b) => (
                 <SelectItem key={b} value={b}>
                   {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Faixa etária</Label>
+          <Select value={ageFilter} onValueChange={(v) => setAgeFilter(v as AgeRange | 'all')}>
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {(Object.keys(AGE_RANGE_LABEL) as AgeRange[]).map((a) => (
+                <SelectItem key={a} value={a}>
+                  {AGE_RANGE_LABEL[a]}
                 </SelectItem>
               ))}
             </SelectContent>

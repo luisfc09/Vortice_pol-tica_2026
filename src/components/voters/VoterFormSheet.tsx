@@ -26,7 +26,13 @@ import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
-import { VOTE_INTENTION_LABEL, type Voter, type VoteIntention } from '@/types';
+import {
+  AGE_RANGE_LABEL,
+  VOTE_INTENTION_LABEL,
+  type AgeRange,
+  type Voter,
+  type VoteIntention,
+} from '@/types';
 
 type FormState = Omit<Voter, 'id' | 'campaign_id' | 'created_by' | 'created_at'>;
 
@@ -42,6 +48,7 @@ const EMPTY: FormState = {
   numero: null,
   complemento: null,
   vote_intention: 'indeciso',
+  age_range: null,
   notes: '',
   lat: null,
   lng: null,
@@ -72,6 +79,7 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
         numero: editing.numero,
         complemento: editing.complemento,
         vote_intention: editing.vote_intention,
+        age_range: editing.age_range ?? null,
         notes: editing.notes ?? '',
         lat: editing.lat,
         lng: editing.lng,
@@ -194,6 +202,26 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Faixa etária</Label>
+            <Select
+              value={form.age_range ?? 'none'}
+              onValueChange={(v) => update('age_range', v === 'none' ? null : (v as AgeRange))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Não informado</SelectItem>
+                {(Object.keys(AGE_RANGE_LABEL) as AgeRange[]).map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {AGE_RANGE_LABEL[a]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
