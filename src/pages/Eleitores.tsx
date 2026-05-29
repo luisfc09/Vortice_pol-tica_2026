@@ -4,6 +4,15 @@ import { Button } from '@/components/ui/button';
 import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
 import { SearchBar } from '@/components/data/SearchBar';
 import { FilterPill } from '@/components/data/FilterPill';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { VoterFormSheet } from '@/components/voters/VoterFormSheet';
@@ -28,16 +37,53 @@ export default function EleitoresPage() {
   const [editing, setEditing] = useState<Voter | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Voter | null>(null);
+  // Filtros avançados (#4)
+  const [cityFilter, setCityFilter] = useState<string>('all');
+  const [bairroFilter, setBairroFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const toTs = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
     return voters.filter((v) => {
       if (filter !== 'all' && v.vote_intention !== filter) return false;
+      if (cityFilter !== 'all' && v.city !== cityFilter) return false;
+      if (bairroFilter !== 'all' && v.neighborhood !== bairroFilter) return false;
+      if (fromTs !== null || toTs !== null) {
+        const t = new Date(v.created_at).getTime();
+        if (fromTs !== null && t < fromTs) return false;
+        if (toTs !== null && t > toTs) return false;
+      }
       if (!q) return true;
       const haystack = `${v.name} ${v.city} ${v.address ?? ''} ${v.phone ?? ''}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [voters, query, filter]);
+  }, [voters, query, filter, cityFilter, bairroFilter, dateFrom, dateTo]);
+
+  // Valores distintos pros selects (cidade/bairro).
+  const cities = useMemo(
+    () =>
+      [...new Set(voters.map((v) => v.city).filter(Boolean) as string[])].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
+    [voters],
+  );
+  const bairros = useMemo(
+    () =>
+      [...new Set(voters.map((v) => v.neighborhood).filter(Boolean) as string[])].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
+    [voters],
+  );
+  const advancedActive = cityFilter !== 'all' || bairroFilter !== 'all' || !!dateFrom || !!dateTo;
+  function clearAdvanced() {
+    setCityFilter('all');
+    setBairroFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  }
 
   const counts = useMemo(() => {
     const base: Record<IntentionFilter, number> = {
@@ -108,6 +154,70 @@ export default function EleitoresPage() {
             onClick={() => setFilter(v)}
           />
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-vortex-border bg-vortex-surface/40 p-3">
+        <div className="space-y-1">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Cidade</Label>
+          <Select value={cityFilter} onValueChange={setCityFilter}>
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {cities.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Bairro</Label>
+          <Select value={bairroFilter} onValueChange={setBairroFilter}>
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {bairros.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="date-from" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Cadastro de
+          </Label>
+          <Input
+            id="date-from"
+            type="date"
+            className="h-9 w-40"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="date-to" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            até
+          </Label>
+          <Input
+            id="date-to"
+            type="date"
+            className="h-9 w-40"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+        {advancedActive ? (
+          <Button variant="ghost" size="sm" onClick={clearAdvanced} className="text-muted-foreground">
+            Limpar filtros
+          </Button>
+        ) : null}
       </div>
 
       {filtered.length === 0 ? (
