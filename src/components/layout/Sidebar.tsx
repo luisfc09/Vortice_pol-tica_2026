@@ -12,7 +12,6 @@ import {
   Shield,
   Building2,
   Settings,
-  SlidersHorizontal,
   Plug,
   Palette,
   type LucideIcon,
@@ -56,13 +55,6 @@ const ITEMS: NavItem[] = [
     module: 'mencoes', // Intermediário e Avançado
   },
   { to: '/campo', label: 'Pesquisas', icon: ClipboardList, requiresCampaign: true },
-  {
-    to: '/pesquisas/perguntas-regionais',
-    label: 'Perguntas Regionais',
-    icon: SlidersHorizontal,
-    roles: ['admin'],
-    requiresCampaign: true,
-  },
   { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
   {
     to: '/usuarios',
@@ -95,8 +87,6 @@ interface SidebarProps {
   candidateName: string;
   partyNumber: string;
   plan?: CampaignPlan | null;
-  /** Nº de perguntas regionais ativas — badge verde no item do menu. */
-  questionsActiveCount?: number;
   onNavigate?: () => void;
 }
 
@@ -106,7 +96,6 @@ export function Sidebar({
   candidateName,
   partyNumber,
   plan,
-  questionsActiveCount,
   onNavigate,
 }: SidebarProps) {
   const { logoUrl } = useBrand();
@@ -152,14 +141,7 @@ export function Sidebar({
         {visible
           .filter((it) => !it.requiresSuperAdmin)
           .map((item) => (
-            <NavRow
-              key={item.to}
-              item={item}
-              onNavigate={onNavigate}
-              badgeCount={
-                item.to === '/pesquisas/perguntas-regionais' ? questionsActiveCount : undefined
-              }
-            />
+            <NavRow key={item.to} item={item} onNavigate={onNavigate} />
           ))}
 
         {isSuperAdmin ? (
@@ -188,12 +170,10 @@ function NavRow({
   item,
   onNavigate,
   admin,
-  badgeCount,
 }: {
   item: NavItem;
   onNavigate?: () => void;
   admin?: boolean;
-  badgeCount?: number;
 }) {
   const Icon = item.icon;
   return (
@@ -213,11 +193,6 @@ function NavRow({
     >
       <Icon className="h-4 w-4" />
       {item.label}
-      {badgeCount != null && badgeCount > 0 ? (
-        <span className="ml-auto rounded-full bg-vortex-lime/20 px-2 py-0.5 text-[10px] font-semibold text-vortex-lime">
-          {badgeCount}
-        </span>
-      ) : null}
     </NavLink>
   );
 }

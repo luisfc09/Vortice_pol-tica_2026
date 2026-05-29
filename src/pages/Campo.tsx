@@ -8,7 +8,6 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -16,11 +15,16 @@ import { getQueue } from '@/lib/offline-queue';
 import { discardInterviewQueue, flushInterviewQueue } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
+import { useCampaignQuestions } from '@/hooks/useCampaignQuestions';
 
 export default function CampoHubPage() {
   const session = useAuthStore((s) => s.session);
   const effective = useEffectiveSession();
   const isAdmin = effective?.role === 'admin' || effective?.is_super_admin === true;
+  const { questions: regionalQuestions } = useCampaignQuestions({
+    activeOnly: true,
+    enabled: isAdmin,
+  });
   const [syncing, setSyncing] = useState(false);
 
   async function handleSync() {
@@ -69,18 +73,9 @@ export default function CampoHubPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Olá, {session?.profile.full_name.split(' ')[0]}.</p>
-          <h2 className="font-display text-3xl tracking-wide text-foreground">Pronto para ir a campo?</h2>
-        </div>
-        {isAdmin ? (
-          <Button asChild variant="outline" size="sm" className="shrink-0">
-            <Link to="/pesquisas/perguntas-regionais">
-              <SlidersHorizontal className="h-4 w-4" /> Configurar perguntas regionais
-            </Link>
-          </Button>
-        ) : null}
+      <div>
+        <p className="text-sm text-muted-foreground">Olá, {session?.profile.full_name.split(' ')[0]}.</p>
+        <h2 className="font-display text-3xl tracking-wide text-foreground">Pronto para ir a campo?</h2>
       </div>
 
       <OfflineBanner onSyncRequest={handleSync} syncing={syncing} />
@@ -110,6 +105,15 @@ export default function CampoHubPage() {
           description="Respostas prontas com dados de apoio para qualquer tema."
           icon={<BookOpenText className="h-7 w-7 text-primary" />}
         />
+        {isAdmin ? (
+          <HubAction
+            to="/pesquisas/perguntas-regionais"
+            title="Perguntas Regionais"
+            description="Configure o Bloco 6 — perguntas próprias desta campanha no fim da entrevista."
+            icon={<SlidersHorizontal className="h-7 w-7 text-primary" />}
+            badge={regionalQuestions.length}
+          />
+        ) : null}
       </div>
 
       <Card>
@@ -133,11 +137,13 @@ function HubAction({
   title,
   description,
   icon,
+  badge,
 }: {
   to: string;
   title: string;
   description: string;
   icon: React.ReactNode;
+  badge?: number;
 }) {
   return (
     <Link
@@ -147,7 +153,14 @@ function HubAction({
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-colors group-hover:bg-primary/20">
         {icon}
       </div>
-      <p className="font-semibold text-foreground">{title}</p>
+      <div className="flex items-center gap-2">
+        <p className="font-semibold text-foreground">{title}</p>
+        {badge != null && badge > 0 ? (
+          <span className="rounded-full bg-vortex-lime/20 px-2 py-0.5 text-[10px] font-semibold text-vortex-lime">
+            {badge}
+          </span>
+        ) : null}
+      </div>
       <p className="mt-1 text-sm text-muted-foreground">{description}</p>
     </Link>
   );

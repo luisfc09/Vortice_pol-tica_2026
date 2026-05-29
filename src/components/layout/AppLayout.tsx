@@ -5,7 +5,6 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { TrialBanner } from './TrialBanner';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
-import { useCampaignQuestions } from '@/hooks/useCampaignQuestions';
 import { setActiveCampaignId } from '@/lib/data';
 
 const TITLES: Record<string, string> = {
@@ -57,13 +56,6 @@ export function AppLayout() {
     setActiveCampaignId(effectiveCampaignId);
   }, [effectiveCampaignId]);
 
-  // Contagem de perguntas regionais ativas (badge no menu) — só busca p/ admin.
-  const isAdmin = session?.role === 'admin' || session?.is_super_admin === true;
-  const { questions: regionalQuestions } = useCampaignQuestions({
-    activeOnly: true,
-    enabled: isAdmin,
-  });
-
   if (!session) return null;
 
   const sidebarProps = {
@@ -72,7 +64,6 @@ export function AppLayout() {
     candidateName: session.campaign?.candidate_name ?? 'Vórtice (Admin)',
     partyNumber: session.campaign?.party_number ?? '—',
     plan: session.campaign?.plan ?? null,
-    questionsActiveCount: regionalQuestions.length,
   };
 
   return (
