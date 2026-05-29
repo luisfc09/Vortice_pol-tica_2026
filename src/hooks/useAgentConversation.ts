@@ -25,6 +25,7 @@ export function useAgentConversation(agent: AgentKey) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     if (!campaignId) {
@@ -62,11 +63,13 @@ export function useAgentConversation(agent: AgentKey) {
     }
     setConversationId(id);
     setMessages((data?.messages as AgentMessage[]) ?? []);
+    setError(null);
   }, []);
 
   const newConversation = useCallback(() => {
     setConversationId(null);
     setMessages([]);
+    setError(null);
   }, []);
 
   const send = useCallback(
@@ -76,6 +79,7 @@ export function useAgentConversation(agent: AgentKey) {
       const base: AgentMessage[] = [...messages, { role: 'user', content }];
       setMessages(base);
       setSending(true);
+      setError(null);
       try {
         const reply = await askAgent({ agent, campaignId, messages: base });
         const full: AgentMessage[] = [...base, { role: 'assistant', content: reply }];
@@ -97,7 +101,9 @@ export function useAgentConversation(agent: AgentKey) {
         }
         void loadList();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Falha ao falar com o agente.');
+        const msg = err instanceof Error ? err.message : 'Falha ao falar com o agente.';
+        setError(msg);
+        toast.error(msg);
         // Mantém a mensagem do usuário visível (base) para retry manual.
       } finally {
         setSending(false);
@@ -112,6 +118,7 @@ export function useAgentConversation(agent: AgentKey) {
     conversationId,
     messages,
     sending,
+    error,
     send,
     newConversation,
     selectConversation,

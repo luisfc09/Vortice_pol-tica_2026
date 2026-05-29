@@ -128,6 +128,20 @@ export function SteveChat() {
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> {agent.name} está analisando…
             </div>
           ) : null}
+
+          {convo.error && !convo.sending ? (
+            <div className="flex items-start gap-2">
+              <AgentAvatar url={agent.avatar_url} name={agent.name} size={32} />
+              <div className="max-w-[80%] space-y-1 rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                <p>{convo.error}</p>
+                {/nenhuma integra|api_key|habilitada/i.test(convo.error) ? (
+                  <p className="text-xs text-red-200/80">
+                    Configure uma IA (Anthropic ou OpenAI) em Integrações → Conexões e tente de novo.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {!agent.is_active ? (
