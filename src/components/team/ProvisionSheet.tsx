@@ -22,7 +22,7 @@ import {
 import { collections, isMockMode } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { formatPhone } from '@/lib/utils';
-import { useAuthStore } from '@/stores/auth';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { ROLE_LABEL, ROLE_DESCRIPTION, ROLE_OPTIONS, type UserRole } from '@/types';
 
 interface Props {
@@ -42,7 +42,9 @@ const ROLE_VALUES: UserRole[] = [...ROLE_OPTIONS];
 const MOCK_TEMP_PASSWORD = '123456';
 
 export function ProvisionSheet({ open, onOpenChange }: Props) {
-  const session = useAuthStore((s) => s.session);
+  // Sessão efetiva: respeita o "ver como cliente" do super admin, garantindo
+  // que o membro é provisionado na campanha em que o usuário está atuando.
+  const session = useEffectiveSession();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -102,6 +104,7 @@ export function ProvisionSheet({ open, onOpenChange }: Props) {
           full_name: name.trim(),
           phone: phone || undefined,
           role,
+          campaign_id: session.campaign.id,
         },
       });
       if (error) {

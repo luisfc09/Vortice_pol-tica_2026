@@ -40,6 +40,7 @@ interface ProvisionRequest {
   full_name: string;
   phone?: string;
   role: Role;
+  campaign_id: string;
 }
 
 const ALLOWED_ROLES: Role[] = [
@@ -96,9 +97,9 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Invalid JSON' }, 400);
   }
 
-  const { email, full_name, phone, role } = payload;
-  if (!email || !full_name || !role) {
-    return json({ error: 'Campos obrigatórios: email, full_name, role' }, 400);
+  const { email, full_name, phone, role, campaign_id } = payload;
+  if (!email || !full_name || !role || !campaign_id) {
+    return json({ error: 'Campos obrigatórios: email, full_name, role, campaign_id' }, 400);
   }
   if (!ALLOWED_ROLES.includes(role)) {
     return json({ error: 'role inválido' }, 400);
@@ -116,18 +117,34 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Sessão inválida' }, 401);
   }
 
-  // 2) Verifica papel do caller
+  // 2) Autorização: o caller precisa ser admin/coordenador ATIVO da campanha
+  //    informada — OU super admin (que pode provisionar em qualquer campanha).
+  //    Escopar por campaign_id evita o erro de "multiple rows" do maybeSingle
+  //    quando o usuário é membro de mais de uma campanha, e garante que o novo
+  //    usuário entra exatamente na campanha pretendida.
   const { data: callerMembership } = await caller
     .from('campaign_users')
-    .select('campaign_id, role, is_active')
+    .select('role, is_active')
     .eq('user_id', callerUser.id)
+    .eq('campaign_id', campaign_id)
     .maybeSingle();
 
-  if (!callerMembership || !callerMembership.is_active) {
-    return json({ error: 'Sem campanha associada ou conta desativada' }, 403);
+  let authorized =
+    !!callerMembership &&
+    callerMembership.is_active === true &&
+    ['admin', 'coordinator'].includes(callerMembership.role);
+
+  if (!authorized) {
+    // Super admin pode provisionar em qualquer campanha (ex.: "ver como cliente").
+    const { data: isSuper } = await caller.rpc('is_super_admin');
+    if (isSuper === true) authorized = true;
   }
-  if (!['admin', 'coordinator'].includes(callerMembership.role)) {
-    return json({ error: 'Apenas admin ou coordenador pode provisionar' }, 403);
+
+  if (!authorized) {
+    return json(
+      { error: 'Apenas admin/coordenador desta campanha (ou super admin) pode provisionar' },
+      403,
+    );
   }
 
   // 3) Service-role client
@@ -143,7 +160,16 @@ Deno.serve(async (req: Request) => {
     user_metadata: { full_name, phone: phone ?? null },
   });
   if (createError || !created.user) {
-    return json({ error: createError?.message ?? 'Falha ao criar usuário' }, 400);
+    const raw = createError?.message ?? '';
+    const alreadyExists = /already.*(registered|been registered|exists)/i.test(raw);
+    return json(
+      {
+        error: alreadyExists
+          ? 'Este e-mail já está cadastrado no sistema (possivelmente em outra campanha). Use um e-mail diferente para este membro, ou mova o usuário existente.'
+          : raw || 'Falha ao criar usuário',
+      },
+      400,
+    );
   }
 
   // 5) Atualiza profile (trigger handle_new_user já criou a linha)
@@ -156,9 +182,9 @@ Deno.serve(async (req: Request) => {
     })
     .eq('id', created.user.id);
 
-  // 6) Cria membership ativo
+  // 6) Cria membership ativo NA campanha informada (já autorizada acima)
   const { error: cuError } = await admin.from('campaign_users').insert({
-    campaign_id: callerMembership.campaign_id,
+    campaign_id,
     user_id: created.user.id,
     role,
     invited_by: callerUser.id,
