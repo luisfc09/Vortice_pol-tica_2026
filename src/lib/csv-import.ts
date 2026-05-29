@@ -65,6 +65,38 @@ export function parseCsv(text: string): ParsedCsv {
   return { headers, rows };
 }
 
+// --- Validação / dedup do preview de importação ---
+
+export type ImportRowStatus = 'valid' | 'warning' | 'error' | 'duplicate';
+
+export interface ImportRowResult {
+  /** Número da linha de dados (1-based, sem contar o cabeçalho). */
+  line: number;
+  /** Linha crua original — repassada ao onImport quando aprovada. */
+  raw: Record<string, string>;
+  status: ImportRowStatus;
+  /** Texto principal (nome) exibido na tabela. */
+  primary: string;
+  /** Texto secundário (cidade · telefone, etc.). */
+  secondary?: string;
+  /** Motivo do erro/duplicado ou texto do aviso. */
+  message?: string;
+}
+
+/** Só os dígitos de uma string (para comparar telefones). */
+export const onlyDigits = (s: string | null | undefined): string => (s ?? '').replace(/\D/g, '');
+
+/** Minúsculas + sem acentos + trim (para comparações tolerantes). */
+export const normText = (s: string | null | undefined): string =>
+  (s ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+
+/** CEP válido = 8 dígitos (com ou sem hífen). */
+export const isValidCep = (cep: string): boolean => /^\d{5}-?\d{3}$/.test(cep.trim());
+
 // Lê um campo da linha tolerando acento/caixa e nomes alternativos.
 export function pickField(row: Record<string, string>, ...names: string[]): string {
   const norm = (s: string) =>

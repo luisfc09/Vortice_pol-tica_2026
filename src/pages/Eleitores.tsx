@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, Phone, MapPin, UserCheck, Download } from 'lucide
 import { Button } from '@/components/ui/button';
 import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
 import { ImportCsvButtons } from '@/components/data/ImportCsvButtons';
-import { pickField } from '@/lib/csv-import';
+import { pickField, onlyDigits, isValidCep, type ImportRowResult } from '@/lib/csv-import';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { SearchBar } from '@/components/data/SearchBar';
@@ -165,16 +165,84 @@ export default function EleitoresPage() {
     ]);
   }
 
+  // Valida + classifica cada linha do CSV (erro/duplicado/aviso/válido) antes de gravar.
+  function validateVoterRows(rows: Record<string, string>[]): ImportRowResult[] {
+    // Chaves já existentes na campanha (dedup).
+    const existNamePhone = new Set<string>();
+    const existNameMuni = new Set<string>();
+    for (const v of voters) {
+      const n = normTxt(v.name);
+      if (v.phone) existNamePhone.add(`${n}|${onlyDigits(v.phone)}`);
+      existNameMuni.add(`${n}|${v.municipality_code ?? normTxt(v.city ?? '')}`);
+    }
+    // Dedup também dentro do próprio arquivo.
+    const seenNamePhone = new Set<string>();
+    const seenNameMuni = new Set<string>();
+
+    return rows.map((r, i): ImportRowResult => {
+      const line = i + 1;
+      const name = pickField(r, 'Nome', 'name').trim();
+      const cidade = pickField(r, 'Cidade', 'city', 'municipio', 'município').trim();
+      const muni = cidade ? MUNI_BY_NAME.get(normTxt(cidade)) : undefined;
+      const phone = pickField(r, 'Telefone', 'phone', 'celular').trim();
+      const intRaw = pickField(r, 'Intenção de voto', 'intencao', 'vote_intention').trim();
+      const cep = pickField(r, 'CEP', 'cep').trim();
+      const secondary = [muni?.name ?? cidade, phone].filter(Boolean).join(' · ') || undefined;
+
+      // ERRO — não importa
+      const errors: string[] = [];
+      if (name.length < 2) errors.push('Nome vazio ou com menos de 2 caracteres');
+      if (!cidade) errors.push('Município não informado');
+      else if (!muni) errors.push(`Município "${cidade}" não encontrado em MG`);
+      if (intRaw && !INTENTION_BY_TEXT[normTxt(intRaw)])
+        errors.push(`Intenção de voto inválida: "${intRaw}"`);
+      if (errors.length)
+        return { line, raw: r, status: 'error', primary: name, secondary, message: errors.join(' · ') };
+
+      // DUPLICADO — não importa
+      const nKey = normTxt(name);
+      if (phone) {
+        const key = `${nKey}|${onlyDigits(phone)}`;
+        if (existNamePhone.has(key) || seenNamePhone.has(key))
+          return {
+            line,
+            raw: r,
+            status: 'duplicate',
+            primary: name,
+            secondary,
+            message: 'Nome + telefone já cadastrado',
+          };
+        seenNamePhone.add(key);
+      } else {
+        const key = `${nKey}|${muni?.code ?? normTxt(cidade)}`;
+        if (existNameMuni.has(key) || seenNameMuni.has(key))
+          return {
+            line,
+            raw: r,
+            status: 'duplicate',
+            primary: name,
+            secondary,
+            message: 'Nome + município já cadastrado (sem telefone)',
+          };
+        seenNameMuni.add(key);
+      }
+
+      // AVISO — importa com aviso
+      const warnings: string[] = [];
+      if (!phone) warnings.push('Sem telefone');
+      if (cep && !isValidCep(cep)) warnings.push('CEP com formato inválido');
+      if (warnings.length)
+        return { line, raw: r, status: 'warning', primary: name, secondary, message: warnings.join(' · ') };
+
+      return { line, raw: r, status: 'valid', primary: name, secondary };
+    });
+  }
+
   async function importVoters(rows: Record<string, string>[]) {
-    if (!session?.campaign) return { ok: 0, skip: 0 };
+    if (!session?.campaign) return { ok: 0 };
     let ok = 0;
-    let skip = 0;
     for (const r of rows) {
       const name = pickField(r, 'Nome', 'name');
-      if (!name) {
-        skip++;
-        continue;
-      }
       const cidade = pickField(r, 'Cidade', 'city', 'municipio', 'município');
       const muni = cidade ? MUNI_BY_NAME.get(normTxt(cidade)) : undefined;
       await collections.voters.create({
@@ -200,7 +268,7 @@ export default function EleitoresPage() {
       });
       ok++;
     }
-    return { ok, skip };
+    return { ok };
   }
 
   return (
@@ -228,7 +296,9 @@ export default function EleitoresPage() {
               { header: 'Cidade', value: (r) => r.Cidade },
               { header: 'Bairro', value: (r) => r.Bairro },
             ]}
+            validateRows={validateVoterRows}
             onImport={importVoters}
+            entityLabel="eleitores"
           />
           <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4" /> Exportar CSV

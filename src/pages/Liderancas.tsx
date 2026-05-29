@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, Phone, MapPin, Mail, Users, Download } from 'luci
 import { Button } from '@/components/ui/button';
 import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
 import { ImportCsvButtons } from '@/components/data/ImportCsvButtons';
-import { pickField } from '@/lib/csv-import';
+import { pickField, onlyDigits, normText, type ImportRowResult } from '@/lib/csv-import';
 import { Badge } from '@/components/ui/badge';
 import { SearchBar } from '@/components/data/SearchBar';
 import { EmptyState } from '@/components/data/EmptyState';
@@ -118,16 +118,78 @@ export default function LiderancasPage() {
     ]);
   }
 
+  // Valida + classifica cada linha do CSV (erro/duplicado/aviso/válido) antes de gravar.
+  function validateSupporterRows(rows: Record<string, string>[]): ImportRowResult[] {
+    const existNamePhone = new Set<string>();
+    const existNameCity = new Set<string>();
+    for (const s of supporters) {
+      const n = normText(s.name);
+      if (s.phone) existNamePhone.add(`${n}|${onlyDigits(s.phone)}`);
+      existNameCity.add(`${n}|${normText(s.city ?? '')}`);
+    }
+    const seenNamePhone = new Set<string>();
+    const seenNameCity = new Set<string>();
+
+    return rows.map((r, i): ImportRowResult => {
+      const line = i + 1;
+      const name = pickField(r, 'Nome', 'name').trim();
+      const phone = pickField(r, 'Telefone', 'phone', 'celular').trim();
+      const cidade = pickField(r, 'Cidade', 'city').trim();
+      const papel = pickField(r, 'Papel', 'cargo', 'role').trim();
+      const secondary = [cidade, papel, phone].filter(Boolean).join(' · ') || undefined;
+
+      // ERRO — não importa
+      if (name.length < 2)
+        return {
+          line,
+          raw: r,
+          status: 'error',
+          primary: name,
+          secondary,
+          message: 'Nome vazio ou com menos de 2 caracteres',
+        };
+
+      // DUPLICADO — não importa
+      const nKey = normText(name);
+      if (phone) {
+        const key = `${nKey}|${onlyDigits(phone)}`;
+        if (existNamePhone.has(key) || seenNamePhone.has(key))
+          return {
+            line,
+            raw: r,
+            status: 'duplicate',
+            primary: name,
+            secondary,
+            message: 'Nome + telefone já cadastrado',
+          };
+        seenNamePhone.add(key);
+      } else {
+        const key = `${nKey}|${normText(cidade)}`;
+        if (existNameCity.has(key) || seenNameCity.has(key))
+          return {
+            line,
+            raw: r,
+            status: 'duplicate',
+            primary: name,
+            secondary,
+            message: 'Nome + cidade já cadastrado (sem telefone)',
+          };
+        seenNameCity.add(key);
+      }
+
+      // AVISO — importa com aviso
+      if (!phone)
+        return { line, raw: r, status: 'warning', primary: name, secondary, message: 'Sem telefone' };
+
+      return { line, raw: r, status: 'valid', primary: name, secondary };
+    });
+  }
+
   async function importSupporters(rows: Record<string, string>[]) {
-    if (!session?.campaign) return { ok: 0, skip: 0 };
+    if (!session?.campaign) return { ok: 0 };
     let ok = 0;
-    let skip = 0;
     for (const r of rows) {
       const name = pickField(r, 'Nome', 'name');
-      if (!name) {
-        skip++;
-        continue;
-      }
       await collections.supporters.create({
         data: {
           campaign_id: session.campaign.id,
@@ -150,7 +212,7 @@ export default function LiderancasPage() {
       });
       ok++;
     }
-    return { ok, skip };
+    return { ok };
   }
 
   return (
@@ -178,7 +240,9 @@ export default function LiderancasPage() {
               { header: 'Bairro', value: (r) => r.Bairro },
               { header: 'Papel', value: (r) => r.Papel },
             ]}
+            validateRows={validateSupporterRows}
             onImport={importSupporters}
+            entityLabel="lideranças"
           />
           <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4" /> Exportar CSV
