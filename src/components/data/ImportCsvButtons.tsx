@@ -28,6 +28,8 @@ interface Props<T extends Record<string, string>> {
   onImport: (rows: Record<string, string>[]) => Promise<{ ok: number }>;
   /** Substantivo plural para botão/toast (ex.: "eleitores", "lideranças"). */
   entityLabel: string;
+  /** Nota opcional exibida no toast de sucesso (ex.: dica de geocodificação). */
+  successNote?: string;
 }
 
 const STATUS_META: Record<
@@ -68,6 +70,7 @@ export function ImportCsvButtons<T extends Record<string, string>>({
   validateRows,
   onImport,
   entityLabel,
+  successNote,
 }: Props<T>) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [results, setResults] = useState<ImportRowResult[] | null>(null);
@@ -114,6 +117,7 @@ export function ImportCsvButtons<T extends Record<string, string>>({
       const res = await onImport(toPersist);
       toast.success(
         `${res.ok} importado(s) · ${counts.error} erro(s) · ${counts.duplicate} duplicado(s) ignorado(s)`,
+        successNote && res.ok > 0 ? { description: successNote } : undefined,
       );
       setResults(null);
     } catch (err) {

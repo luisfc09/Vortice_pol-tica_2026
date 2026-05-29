@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MapPin, Save, RotateCw } from 'lucide-react';
+import { MapPin, Save, RotateCw, Search, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Sheet,
@@ -21,15 +21,18 @@ import {
 } from '@/components/ui/select';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { AddressFields, type AddressValue } from '@/components/forms/AddressFields';
+import { GeoStatusBadge } from '@/components/voters/GeoStatusBadge';
 import { collections } from '@/lib/data';
 import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useGeolocation } from '@/hooks/useGeolocation';
+import { geocodeAddress, type GeoAccuracy, type GeocodeResult } from '@/lib/geocode';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import {
   AGE_RANGE_LABEL,
   VOTE_INTENTION_LABEL,
   type AgeRange,
+  type GeoSource,
   type Voter,
   type VoteIntention,
 } from '@/types';
@@ -52,6 +55,7 @@ const EMPTY: FormState = {
   notes: '',
   lat: null,
   lng: null,
+  geo_source: null,
 };
 
 interface VoterFormSheetProps {
@@ -63,6 +67,8 @@ interface VoterFormSheetProps {
 export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetProps) {
   const session = useAuthStore((s) => s.session);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [geoAccuracy, setGeoAccuracy] = useState<GeoAccuracy | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
   const geo = useGeolocation(open && !editing);
 
   useEffect(() => {
@@ -83,16 +89,27 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
         notes: editing.notes ?? '',
         lat: editing.lat,
         lng: editing.lng,
+        geo_source: editing.geo_source ?? null,
       });
+      // Sem accuracy armazenada: inferimos pelo geo_source quando há coordenadas.
+      setGeoAccuracy(
+        editing.lat != null && editing.lng != null
+          ? editing.geo_source === 'gps'
+            ? 'gps'
+            : 'address'
+          : null,
+      );
     } else if (open) {
       setForm(EMPTY);
+      setGeoAccuracy(null);
     }
   }, [editing, open]);
 
-  // When creating, auto-fill coordinates from the device GPS.
+  // Ao criar, preenche coordenadas a partir do GPS do dispositivo (fonte primária).
   useEffect(() => {
     if (!editing && geo.lat != null && geo.lng != null) {
-      setForm((f) => (f.lat == null ? { ...f, lat: geo.lat, lng: geo.lng } : f));
+      setForm((f) => (f.lat == null ? { ...f, lat: geo.lat, lng: geo.lng, geo_source: 'gps' } : f));
+      setGeoAccuracy((acc) => acc ?? 'gps');
     }
   }, [editing, geo.lat, geo.lng]);
 
@@ -112,7 +129,34 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
     setForm((f) => ({ ...f, ...next }));
   }
 
-  function onSubmit(e: React.FormEvent) {
+  // Geocodifica a partir dos campos atuais do formulário e atualiza o estado.
+  async function runGeocode(): Promise<GeocodeResult | null> {
+    setGeocoding(true);
+    try {
+      const result = await geocodeAddress({
+        logradouro: form.logradouro,
+        numero: form.numero,
+        neighborhood: form.neighborhood,
+        city: form.city,
+        uf: 'MG',
+        cep: form.cep,
+      });
+      if (result) {
+        setForm((f) => ({ ...f, lat: result.lat, lng: result.lng, geo_source: 'address' }));
+        setGeoAccuracy(result.accuracy);
+      }
+      return result;
+    } finally {
+      setGeocoding(false);
+    }
+  }
+
+  async function onManualGeocode() {
+    const result = await runGeocode();
+    if (!result) toast.error('Não foi possível localizar pelo endereço informado.');
+  }
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!session || !session.campaign) return;
     if (!form.name.trim()) {
@@ -124,6 +168,22 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
       return;
     }
     const muniName = MG_MUNICIPALITIES.find((m) => m.code === form.municipality_code)?.name;
+
+    // Fallback: sem coordenadas (GPS negado/ausente) → tenta geocodificar pelo endereço.
+    let lat = form.lat;
+    let lng = form.lng;
+    let geoSource: GeoSource | null = form.geo_source ?? (lat != null ? 'gps' : null);
+    if (lat == null || lng == null) {
+      const result = await runGeocode();
+      if (result) {
+        lat = result.lat;
+        lng = result.lng;
+        geoSource = 'address';
+      } else {
+        geoSource = null;
+      }
+    }
+
     const payload = {
       ...form,
       phone: form.phone || null,
@@ -135,6 +195,9 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
       logradouro: form.logradouro?.trim() || null,
       numero: form.numero?.trim() || null,
       complemento: form.complemento?.trim() || null,
+      lat,
+      lng,
+      geo_source: geoSource,
     };
     if (editing) {
       collections.voters.update(editing.id, payload);
@@ -158,7 +221,7 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
         <SheetHeader className="mb-5">
           <SheetTitle>{editing ? 'Editar eleitor' : 'Novo eleitor'}</SheetTitle>
           <SheetDescription>
-            Registro de contato com eleitor. Coordenadas são capturadas automaticamente.
+            Registro de contato com eleitor. Coordenadas vêm do GPS ou, na falta dele, do endereço.
           </SheetDescription>
         </SheetHeader>
 
@@ -257,33 +320,53 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
           </div>
 
           <div className="rounded-lg border border-vortex-border bg-vortex-surface/40 p-3 text-xs">
-            <div className="mb-1 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 font-medium text-foreground">
-                <MapPin className="h-3.5 w-3.5 text-primary" /> Coordenadas
+                <MapPin className="h-3.5 w-3.5 text-primary" /> Localização
               </span>
-              {!editing ? (
+              <div className="flex items-center gap-1">
+                {!editing ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      if (geo.lat != null && geo.lng != null) {
+                        update('lat', geo.lat);
+                        update('lng', geo.lng);
+                        update('geo_source', 'gps');
+                        setGeoAccuracy('gps');
+                      }
+                    }}
+                  >
+                    <RotateCw className="h-3 w-3" /> GPS
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 text-xs"
-                  onClick={() => {
-                    if (geo.lat != null && geo.lng != null) {
-                      update('lat', geo.lat);
-                      update('lng', geo.lng);
-                    }
-                  }}
+                  disabled={geocoding}
+                  onClick={onManualGeocode}
                 >
-                  <RotateCw className="h-3 w-3" /> Atualizar
+                  {geocoding ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Search className="h-3 w-3" />
+                  )}{' '}
+                  Endereço
                 </Button>
-              ) : null}
+              </div>
             </div>
-            <p className="text-muted-foreground">
+            <GeoStatusBadge accuracy={geoAccuracy} />
+            <p className="mt-2 text-muted-foreground">
               {form.lat != null && form.lng != null
                 ? `${form.lat.toFixed(5)}, ${form.lng.toFixed(5)}`
                 : geo.loading
-                  ? 'Obtendo GPS...'
-                  : geo.error ?? 'Sem coordenadas — registro será salvo sem GPS.'}
+                  ? 'Obtendo GPS…'
+                  : 'Sem coordenadas — tentaremos localizar pelo endereço ao salvar.'}
             </p>
           </div>
 
@@ -291,8 +374,8 @@ export function VoterFormSheet({ open, onOpenChange, editing }: VoterFormSheetPr
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" className="flex-1">
-              <Save className="h-4 w-4" />
+            <Button type="submit" className="flex-1" disabled={geocoding}>
+              {geocoding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar
             </Button>
           </div>

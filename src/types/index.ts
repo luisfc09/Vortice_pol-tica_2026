@@ -473,9 +473,16 @@ export interface Voter {
   notes: string | null;
   lat: number | null;
   lng: number | null;
+  geo_source?: GeoSource | null;
   created_by: string;
   created_at: string;
 }
+
+// Origem das coordenadas de um eleitor.
+//   'gps'     → capturado do GPS do dispositivo (preciso)
+//   'address' → geocodificado via endereço/CEP (Nominatim)
+//   'manual'  → inserido manualmente
+export type GeoSource = 'gps' | 'address' | 'manual';
 
 // Status do ciclo de vida do questionário:
 //   'basic'    → só formulário rápido salvo

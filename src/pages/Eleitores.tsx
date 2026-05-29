@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Phone, MapPin, UserCheck, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Phone, MapPin, UserCheck, Download, LocateFixed, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
 import { ImportCsvButtons } from '@/components/data/ImportCsvButtons';
 import { pickField, onlyDigits, isValidCep, type ImportRowResult } from '@/lib/csv-import';
+import { geocodeAddress } from '@/lib/geocode';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { SearchBar } from '@/components/data/SearchBar';
@@ -147,6 +149,55 @@ export default function EleitoresPage() {
   }, [voters]);
 
   const canManage = session?.role === 'admin' || session?.role === 'coordinator';
+  const isAdmin = session?.role === 'admin';
+
+  // Geocodificação em lote (apenas admin) — eleitores sem coordenadas.
+  const [geoRunning, setGeoRunning] = useState(false);
+  const [geoProgress, setGeoProgress] = useState({ done: 0, total: 0 });
+  const pendingGeo = useMemo(
+    () => voters.filter((v) => v.lat == null || v.lng == null),
+    [voters],
+  );
+
+  async function geocodePending() {
+    const targets = voters.filter((v) => v.lat == null || v.lng == null);
+    if (targets.length === 0) {
+      toast.info('Nenhum eleitor pendente de geocodificação.');
+      return;
+    }
+    setGeoRunning(true);
+    setGeoProgress({ done: 0, total: targets.length });
+    let okc = 0;
+    let failc = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const v = targets[i];
+      try {
+        const result = await geocodeAddress({
+          logradouro: v.logradouro,
+          numero: v.numero,
+          neighborhood: v.neighborhood,
+          city: v.city,
+          uf: 'MG',
+          cep: v.cep,
+        });
+        if (result) {
+          await collections.voters.update(v.id, {
+            lat: result.lat,
+            lng: result.lng,
+            geo_source: 'address',
+          });
+          okc++;
+        } else {
+          failc++;
+        }
+      } catch {
+        failc++;
+      }
+      setGeoProgress({ done: i + 1, total: targets.length });
+    }
+    setGeoRunning(false);
+    toast.success(`${okc} geocodificados · ${failc} sem endereço suficiente`);
+  }
 
   function exportCsv() {
     exportToCsv(stampedCsvName('eleitores'), filtered, [
@@ -299,10 +350,23 @@ export default function EleitoresPage() {
             validateRows={validateVoterRows}
             onImport={importVoters}
             entityLabel="eleitores"
+            successNote="Use 'Geocodificar pendentes' para adicionar coordenadas aos endereços."
           />
           <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4" /> Exportar CSV
           </Button>
+          {isAdmin && pendingGeo.length > 0 ? (
+            <Button variant="outline" onClick={geocodePending} disabled={geoRunning}>
+              {geoRunning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LocateFixed className="h-4 w-4" />
+              )}
+              {geoRunning
+                ? `Geocodificando ${geoProgress.done}/${geoProgress.total}`
+                : `Geocodificar pendentes (${pendingGeo.length})`}
+            </Button>
+          ) : null}
           <Button
             onClick={() => {
               setEditing(null);
@@ -313,6 +377,25 @@ export default function EleitoresPage() {
           </Button>
         </div>
       </div>
+
+      {geoRunning ? (
+        <div className="rounded-lg border border-vortex-border bg-vortex-surface/40 p-3">
+          <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Geocodificando endereços (1 por segundo)…</span>
+            <span>
+              {geoProgress.done}/{geoProgress.total}
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-vortex-bg">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{
+                width: `${geoProgress.total ? (geoProgress.done / geoProgress.total) * 100 : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <SearchBar
         value={query}
