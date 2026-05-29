@@ -15,6 +15,7 @@ import MencoesPage from '@/pages/Mencoes';
 import RespostaRapidaPage from '@/pages/RespostaRapida';
 import RespostaRapidaHistoricoPage from '@/pages/RespostaRapidaHistorico';
 import CampoHubPage from '@/pages/Campo';
+import PerguntasRegionaisPage from '@/pages/PerguntasRegionaisPage';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoEntrevistaDetalhePage from '@/pages/CampoEntrevistaDetalhe';
 import InteligenciaPage from '@/pages/Inteligencia';
@@ -90,6 +91,16 @@ export default function App() {
             <Route
               path="/mencoes/resposta-rapida/historico"
               element={<RespostaRapidaHistoricoPage />}
+            />
+          </Route>
+        </Route>
+
+        {/* Perguntas regionais — gerenciamento só do admin da campanha */}
+        <Route element={<ProtectedRoute requireCampaign roles={['admin']} />}>
+          <Route element={<AppLayout />}>
+            <Route
+              path="/pesquisas/perguntas-regionais"
+              element={<PerguntasRegionaisPage />}
             />
           </Route>
         </Route>

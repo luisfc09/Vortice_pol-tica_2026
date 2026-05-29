@@ -1,15 +1,26 @@
 import { Link } from 'react-router-dom';
-import { ClipboardCheck, BookOpenText, History, MapPin, Sunrise } from 'lucide-react';
+import {
+  ClipboardCheck,
+  BookOpenText,
+  History,
+  MapPin,
+  Sunrise,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { getQueue } from '@/lib/offline-queue';
 import { discardInterviewQueue, flushInterviewQueue } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 
 export default function CampoHubPage() {
   const session = useAuthStore((s) => s.session);
+  const effective = useEffectiveSession();
+  const isAdmin = effective?.role === 'admin' || effective?.is_super_admin === true;
   const [syncing, setSyncing] = useState(false);
 
   async function handleSync() {
@@ -58,9 +69,18 @@ export default function CampoHubPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <p className="text-sm text-muted-foreground">Olá, {session?.profile.full_name.split(' ')[0]}.</p>
-        <h2 className="font-display text-3xl tracking-wide text-foreground">Pronto para ir a campo?</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">Olá, {session?.profile.full_name.split(' ')[0]}.</p>
+          <h2 className="font-display text-3xl tracking-wide text-foreground">Pronto para ir a campo?</h2>
+        </div>
+        {isAdmin ? (
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <Link to="/pesquisas/perguntas-regionais">
+              <SlidersHorizontal className="h-4 w-4" /> Configurar perguntas regionais
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       <OfflineBanner onSyncRequest={handleSync} syncing={syncing} />

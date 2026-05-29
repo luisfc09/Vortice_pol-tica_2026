@@ -209,6 +209,50 @@ export interface Campaign {
   deleted_by?: string | null;
 }
 
+// ----------------------------------------------------------------------------
+// Perguntas regionais por campanha (Bloco 6 do questionário) — migration 034
+// ----------------------------------------------------------------------------
+export type CampaignQuestionType =
+  | 'yes_no'
+  | 'multiple_choice'
+  | 'scale_1_5'
+  | 'free_text'
+  | 'single_choice';
+
+export const CAMPAIGN_QUESTION_TYPE_LABEL: Record<CampaignQuestionType, string> = {
+  yes_no: 'Sim / Não',
+  multiple_choice: 'Múltipla escolha',
+  single_choice: 'Seleção única',
+  scale_1_5: 'Escala 1 a 5',
+  free_text: 'Texto livre',
+};
+
+export interface CampaignQuestion {
+  id: string;
+  campaign_id: string;
+  text: string;
+  type: CampaignQuestionType;
+  options: string[] | null;
+  is_required: boolean;
+  sort_order: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InterviewCustomAnswer {
+  id: string;
+  interview_id: string;
+  campaign_id: string;
+  question_id: string;
+  answer_text: string | null;
+  answer_option: string | null;
+  answer_options: string[] | null;
+  answer_scale: number | null;
+  created_at: string;
+}
+
 export interface CampaignOverview {
   id: string;
   candidate_name: string;
