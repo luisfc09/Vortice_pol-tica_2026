@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2, Phone, MapPin, Mail, Users, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
+import { ImportCsvButtons } from '@/components/data/ImportCsvButtons';
+import { pickField } from '@/lib/csv-import';
 import { Badge } from '@/components/ui/badge';
 import { SearchBar } from '@/components/data/SearchBar';
 import { EmptyState } from '@/components/data/EmptyState';
@@ -116,13 +118,68 @@ export default function LiderancasPage() {
     ]);
   }
 
+  async function importSupporters(rows: Record<string, string>[]) {
+    if (!session?.campaign) return { ok: 0, skip: 0 };
+    let ok = 0;
+    let skip = 0;
+    for (const r of rows) {
+      const name = pickField(r, 'Nome', 'name');
+      if (!name) {
+        skip++;
+        continue;
+      }
+      await collections.supporters.create({
+        data: {
+          campaign_id: session.campaign.id,
+          created_by: session.id,
+          name,
+          cpf: pickField(r, 'CPF', 'cpf') || null,
+          phone: pickField(r, 'Telefone', 'phone', 'celular') || null,
+          email: pickField(r, 'Email', 'e-mail') || null,
+          city: pickField(r, 'Cidade', 'city') || null,
+          neighborhood: pickField(r, 'Bairro', 'neighborhood') || null,
+          municipality_code: null,
+          cep: null,
+          logradouro: null,
+          numero: null,
+          complemento: null,
+          role: 'outro',
+          role_custom: pickField(r, 'Papel', 'cargo', 'role') || null,
+          status: 'ativo',
+        },
+      });
+      ok++;
+    }
+    return { ok, skip };
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {supporters.length} {supporters.length === 1 ? 'liderança cadastrada' : 'lideranças cadastradas'}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportCsvButtons
+            templateName="modelo-liderancas"
+            templateRow={{
+              Nome: 'Maria Souza',
+              Telefone: '(31) 99999-0000',
+              Email: 'maria@exemplo.com',
+              Cidade: 'Belo Horizonte',
+              Bairro: 'Savassi',
+              Papel: 'Liderança comunitária',
+            }}
+            templateColumns={[
+              { header: 'Nome', value: (r) => r.Nome },
+              { header: 'Telefone', value: (r) => r.Telefone },
+              { header: 'Email', value: (r) => r.Email },
+              { header: 'Cidade', value: (r) => r.Cidade },
+              { header: 'Bairro', value: (r) => r.Bairro },
+              { header: 'Papel', value: (r) => r.Papel },
+            ]}
+            onImport={importSupporters}
+          />
           <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4" /> Exportar CSV
           </Button>

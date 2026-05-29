@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2, Phone, MapPin, UserCheck, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
+import { ImportCsvButtons } from '@/components/data/ImportCsvButtons';
+import { pickField } from '@/lib/csv-import';
+import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import { SearchBar } from '@/components/data/SearchBar';
 import { FilterPill } from '@/components/data/FilterPill';
 import { Input } from '@/components/ui/input';
@@ -30,6 +33,40 @@ import {
 } from '@/types';
 
 type IntentionFilter = 'all' | VoteIntention;
+
+// --- helpers de import (tolerantes a acento/caixa/label) ---
+const normTxt = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+
+const INTENTION_BY_TEXT: Record<string, VoteIntention> = (() => {
+  const m: Record<string, VoteIntention> = {};
+  (Object.keys(VOTE_INTENTION_LABEL) as VoteIntention[]).forEach((k) => {
+    m[normTxt(k)] = k;
+    m[normTxt(VOTE_INTENTION_LABEL[k])] = k;
+  });
+  return m;
+})();
+const parseIntention = (raw: string): VoteIntention => INTENTION_BY_TEXT[normTxt(raw)] ?? 'indeciso';
+
+const AGE_BY_TEXT: Record<string, AgeRange> = (() => {
+  const m: Record<string, AgeRange> = {};
+  (Object.keys(AGE_RANGE_LABEL) as AgeRange[]).forEach((k) => {
+    m[normTxt(k)] = k;
+    m[normTxt(AGE_RANGE_LABEL[k])] = k;
+  });
+  return m;
+})();
+const parseAge = (raw: string): AgeRange | null => (raw ? AGE_BY_TEXT[normTxt(raw)] ?? null : null);
+
+const MUNI_BY_NAME = (() => {
+  const m = new Map<string, { code: string; name: string }>();
+  for (const x of MG_MUNICIPALITIES) m.set(normTxt(x.name), { code: x.code, name: x.name });
+  return m;
+})();
 
 export default function EleitoresPage() {
   const session = useAuthStore((s) => s.session);
@@ -127,13 +164,71 @@ export default function EleitoresPage() {
     ]);
   }
 
+  async function importVoters(rows: Record<string, string>[]) {
+    if (!session?.campaign) return { ok: 0, skip: 0 };
+    let ok = 0;
+    let skip = 0;
+    for (const r of rows) {
+      const name = pickField(r, 'Nome', 'name');
+      if (!name) {
+        skip++;
+        continue;
+      }
+      const cidade = pickField(r, 'Cidade', 'city', 'municipio', 'município');
+      const muni = cidade ? MUNI_BY_NAME.get(normTxt(cidade)) : undefined;
+      await collections.voters.create({
+        data: {
+          campaign_id: session.campaign.id,
+          created_by: session.id,
+          name,
+          phone: pickField(r, 'Telefone', 'phone', 'celular') || null,
+          address: null,
+          city: muni?.name ?? (cidade || null),
+          neighborhood: pickField(r, 'Bairro', 'neighborhood') || null,
+          municipality_code: muni?.code ?? null,
+          cep: null,
+          logradouro: null,
+          numero: null,
+          complemento: null,
+          vote_intention: parseIntention(pickField(r, 'Intenção de voto', 'intencao', 'vote_intention')),
+          age_range: parseAge(pickField(r, 'Faixa etária', 'faixa', 'age_range')),
+          notes: pickField(r, 'Observações', 'obs', 'notes') || null,
+          lat: null,
+          lng: null,
+        },
+      });
+      ok++;
+    }
+    return { ok, skip };
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {voters.length} {voters.length === 1 ? 'eleitor cadastrado' : 'eleitores cadastrados'}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportCsvButtons
+            templateName="modelo-eleitores"
+            templateRow={{
+              Nome: 'José da Silva',
+              Telefone: '(31) 99999-0000',
+              'Intenção de voto': 'Indeciso',
+              'Faixa etária': '25 a 34 anos',
+              Cidade: 'Belo Horizonte',
+              Bairro: 'Savassi',
+            }}
+            templateColumns={[
+              { header: 'Nome', value: (r) => r.Nome },
+              { header: 'Telefone', value: (r) => r.Telefone },
+              { header: 'Intenção de voto', value: (r) => r['Intenção de voto'] },
+              { header: 'Faixa etária', value: (r) => r['Faixa etária'] },
+              { header: 'Cidade', value: (r) => r.Cidade },
+              { header: 'Bairro', value: (r) => r.Bairro },
+            ]}
+            onImport={importVoters}
+          />
           <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4" /> Exportar CSV
           </Button>
