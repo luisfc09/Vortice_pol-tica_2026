@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Phone, MapPin, Mail, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Phone, MapPin, Mail, Users, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
 import { Badge } from '@/components/ui/badge';
 import { SearchBar } from '@/components/data/SearchBar';
 import { EmptyState } from '@/components/data/EmptyState';
@@ -92,15 +93,43 @@ export default function LiderancasPage() {
 
   const canManage = session?.role === 'admin' || session?.role === 'coordinator';
 
+  const STATUS_LABEL: Record<string, string> = {
+    ativo: 'Ativo',
+    pendente: 'Pendente',
+    inativo: 'Inativo',
+  };
+
+  function exportCsv() {
+    exportToCsv(stampedCsvName('liderancas'), filtered, [
+      { header: 'Nome', value: (s) => s.name },
+      { header: 'Papel', value: (s) => displayRole(s) },
+      { header: 'Telefone', value: (s) => s.phone },
+      { header: 'Email', value: (s) => s.email },
+      { header: 'CPF', value: (s) => s.cpf },
+      { header: 'Cidade', value: (s) => s.city },
+      { header: 'Bairro', value: (s) => s.neighborhood },
+      { header: 'CEP', value: (s) => s.cep },
+      { header: 'Logradouro', value: (s) => s.logradouro },
+      { header: 'Número', value: (s) => s.numero },
+      { header: 'Status', value: (s) => STATUS_LABEL[s.status] ?? s.status },
+      { header: 'Cadastrado em', value: (s) => csvDate(s.created_at) },
+    ]);
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {supporters.length} {supporters.length === 1 ? 'liderança cadastrada' : 'lideranças cadastradas'}
         </p>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4" /> Nova liderança
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
+            <Download className="h-4 w-4" /> Exportar CSV
+          </Button>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" /> Nova liderança
+          </Button>
+        </div>
       </div>
 
       <SearchBar

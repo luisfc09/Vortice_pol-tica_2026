@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Phone, MapPin, UserCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, Phone, MapPin, UserCheck, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
 import { SearchBar } from '@/components/data/SearchBar';
 import { FilterPill } from '@/components/data/FilterPill';
 import { EmptyState } from '@/components/data/EmptyState';
@@ -53,20 +54,41 @@ export default function EleitoresPage() {
 
   const canManage = session?.role === 'admin' || session?.role === 'coordinator';
 
+  function exportCsv() {
+    exportToCsv(stampedCsvName('eleitores'), filtered, [
+      { header: 'Nome', value: (v) => v.name },
+      { header: 'Telefone', value: (v) => v.phone },
+      { header: 'Intenção de voto', value: (v) => VOTE_INTENTION_LABEL[v.vote_intention] },
+      { header: 'Cidade', value: (v) => v.city },
+      { header: 'Bairro', value: (v) => v.neighborhood },
+      { header: 'CEP', value: (v) => v.cep },
+      { header: 'Logradouro', value: (v) => v.logradouro },
+      { header: 'Número', value: (v) => v.numero },
+      { header: 'Complemento', value: (v) => v.complemento },
+      { header: 'Observações', value: (v) => v.notes },
+      { header: 'Cadastrado em', value: (v) => csvDate(v.created_at) },
+    ]);
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {voters.length} {voters.length === 1 ? 'eleitor cadastrado' : 'eleitores cadastrados'}
         </p>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setSheetOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Novo eleitor
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
+            <Download className="h-4 w-4" /> Exportar CSV
+          </Button>
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setSheetOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Novo eleitor
+          </Button>
+        </div>
       </div>
 
       <SearchBar
