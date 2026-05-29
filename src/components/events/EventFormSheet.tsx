@@ -55,13 +55,21 @@ function toLocalInput(value: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Data clicada no calendário → input com hora padrão 09:00.
+function dateToLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: CampaignEvent | null;
+  /** Pré-preenche a data ao criar (clique num dia do calendário). */
+  initialDate?: Date | null;
 }
 
-export function EventFormSheet({ open, onOpenChange, editing }: Props) {
+export function EventFormSheet({ open, onOpenChange, editing, initialDate }: Props) {
   const session = useAuthStore((s) => s.session);
   const [form, setForm] = useState<FormState>(EMPTY);
 
@@ -76,9 +84,9 @@ export function EventFormSheet({ open, onOpenChange, editing }: Props) {
         description: editing.description ?? '',
       });
     } else if (open) {
-      setForm(EMPTY);
+      setForm(initialDate ? { ...EMPTY, date: dateToLocalInput(initialDate) } : EMPTY);
     }
-  }, [editing, open]);
+  }, [editing, open, initialDate]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
