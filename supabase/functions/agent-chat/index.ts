@@ -51,7 +51,7 @@ function json(body: unknown, status = 200) {
 
 const LLM_TYPES: IntegrationType[] = ['anthropic', 'openai', 'gemini', 'mistral', 'groq', 'xai', 'deepseek'];
 const DEFAULT_MODELS: Record<IntegrationType, string> = {
-  anthropic: 'claude-sonnet-4-6',
+  anthropic: 'claude-sonnet-4-20250514',
   openai: 'gpt-4o',
   gemini: 'gemini-2.5-flash',
   mistral: 'mistral-small-latest',
@@ -193,7 +193,8 @@ async function selectAgentProvider(
   return {
     type: pick.type,
     api_key: pick.secrets!.api_key,
-    model: (pick.config?.model as string) ?? DEFAULT_MODELS[pick.type],
+    // `|| default` (não `??`): trata string vazia '' como "sem modelo" → default.
+    model: ((pick.config?.model as string) ?? '').trim() || DEFAULT_MODELS[pick.type],
     organization: pick.config?.organization,
   };
 }
@@ -454,7 +455,7 @@ async function callChat(
       method: 'POST',
       headers: { 'x-api-key': p.api_key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: p.model ?? DEFAULT_MODELS.anthropic,
+        model: p.model || DEFAULT_MODELS.anthropic,
         max_tokens: maxTokens,
         temperature,
         system,
@@ -467,7 +468,7 @@ async function callChat(
   }
 
   if (p.type === 'gemini') {
-    const model = p.model ?? DEFAULT_MODELS.gemini;
+    const model = p.model || DEFAULT_MODELS.gemini;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(p.api_key)}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -500,7 +501,7 @@ async function callChat(
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: p.model ?? DEFAULT_MODELS[p.type],
+      model: p.model || DEFAULT_MODELS[p.type],
       max_tokens: maxTokens,
       temperature,
       messages: [{ role: 'system', content: system }, ...messages.map((m) => ({ role: m.role, content: m.content }))],
