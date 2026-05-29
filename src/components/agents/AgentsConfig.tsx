@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { AgentAvatar } from '@/components/agents/AgentAvatar';
+import { AgentPhotoPicker } from '@/components/agents/AgentPhotoPicker';
 import { supabase } from '@/lib/supabase';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { cn } from '@/lib/utils';
@@ -193,33 +194,13 @@ export function AgentsConfig({ integrations }: Props) {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor={`avatar-${meta.key}`}>Foto do agente (URL)</Label>
-                    <Input
-                      id={`avatar-${meta.key}`}
-                      placeholder="https://…"
+                    <Label>Foto do agente</Label>
+                    <AgentPhotoPicker
                       value={form.avatar_url}
-                      onChange={(e) => patch(meta.key, { avatar_url: e.target.value })}
+                      onChange={(url) => patch(meta.key, { avatar_url: url })}
+                      userId={session?.id ?? null}
+                      agentKey={meta.key}
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      Sugestões gratuitas:{' '}
-                      <a
-                        href="https://thispersondoesnotexist.com"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline hover:text-primary"
-                      >
-                        ThisPersonDoesNotExist
-                      </a>{' '}
-                      ·{' '}
-                      <a
-                        href="https://unsplash.com/s/photos/portrait"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline hover:text-primary"
-                      >
-                        Unsplash
-                      </a>
-                    </p>
                   </div>
 
                   <div className="space-y-1.5">
