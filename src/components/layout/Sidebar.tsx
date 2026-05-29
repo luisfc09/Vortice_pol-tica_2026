@@ -8,6 +8,7 @@ import {
   Megaphone,
   ClipboardList,
   Calendar,
+  Brain,
   UsersRound,
   Shield,
   Building2,
@@ -56,6 +57,13 @@ const ITEMS: NavItem[] = [
   },
   { to: '/campo', label: 'Pesquisas', icon: ClipboardList, requiresCampaign: true },
   { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
+  {
+    to: '/agentes/steve',
+    label: 'Steve_AI — Estrategista',
+    icon: Brain,
+    roles: ['admin', 'candidate'],
+    requiresCampaign: true,
+  },
   {
     to: '/usuarios',
     label: 'Usuários',

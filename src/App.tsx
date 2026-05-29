@@ -20,6 +20,7 @@ import OnboardingPage from '@/pages/Onboarding';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoEntrevistaDetalhePage from '@/pages/CampoEntrevistaDetalhe';
 import InteligenciaPage from '@/pages/Inteligencia';
+import SteveAIPage from '@/pages/SteveAIPage';
 import CampoQuestionarioPage from '@/pages/CampoQuestionario';
 import CampoFaqPage from '@/pages/CampoFaq';
 import CampoHistoricoPage from '@/pages/CampoHistorico';
@@ -75,6 +76,13 @@ export default function App() {
             />
             <Route path="/campo/faq" element={<CampoFaqPage />} />
             <Route path="/agenda" element={<AgendaPage />} />
+          </Route>
+        </Route>
+
+        {/* Steve_AI — estrategista (admin e candidato) */}
+        <Route element={<ProtectedRoute requireCampaign roles={['admin', 'candidate']} />}>
+          <Route element={<AppLayout />}>
+            <Route path="/agentes/steve" element={<SteveAIPage />} />
           </Route>
         </Route>
 
