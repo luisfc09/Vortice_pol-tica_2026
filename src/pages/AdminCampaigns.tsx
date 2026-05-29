@@ -266,7 +266,8 @@ export default function AdminCampaignsPage() {
                 <div className="flex-1 min-w-0">
                   <Link
                     to={`/admin/campaigns/${row.id}`}
-                    className="truncate font-medium text-foreground hover:text-primary"
+                    className="block truncate font-medium text-foreground hover:text-primary"
+                    title={row.candidate_name}
                   >
                     {row.candidate_name}
                   </Link>
@@ -347,7 +348,9 @@ export default function AdminCampaignsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-semibold text-foreground">{r.candidate_name}</p>
+                      <p className="truncate font-semibold text-foreground" title={r.candidate_name}>
+                        {r.candidate_name}
+                      </p>
                       <Badge variant={STATUS_VARIANT[r.status]} className="gap-1">
                         <StatusIcon className="h-3 w-3" />
                         {CAMPAIGN_STATUS_LABEL[r.status]}

@@ -252,7 +252,9 @@ export default function UsuariosPage() {
                   />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-semibold text-foreground">{p.full_name}</p>
+                      <p className="truncate font-semibold text-foreground" title={p.full_name}>
+                        {p.full_name}
+                      </p>
                       {isSelf ? <Badge variant="outline">Você</Badge> : null}
                       {superAdminIds.has(m.user_id) ? (
                         <Badge variant="warning" className="gap-1">
@@ -262,7 +264,10 @@ export default function UsuariosPage() {
                       ) : null}
                       {!m.is_active ? <Badge variant="destructive">Desativado</Badge> : null}
                     </div>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p
+                      className="truncate text-xs text-muted-foreground"
+                      title={p.phone ?? 'Sem telefone cadastrado'}
+                    >
                       {p.phone ?? 'Sem telefone cadastrado'}
                     </p>
                   </div>

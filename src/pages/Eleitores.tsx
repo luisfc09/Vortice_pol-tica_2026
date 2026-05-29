@@ -113,8 +113,12 @@ export default function EleitoresPage() {
             >
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate font-semibold text-foreground">{v.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{v.city}</p>
+                  <p className="truncate font-semibold text-foreground" title={v.name}>
+                    {v.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground" title={v.city ?? undefined}>
+                    {v.city}
+                  </p>
                 </div>
                 <span
                   className={cn(

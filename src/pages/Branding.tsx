@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { hexToHslVar, isValidHex } from '@/lib/color';
 import { VorticeLogo } from '@/components/brand/VorticeLogo';
 
@@ -31,7 +32,11 @@ const DEFAULT_SECONDARY = '#A78BFA';
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
 
 export default function BrandingPage() {
-  const session = useAuthStore((s) => s.session);
+  // Lê a campanha pela sessão EFETIVA (respeita o "ver como cliente" do super
+  // admin). Antes usava useAuthStore direto → super admin em view-as tem
+  // campaign=null na sessão real → caía no `return null` = tela branca.
+  const session = useEffectiveSession();
+  const realSession = useAuthStore((s) => s.session);
   const setSession = useAuthStore((s) => s.setSession);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,7 +55,34 @@ export default function BrandingPage() {
     setLogoUrl(session.campaign.brand_logo_url ?? null);
   }, [session?.campaign?.id]);
 
-  if (!session?.campaign) return null;
+  // Nunca renderiza tela branca: sessão hidratando → skeleton; sem campanha
+  // efetiva → card com mensagem.
+  if (!session) {
+    return (
+      <div className="space-y-4">
+        <div className="h-9 w-64 animate-pulse rounded bg-vortex-surface/60" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="h-72 animate-pulse rounded-xl bg-vortex-surface/40 lg:col-span-1" />
+          <div className="h-72 animate-pulse rounded-xl bg-vortex-surface/40 lg:col-span-2" />
+        </div>
+      </div>
+    );
+  }
+  if (!session.campaign) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-vortex-surface/60">
+          <Palette className="h-6 w-6 text-primary" />
+        </div>
+        <h2 className="font-display text-2xl tracking-wide text-foreground">
+          Identidade da campanha
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Selecione uma campanha para configurar a identidade visual.
+        </p>
+      </div>
+    );
+  }
   const campaignId = session.campaign.id;
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -112,11 +144,15 @@ export default function BrandingPage() {
         toast.error(error.message);
         return;
       }
-      // Atualiza a session local para refletir imediatamente
-      setSession({
-        ...session,
-        campaign: { ...session.campaign, ...patch },
-      });
+      // Atualiza a session local só quando ela é dona desta campanha (admin
+      // real). Em "ver como cliente" o super admin não tem campanha na sessão
+      // real — o update no banco já persistiu; não clobbar a sessão real.
+      if (realSession?.campaign && realSession.campaign.id === campaignId) {
+        setSession({
+          ...realSession,
+          campaign: { ...realSession.campaign, ...patch },
+        });
+      }
       toast.success('Identidade da campanha salva.');
     } finally {
       setSaving(false);

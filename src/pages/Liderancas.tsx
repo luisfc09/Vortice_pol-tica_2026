@@ -154,8 +154,13 @@ export default function LiderancasPage() {
             >
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate font-semibold text-foreground">{s.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="truncate font-semibold text-foreground" title={s.name}>
+                    {s.name}
+                  </p>
+                  <p
+                    className="truncate text-xs text-muted-foreground"
+                    title={`${s.city}${s.neighborhood ? ` · ${s.neighborhood}` : ''}`}
+                  >
                     {s.city}
                     {s.neighborhood ? ` · ${s.neighborhood}` : ''}
                   </p>
@@ -175,7 +180,7 @@ export default function LiderancasPage() {
                 {s.email ? (
                   <p className="flex items-center gap-2 text-foreground/80">
                     <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="truncate">{s.email}</span>
+                    <span className="truncate" title={s.email}>{s.email}</span>
                   </p>
                 ) : null}
                 <p className="flex items-center gap-2 text-muted-foreground">
