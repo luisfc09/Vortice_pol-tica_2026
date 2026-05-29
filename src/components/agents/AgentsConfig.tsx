@@ -302,18 +302,17 @@ function ProviderOption({
   onSelect: () => void;
   auto?: boolean;
 }) {
-  const disabled = !ready && !auto; // "automático" é sempre selecionável (cai no fallback)
+  // Sempre selecionável: a escolha é uma PREFERÊNCIA. Se a IA preferida não
+  // estiver configurada, o servidor cai no fallback (ou avisa que não há IA).
   return (
     <button
       type="button"
       onClick={onSelect}
-      disabled={disabled}
       className={cn(
         'flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
         selected
           ? 'border-primary bg-primary/10 text-foreground'
           : 'border-vortex-border bg-vortex-bg/40 text-foreground/80',
-        disabled && 'cursor-not-allowed opacity-50',
       )}
     >
       <span className="flex items-center gap-2">
