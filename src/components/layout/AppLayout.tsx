@@ -4,6 +4,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { TrialBanner } from './TrialBanner';
+import { CarlosDrawer } from '@/components/agents/CarlosDrawer';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { setActiveCampaignId } from '@/lib/data';
 
@@ -85,6 +86,9 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Carlos_AI_Op — assistente flutuante em todas as telas do app */}
+      <CarlosDrawer />
     </div>
   );
 }
