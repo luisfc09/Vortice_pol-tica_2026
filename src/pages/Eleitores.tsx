@@ -5,6 +5,7 @@ import { exportToCsv, stampedCsvName, csvDate } from '@/lib/csv-export';
 import { ImportCsvButtons } from '@/components/data/ImportCsvButtons';
 import { pickField } from '@/lib/csv-import';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
+import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { SearchBar } from '@/components/data/SearchBar';
 import { FilterPill } from '@/components/data/FilterPill';
 import { Input } from '@/components/ui/input';
@@ -77,11 +78,18 @@ export default function EleitoresPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Voter | null>(null);
   // Filtros avançados (#4)
-  const [cityFilter, setCityFilter] = useState<string>('all');
+  // cityFilter guarda o CÓDIGO IBGE do município ('' = todas) — combobox com os 853 de MG.
+  const [cityFilter, setCityFilter] = useState<string>('');
   const [bairroFilter, setBairroFilter] = useState<string>('all');
   const [ageFilter, setAgeFilter] = useState<AgeRange | 'all'>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  // Nome do município selecionado (cityFilter guarda o código IBGE).
+  const cityName = useMemo(
+    () => (cityFilter ? MG_MUNICIPALITIES.find((m) => m.code === cityFilter)?.name ?? null : null),
+    [cityFilter],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -89,7 +97,7 @@ export default function EleitoresPage() {
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
     return voters.filter((v) => {
       if (filter !== 'all' && v.vote_intention !== filter) return false;
-      if (cityFilter !== 'all' && v.city !== cityFilter) return false;
+      if (cityFilter && v.municipality_code !== cityFilter && v.city !== cityName) return false;
       if (bairroFilter !== 'all' && v.neighborhood !== bairroFilter) return false;
       if (ageFilter !== 'all' && v.age_range !== ageFilter) return false;
       if (fromTs !== null || toTs !== null) {
@@ -101,16 +109,9 @@ export default function EleitoresPage() {
       const haystack = `${v.name} ${v.city} ${v.address ?? ''} ${v.phone ?? ''}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [voters, query, filter, cityFilter, bairroFilter, ageFilter, dateFrom, dateTo]);
+  }, [voters, query, filter, cityFilter, cityName, bairroFilter, ageFilter, dateFrom, dateTo]);
 
-  // Valores distintos pros selects (cidade/bairro).
-  const cities = useMemo(
-    () =>
-      [...new Set(voters.map((v) => v.city).filter(Boolean) as string[])].sort((a, b) =>
-        a.localeCompare(b, 'pt-BR'),
-      ),
-    [voters],
-  );
+  // Valores distintos pro select de bairro.
   const bairros = useMemo(
     () =>
       [...new Set(voters.map((v) => v.neighborhood).filter(Boolean) as string[])].sort((a, b) =>
@@ -119,13 +120,13 @@ export default function EleitoresPage() {
     [voters],
   );
   const advancedActive =
-    cityFilter !== 'all' ||
+    cityFilter !== '' ||
     bairroFilter !== 'all' ||
     ageFilter !== 'all' ||
     !!dateFrom ||
     !!dateTo;
   function clearAdvanced() {
-    setCityFilter('all');
+    setCityFilter('');
     setBairroFilter('all');
     setAgeFilter('all');
     setDateFrom('');
@@ -265,19 +266,13 @@ export default function EleitoresPage() {
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-vortex-border bg-vortex-surface/40 p-3">
         <div className="space-y-1">
           <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Cidade</Label>
-          <Select value={cityFilter} onValueChange={setCityFilter}>
-            <SelectTrigger className="h-9 w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              {cities.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="w-56">
+            <MunicipalityCombobox
+              value={cityFilter}
+              onChange={(code) => setCityFilter(code)}
+              placeholder="Todas as cidades"
+            />
+          </div>
         </div>
         <div className="space-y-1">
           <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Bairro</Label>
