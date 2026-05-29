@@ -27,6 +27,15 @@ import { collections, useCollection } from '@/lib/data';
 import { supabase, USE_MOCKS } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import type { FieldInterview, InterviewAIAnalysis } from '@/types';
+import { useCampaignQuestions } from '@/hooks/useCampaignQuestions';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
+import { CustomQuestionBlock } from '@/components/pesquisas/CustomQuestionBlock';
+import {
+  answerHasValue,
+  salvarRespostasRegionais,
+  type CustomAnswersState,
+  type CustomAnswerValue,
+} from '@/lib/customQuestions';
 
 export default function CampoQuestionarioPage() {
   const params = useParams();
@@ -44,6 +53,13 @@ export default function CampoQuestionarioPage() {
   const startedAtRef = useRef<number>(performance.now());
   const [saving, setSaving] = useState(false);
   const [analysis, setAnalysis] = useState<InterviewAIAnalysis | null>(null);
+
+  // Bloco 6 — perguntas regionais da campanha (só aparece se hasQuestions).
+  const session = useEffectiveSession();
+  const { questions: regionalQuestions, hasQuestions } = useCampaignQuestions();
+  const [customAnswers, setCustomAnswers] = useState<CustomAnswersState>({});
+  const [customErrorIds, setCustomErrorIds] = useState<string[]>([]);
+  const stepTitles = hasQuestions ? [...BLOCK_TITLES, 'Campanha'] : [...BLOCK_TITLES];
 
   // Quando a entrevista chega via realtime/hidratação, preenche o estado
   // com o que já estiver salvo (suporta retomar de onde parou).
@@ -81,6 +97,41 @@ export default function CampoQuestionarioPage() {
     setState((s) => ({ ...s, ...next }));
   }
 
+  // Pré-carrega respostas regionais já salvas (suporta re-edição da entrevista).
+  useEffect(() => {
+    let active = true;
+    async function loadExisting() {
+      if (!interview?.id || USE_MOCKS || !hasQuestions) return;
+      const { data } = await supabase
+        .from('interview_custom_answers')
+        .select('question_id, answer_text, answer_option, answer_options, answer_scale')
+        .eq('interview_id', interview.id);
+      if (!active || !data) return;
+      const next: CustomAnswersState = {};
+      for (const row of data) {
+        const q = regionalQuestions.find((x) => x.id === row.question_id);
+        if (!q) continue;
+        next[row.question_id] = {
+          type: q.type,
+          optionValue: row.answer_option ?? null,
+          optionValues: row.answer_options ?? [],
+          scaleValue: row.answer_scale ?? null,
+          textValue: row.answer_text ?? '',
+        };
+      }
+      if (Object.keys(next).length > 0) setCustomAnswers(next);
+    }
+    void loadExisting();
+    return () => {
+      active = false;
+    };
+  }, [interview?.id, hasQuestions, regionalQuestions.length]);
+
+  function onCustomChange(questionId: string, value: CustomAnswerValue) {
+    setCustomAnswers((s) => ({ ...s, [questionId]: value }));
+    if (customErrorIds.length > 0) setCustomErrorIds([]); // limpa erros ao interagir
+  }
+
   // Salva o conteúdo do bloco atual em background ao avançar. Mantém
   // status='draft' até a finalização. Se o usuário fechar a página
   // metade do caminho, volta na próxima sessão com o que digitou.
@@ -113,7 +164,7 @@ export default function CampoQuestionarioPage() {
 
   function next() {
     void persistDraft();
-    setBlock((b) => Math.min(BLOCK_TITLES.length - 1, b + 1));
+    setBlock((b) => Math.min(stepTitles.length - 1, b + 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   function back() {
@@ -141,6 +192,25 @@ export default function CampoQuestionarioPage() {
 
   async function finalize() {
     if (!interview) return;
+
+    // Validação do Bloco 6: perguntas obrigatórias precisam estar respondidas.
+    if (hasQuestions) {
+      const missing = regionalQuestions.filter(
+        (q) => q.is_required && !answerHasValue(customAnswers[q.id]),
+      );
+      if (missing.length > 0) {
+        setCustomErrorIds(missing.map((q) => q.id));
+        setBlock(stepTitles.length - 1); // garante que está no Bloco 6
+        toast.error('Responda as perguntas obrigatórias da campanha.');
+        setTimeout(() => {
+          document
+            .getElementById(`custom-q-${missing[0].id}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 60);
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const elapsedSec = Math.floor((performance.now() - startedAtRef.current) / 1000);
@@ -179,6 +249,22 @@ export default function CampoQuestionarioPage() {
         interview_duration_seconds: elapsedSec,
         status: 'complete',
       });
+
+      // Respostas regionais (Bloco 6) — APÓS o save principal e não-bloqueante:
+      // se falhar, a entrevista continua salva; só avisa pra reeditar depois.
+      if (hasQuestions) {
+        const campaignId = session?.campaign?.id ?? null;
+        if (campaignId) {
+          try {
+            await salvarRespostasRegionais(interview.id, campaignId, customAnswers);
+          } catch (e) {
+            console.error('salvarRespostasRegionais falhou:', e);
+            toast.warning(
+              'Entrevista salva. Algumas respostas regionais não foram salvas — tente novamente editando a entrevista.',
+            );
+          }
+        }
+      }
 
       // IA é opcional. Toast intermediário pra dar feedback.
       const aiToast = toast.loading('Gerando análise da IA…');
@@ -294,7 +380,7 @@ export default function CampoQuestionarioPage() {
 
       {/* Stepper */}
       <ol className="flex gap-1">
-        {BLOCK_TITLES.map((t, i) => {
+        {stepTitles.map((t, i) => {
           const state =
             i < block ? 'done' : i === block ? 'active' : 'pending';
           return (
@@ -322,6 +408,14 @@ export default function CampoQuestionarioPage() {
         {block === 2 && <TemasBlock value={state} onChange={patch} />}
         {block === 3 && <GovernoBlock value={state} onChange={patch} />}
         {block === 4 && <CampoBlock value={state} onChange={patch} />}
+        {hasQuestions && block === 5 && (
+          <CustomQuestionBlock
+            questions={regionalQuestions}
+            answers={customAnswers}
+            onChange={onCustomChange}
+            errorIds={customErrorIds}
+          />
+        )}
       </div>
 
       <div className="flex flex-wrap justify-between gap-2">
@@ -334,7 +428,7 @@ export default function CampoQuestionarioPage() {
           <ArrowLeft className="h-4 w-4" />
           Voltar
         </Button>
-        {block < BLOCK_TITLES.length - 1 ? (
+        {block < stepTitles.length - 1 ? (
           <Button type="button" onClick={next} disabled={saving}>
             Próximo
             <ArrowRight className="h-4 w-4" />
