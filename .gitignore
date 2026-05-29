@@ -21,3 +21,6 @@ dist-ssr
 .tmp
 .cache
 .eslintcache
+
+# Supabase CLI — artefatos locais/temporários
+supabase/.temp/
