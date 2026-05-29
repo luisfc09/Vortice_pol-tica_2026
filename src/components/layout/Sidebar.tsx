@@ -44,6 +44,13 @@ const ITEMS: NavItem[] = [
     requiresCampaign: true,
     module: 'inteligencia', // só plano Avançado (top)
   },
+  {
+    to: '/agentes/steve',
+    label: 'Steve_AI — Estrategista',
+    icon: Brain,
+    roles: ['admin', 'candidate'],
+    requiresCampaign: true,
+  },
   { to: '/liderancas', label: 'Lideranças', icon: Users, requiresCampaign: true },
   { to: '/eleitores', label: 'Eleitores', icon: UserCheck, requiresCampaign: true },
   { to: '/mapa', label: 'Mapa Eleitoral', icon: MapPin, requiresCampaign: true },
@@ -57,13 +64,6 @@ const ITEMS: NavItem[] = [
   },
   { to: '/campo', label: 'Pesquisas', icon: ClipboardList, requiresCampaign: true },
   { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
-  {
-    to: '/agentes/steve',
-    label: 'Steve_AI — Estrategista',
-    icon: Brain,
-    roles: ['admin', 'candidate'],
-    requiresCampaign: true,
-  },
   {
     to: '/usuarios',
     label: 'Usuários',
