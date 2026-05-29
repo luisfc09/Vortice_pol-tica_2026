@@ -76,7 +76,7 @@ const LLM_TYPES: IntegrationType[] = [
 ];
 
 const DEFAULT_MODELS: Record<IntegrationType, string> = {
-  anthropic: 'claude-sonnet-4-6',
+  anthropic: 'claude-sonnet-4-20250514',
   openai: 'gpt-4o-mini',
   gemini: 'gemini-2.5-flash',
   mistral: 'mistral-small-latest',
@@ -170,7 +170,7 @@ async function selectProvider(client: SupabaseClient, mode: Mode): Promise<Selec
       return {
         type: lt,
         api_key: key,
-        model: model ?? (orgConfig.model as string) ?? DEFAULT_MODELS[lt],
+        model: model?.trim() || (orgConfig.model as string)?.trim() || DEFAULT_MODELS[lt],
         organization: orgConfig.organization,
       };
     }
@@ -194,7 +194,7 @@ async function selectProvider(client: SupabaseClient, mode: Mode): Promise<Selec
   return {
     type: lt,
     api_key: key,
-    model: model ?? (orgConfig.model as string) ?? DEFAULT_MODELS[lt],
+    model: model?.trim() || (orgConfig.model as string)?.trim() || DEFAULT_MODELS[lt],
     organization: orgConfig.organization,
   };
 }
@@ -232,7 +232,7 @@ async function callAnthropic(p: SelectedProvider, system: string, user: string, 
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: p.model ?? DEFAULT_MODELS.anthropic,
+      model: p.model || DEFAULT_MODELS.anthropic,
       max_tokens: maxTokens,
       system,
       messages: [{ role: 'user', content: user }],
@@ -278,7 +278,7 @@ async function callOpenAiCompatible(
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: p.model ?? DEFAULT_MODELS[p.type],
+      model: p.model || DEFAULT_MODELS[p.type],
       max_tokens: maxTokens,
       messages: [
         { role: 'system', content: system },
@@ -301,7 +301,7 @@ async function callOpenAiCompatible(
 }
 
 async function callGemini(p: SelectedProvider, system: string, user: string, maxTokens: number) {
-  const model = p.model ?? DEFAULT_MODELS.gemini;
+  const model = p.model || DEFAULT_MODELS.gemini;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model,
   )}:generateContent?key=${encodeURIComponent(p.api_key)}`;
