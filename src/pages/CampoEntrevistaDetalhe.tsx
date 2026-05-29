@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/data/EmptyState';
 import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import { collections, useCollection } from '@/lib/data';
-import { exportInterviewAsJson, printInterview } from '@/lib/interview-export';
+import { exportInterviewAsJson, exportInterviewAsPdf } from '@/lib/interview-export';
 import { MUNI_COORDS } from '@/data/municipalities-mg-coords';
 import {
   AGE_RANGE_LABEL,
@@ -164,13 +164,13 @@ export default function CampoEntrevistaDetalhePage() {
               </Link>
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={printInterview}>
+          <Button variant="outline" size="sm" onClick={() => exportInterviewAsPdf(i)}>
             <Printer className="h-3.5 w-3.5" />
-            Imprimir / PDF
+            Baixar PDF
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportInterviewAsJson(i)}>
+          <Button variant="ghost" size="sm" onClick={() => exportInterviewAsJson(i)}>
             <Download className="h-3.5 w-3.5" />
-            JSON
+            Dados (JSON)
           </Button>
         </div>
       </div>

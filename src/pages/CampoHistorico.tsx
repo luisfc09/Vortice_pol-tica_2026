@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Download,
   Eye,
+  FileText,
   ListChecks,
   MapPin,
   Pencil,
@@ -16,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/data/EmptyState';
 import { collections, useCollection } from '@/lib/data';
-import { exportInterviewAsJson } from '@/lib/interview-export';
+import { exportInterviewAsJson, exportInterviewAsPdf } from '@/lib/interview-export';
 import { useAuthStore } from '@/stores/auth';
 import { MUNI_COORDS } from '@/data/municipalities-mg-coords';
 import { VOTE_INTENTION_LABEL, isInterviewDeepened } from '@/types';
@@ -147,9 +148,18 @@ export default function CampoHistoricoPage() {
                   <Button
                     size="sm"
                     variant="outline"
+                    onClick={() => exportInterviewAsPdf(i)}
+                    title="Baixar PDF desta entrevista"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={() => exportInterviewAsJson(i)}
-                    aria-label="Exportar JSON"
-                    title="Baixar JSON desta entrevista"
+                    aria-label="Exportar dados (JSON)"
+                    title="Baixar dados crus (JSON)"
                   >
                     <Download className="h-3.5 w-3.5" />
                   </Button>
