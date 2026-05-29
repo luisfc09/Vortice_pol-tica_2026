@@ -205,6 +205,8 @@ export interface Campaign {
   brand_primary_hex: string | null;
   brand_secondary_hex: string | null;
   created_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
 }
 
 export interface CampaignOverview {

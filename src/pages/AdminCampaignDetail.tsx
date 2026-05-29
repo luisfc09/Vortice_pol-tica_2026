@@ -12,6 +12,8 @@ import {
   Save,
   Shield,
   Eye,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -57,6 +59,7 @@ export default function AdminCampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const enterViewAs = useViewAsStore((s) => s.enter);
+  const exitViewAs = useViewAsStore((s) => s.exit);
   const viewAsId = useViewAsStore((s) => s.campaign?.id ?? null);
   const [detail, setDetail] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +72,9 @@ export default function AdminCampaignDetailPage() {
     trial_ends_at: '',
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
 
   async function load() {
     if (!id) return;
@@ -139,6 +145,39 @@ export default function AdminCampaignDetailPage() {
       return;
     }
     toast.success('Campanha atualizada.');
+    void load();
+  }
+
+  async function doDelete() {
+    if (!detail) return;
+    setDeleting(true);
+    const { error } = await supabase.rpc('soft_delete_campaign', {
+      p_campaign_id: detail.campaign.id,
+      p_reason: deleteReason.trim() || null,
+    });
+    setDeleting(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    // Se estava "vendo como cliente" essa campanha, sai do modo (evita snapshot órfão).
+    if (viewAsId === detail.campaign.id) exitViewAs();
+    toast.success('Campanha excluída. Os dados ficam preservados e recuperáveis.');
+    navigate('/admin/campaigns');
+  }
+
+  async function doRestore() {
+    if (!detail) return;
+    setDeleting(true);
+    const { error } = await supabase.rpc('restore_campaign', {
+      p_campaign_id: detail.campaign.id,
+    });
+    setDeleting(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Campanha restaurada.');
     void load();
   }
 
@@ -396,6 +435,75 @@ export default function AdminCampaignDetailPage() {
               </Button>
             </div>
           </div>
+
+          {/* Zona de perigo: apagar (soft delete) ou restaurar a campanha */}
+          {c.deleted_at ? (
+            <div className="mt-5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-5">
+              <div className="mb-2 flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-amber-300" />
+                <p className="text-sm font-semibold text-amber-100">Campanha excluída</p>
+              </div>
+              <p className="mb-4 text-sm text-amber-100/90">
+                Excluída em{' '}
+                {format(new Date(c.deleted_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}. Os
+                dados foram preservados — restaure para devolver o acesso aos usuários.
+              </p>
+              <Button variant="outline" onClick={() => void doRestore()} disabled={deleting}>
+                <RotateCcw className="h-4 w-4" />
+                {deleting ? 'Restaurando…' : 'Restaurar campanha'}
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-5 rounded-xl border border-red-500/40 bg-red-500/10 p-5">
+              <div className="mb-2 flex items-center gap-2">
+                <Trash2 className="h-4 w-4 text-red-300" />
+                <p className="text-sm font-semibold text-red-100">Zona de perigo</p>
+              </div>
+              <p className="mb-4 text-sm text-red-100/90">
+                Apagar a campanha remove o acesso de todos os usuários e a esconde das listas. Os
+                dados ficam preservados (recuperável) e a ação é registrada em log com seu nome.
+              </p>
+              <div className="mb-3 space-y-2">
+                <Label htmlFor="delete_reason">Motivo (opcional)</Label>
+                <Input
+                  id="delete_reason"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Ex.: cliente cancelou o contrato"
+                />
+              </div>
+              {confirmingDelete ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-red-500/40 bg-vortex-bg/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-sm text-red-100">
+                    Tem certeza que quer apagar <strong>{c.candidate_name}</strong>?
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmingDelete(false)}
+                      disabled={deleting}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => void doDelete()}
+                      disabled={deleting}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {deleting ? 'Apagando…' : 'Sim, apagar'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="destructive" onClick={() => setConfirmingDelete(true)}>
+                  <Trash2 className="h-4 w-4" /> Apagar campanha
+                </Button>
+              )}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
