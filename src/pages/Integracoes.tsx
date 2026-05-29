@@ -9,12 +9,17 @@ import { IntegrationDrawer } from '@/components/integrations/IntegrationDrawer';
 import { AiFeatureMatrix } from '@/components/integrations/AiFeatureMatrix';
 import { AgentsConfig } from '@/components/agents/AgentsConfig';
 import { supabase } from '@/lib/supabase';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { INTEGRATION_CATALOG, type IntegrationSpec } from '@/data/integration-catalog';
 import type { IntegrationSafe, IntegrationType } from '@/types';
 
 type CategoryFilter = 'all' | IntegrationSpec['category'];
 
 export default function IntegracoesPage() {
+  // Sessão efetiva: respeita "Ver como cliente" do super admin → opera a
+  // campanha escolhida, não a current_campaign_id() (membership mais antiga).
+  const session = useEffectiveSession();
+  const campaignId = session?.campaign?.id ?? null;
   const [list, setList] = useState<IntegrationSafe[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CategoryFilter>('all');
@@ -23,18 +28,24 @@ export default function IntegracoesPage() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase.rpc('list_integrations_safe');
+    // Tenta a versão com campanha explícita (migration-040). Se ainda não foi
+    // aplicada, faz fallback para a versão sem parâmetro (current_campaign_id).
+    let res = await supabase.rpc('list_integrations_safe', { p_campaign_id: campaignId });
+    if (res.error) {
+      res = await supabase.rpc('list_integrations_safe');
+    }
     setLoading(false);
-    if (error) {
-      toast.error(error.message);
+    if (res.error) {
+      toast.error(res.error.message);
       return;
     }
-    setList((data ?? []) as IntegrationSafe[]);
+    setList((res.data ?? []) as IntegrationSafe[]);
   }
 
   useEffect(() => {
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
 
   const byType: Record<IntegrationType, IntegrationSafe | null> = useMemo(() => {
     const map = Object.fromEntries(

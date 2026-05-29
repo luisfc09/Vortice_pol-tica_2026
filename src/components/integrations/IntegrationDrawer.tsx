@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/auth';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import type { IntegrationSafe } from '@/types';
 import type { IntegrationSpec } from '@/data/integration-catalog';
 
@@ -27,7 +27,8 @@ interface Props {
 }
 
 export function IntegrationDrawer({ open, onOpenChange, spec, integration, onSaved }: Props) {
-  const session = useAuthStore((s) => s.session);
+  // Sessão efetiva → grava na campanha do "Ver como cliente" (super admin).
+  const session = useEffectiveSession();
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [config, setConfig] = useState<Record<string, string>>({});
   const [enabled, setEnabled] = useState(false);
