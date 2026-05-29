@@ -8,6 +8,7 @@ import { TemasAnalise } from '@/components/inteligencia/TemasAnalise';
 import { InsightsIA } from '@/components/inteligencia/InsightsIA';
 import { AgendaRecomendada } from '@/components/inteligencia/AgendaRecomendada';
 import { SegmentosCard } from '@/components/inteligencia/SegmentosCard';
+import { CustomQuestionsAnalytics } from '@/components/inteligencia/CustomQuestionsAnalytics';
 import { useIntelligence } from '@/hooks/useIntelligence';
 import { reliabilityOf, RELIABILITY_LABEL } from '@/types';
 
@@ -32,6 +33,7 @@ export default function InteligenciaPage() {
           <TabsTrigger value="segments">Segmentos</TabsTrigger>
           <TabsTrigger value="territories">Territórios</TabsTrigger>
           <TabsTrigger value="themes">Temas</TabsTrigger>
+          <TabsTrigger value="regionais">Regionais</TabsTrigger>
           <TabsTrigger value="report">Relatório PDF</TabsTrigger>
         </TabsList>
 
@@ -190,6 +192,10 @@ export default function InteligenciaPage() {
               ))}
             </ul>
           </div>
+        </TabsContent>
+
+        <TabsContent value="regionais" className="space-y-4">
+          <CustomQuestionsAnalytics />
         </TabsContent>
 
         <TabsContent value="report" className="space-y-4">

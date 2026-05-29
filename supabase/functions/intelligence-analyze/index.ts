@@ -221,7 +221,12 @@ function computeStats(items: Interview[]) {
 // Prompt builder + LLM adapters
 // ----------------------------------------------------------------------------
 
-function buildPrompt(stats: unknown, openAnswers: unknown, candidate: string) {
+function buildPrompt(
+  stats: unknown,
+  openAnswers: unknown,
+  candidate: string,
+  regional: string | null,
+) {
   return `Você é especialista sênior em marketing eleitoral brasileiro com 20 anos de experiência (Datafolha, Quaest). Analise os dados de pesquisa eleitoral abaixo de uma campanha de deputado estadual em MG e gere JSON estrito (sem markdown, sem comentários).
 
 CANDIDATO: ${candidate}
@@ -231,7 +236,7 @@ ${JSON.stringify(stats, null, 2)}
 
 AMOSTRA DE RESPOSTAS ABERTAS:
 ${JSON.stringify(openAnswers, null, 2)}
-
+${regional ? `\n${regional}\n` : ''}
 Devolva no formato:
 {
   "resumo_executivo": "2-3 frases sobre o momento da campanha",
@@ -319,6 +324,106 @@ function defaultBase(type: IntegrationType) {
     case 'deepseek': return 'https://api.deepseek.com';
     default: return 'https://api.openai.com/v1';
   }
+}
+
+// ----------------------------------------------------------------------------
+// Perguntas regionais (Bloco 6) — agrega e formata pro contexto da IA.
+// ----------------------------------------------------------------------------
+function rpct(c: number, t: number) {
+  return t ? Math.round((c / t) * 100) : 0;
+}
+
+// deno-lint-ignore no-explicit-any
+function aggregateRegional(type: string, answers: any[]): { total: number; text: string } {
+  if (type === 'yes_no' || type === 'single_choice') {
+    const valid = answers.filter((a) => a.answer_option);
+    const m = new Map<string, number>();
+    for (const a of valid) m.set(a.answer_option, (m.get(a.answer_option) ?? 0) + 1);
+    const parts = [...m.entries()]
+      .sort((x, y) => y[1] - x[1])
+      .map(([k, c]) => `${k}: ${c} (${rpct(c, valid.length)}%)`);
+    return { total: valid.length, text: parts.join(', ') };
+  }
+  if (type === 'multiple_choice') {
+    const valid = answers.filter(
+      (a) => Array.isArray(a.answer_options) && a.answer_options.length > 0,
+    );
+    const m = new Map<string, number>();
+    for (const a of valid) for (const o of a.answer_options) m.set(o, (m.get(o) ?? 0) + 1);
+    const parts = [...m.entries()]
+      .sort((x, y) => y[1] - x[1])
+      .map(([k, c]) => `${k}: ${c} (${rpct(c, valid.length)}% dos respondentes)`);
+    return { total: valid.length, text: parts.join(', ') };
+  }
+  if (type === 'scale_1_5') {
+    const valid = answers.filter((a) => a.answer_scale != null);
+    const m = new Map<number, number>();
+    let sum = 0;
+    for (const a of valid) {
+      m.set(a.answer_scale, (m.get(a.answer_scale) ?? 0) + 1);
+      sum += a.answer_scale;
+    }
+    const avg = valid.length ? Math.round((sum / valid.length) * 10) / 10 : 0;
+    const parts = [5, 4, 3, 2, 1].map(
+      (n) => `${n}: ${m.get(n) ?? 0} (${rpct(m.get(n) ?? 0, valid.length)}%)`,
+    );
+    return { total: valid.length, text: `média ${avg}/5 — ${parts.join(', ')}` };
+  }
+  // free_text
+  const valid = answers.filter((a) => a.answer_text && String(a.answer_text).trim());
+  const m = new Map<string, { label: string; c: number }>();
+  for (const a of valid) {
+    const norm = String(a.answer_text).trim().toLowerCase();
+    const e = m.get(norm);
+    if (e) e.c += 1;
+    else m.set(norm, { label: String(a.answer_text).trim(), c: 1 });
+  }
+  const top = [...m.values()]
+    .sort((x, y) => y.c - x.c)
+    .slice(0, 10)
+    .map((e) => `"${e.label}" (${e.c}, ${rpct(e.c, valid.length)}%)`);
+  return { total: valid.length, text: top.join(', ') };
+}
+
+// deno-lint-ignore no-explicit-any
+async function buildRegionalContext(admin: any, campaignId: string): Promise<string | null> {
+  const { data: perguntas } = await admin
+    .from('campaign_questions')
+    .select('id, text, type, options')
+    .eq('campaign_id', campaignId)
+    .eq('is_active', true)
+    .order('sort_order');
+  if (!perguntas || perguntas.length === 0) return null;
+
+  const { data: respostas } = await admin
+    .from('interview_custom_answers')
+    .select('question_id, answer_text, answer_option, answer_options, answer_scale')
+    .eq('campaign_id', campaignId);
+  const answers = respostas ?? [];
+  if (answers.length === 0) return null;
+
+  // deno-lint-ignore no-explicit-any
+  const byQ = new Map<string, any[]>();
+  for (const a of answers) {
+    const arr = byQ.get(a.question_id) ?? [];
+    arr.push(a);
+    byQ.set(a.question_id, arr);
+  }
+
+  const blocks: string[] = [];
+  let idx = 0;
+  for (const q of perguntas) {
+    const ans = byQ.get(q.id) ?? [];
+    if (ans.length === 0) continue; // só perguntas que têm respostas
+    idx += 1;
+    const agg = aggregateRegional(q.type, ans);
+    blocks.push(
+      `${idx}. ${q.text}\n   Tipo: ${q.type}\n   ${agg.total} respostas coletadas\n   Distribuição: ${agg.text}`,
+    );
+  }
+  if (blocks.length === 0) return null;
+
+  return `PERGUNTAS REGIONAIS DESTA CAMPANHA (perguntas específicas do contexto local — analisar com atenção pois refletem particularidades do território):\n\n${blocks.join('\n\n')}`;
 }
 
 // ----------------------------------------------------------------------------
@@ -425,7 +530,9 @@ Deno.serve(async (req) => {
         .eq('id', body.campaign_id)
         .single();
       const candidate = camp?.candidate_name ?? 'o candidato';
-      const prompt = buildPrompt(stats, openAnswers, candidate);
+      // Perguntas regionais (Bloco 6) no contexto da IA — só se houver com respostas.
+      const regional = await buildRegionalContext(admin, body.campaign_id);
+      const prompt = buildPrompt(stats, openAnswers, candidate, regional);
       try {
         if (providerType === 'anthropic') raw = await callAnthropic(prompt, apiKey, model);
         else if (providerType === 'gemini') raw = await callGemini(prompt, apiKey, model);
