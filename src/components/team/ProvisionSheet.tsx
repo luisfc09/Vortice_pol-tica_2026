@@ -105,7 +105,26 @@ export function ProvisionSheet({ open, onOpenChange }: Props) {
         },
       });
       if (error) {
-        toast.error(`Falha ao provisionar: ${error.message}`);
+        // supabase.functions.invoke devolve sempre a mensagem genérica
+        // ("non-2xx status code"). O motivo real vem no corpo da resposta,
+        // exposto em error.context (um Response). Extraímos para o toast.
+        let reason = error.message;
+        const res = (error as { context?: Response }).context;
+        if (res && typeof res.text === 'function') {
+          try {
+            const raw = await res.text();
+            if (raw) {
+              try {
+                reason = (JSON.parse(raw) as { error?: string }).error || raw;
+              } catch {
+                reason = raw;
+              }
+            }
+          } catch {
+            /* mantém error.message */
+          }
+        }
+        toast.error(`Falha ao provisionar: ${reason}`);
         return;
       }
       const payload = data as { ok?: boolean; error?: string } & ProvisionResult;
