@@ -39,7 +39,9 @@ import {
   type Campaign,
   type CampaignDetail,
   type CampaignStatus,
+  type CampaignPlan,
 } from '@/types';
+import { PLANS, PLAN_ORDER } from '@/lib/plans';
 
 const NUM = new Intl.NumberFormat('pt-BR');
 
@@ -60,6 +62,7 @@ export default function AdminCampaignDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState({
     status: 'active' as CampaignStatus,
+    plan: 'basico' as CampaignPlan,
     vote_target: '0',
     slogan: '',
     notes: '',
@@ -81,6 +84,7 @@ export default function AdminCampaignDetailPage() {
     if (d) {
       setEditing({
         status: d.campaign.status,
+        plan: d.campaign.plan,
         vote_target: String(d.campaign.vote_target ?? 0),
         slogan: d.campaign.slogan ?? '',
         notes: d.campaign.notes ?? '',
@@ -120,6 +124,7 @@ export default function AdminCampaignDetailPage() {
       .from('campaigns')
       .update({
         status: editing.status,
+        plan: editing.plan,
         vote_target: Number(editing.vote_target) || 0,
         slogan: editing.slogan || null,
         notes: editing.notes || null,
@@ -316,6 +321,24 @@ export default function AdminCampaignDetailPage() {
                     {(Object.keys(CAMPAIGN_STATUS_LABEL) as CampaignStatus[]).map((st) => (
                       <SelectItem key={st} value={st}>
                         {CAMPAIGN_STATUS_LABEL[st]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Plano</Label>
+                <Select
+                  value={editing.plan}
+                  onValueChange={(v) => setEditing((s) => ({ ...s, plan: v as CampaignPlan }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PLAN_ORDER.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {PLANS[p].name}
                       </SelectItem>
                     ))}
                   </SelectContent>
