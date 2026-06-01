@@ -111,7 +111,7 @@ vortice/
 │  │  ├─ ui/                 # primitivos shadcn (button, input, select, sheet, tabs...)
 │  │  ├─ layout/             # AppLayout, Sidebar, Header, ProtectedRoute, TrialBanner
 │  │  ├─ data/               # SearchBar, EmptyState, ConfirmDelete, ImportCsvButtons, FilterPill
-│  │  ├─ agents/             # Vera/Carlos (chat, drawer, config, avatar, picker)
+│  │  ├─ agents/             # Steve/Carlos (chat, drawer, config, avatar, picker)
 │  │  ├─ dashboard/          # PulseGauge, CampaignSignals, WeeklyRadar
 │  │  ├─ inteligencia/       # 7 componentes de análise
 │  │  ├─ mencoes/            # feed + stepper de Resposta Rápida (Step1-5)
@@ -351,9 +351,7 @@ Uso típico nas páginas: `const voters = useCollection(collections.voters)` e
 | 036 | onboarding | `campaigns.onboarding_completed`, `target_municipalities text[]` |
 | 037 | voter-age-range | `voters.age_range` (enum 16-24..60+) |
 | 038 | **geocode** | `voters.geo_source` + tabela `geocode_cache` (cache de CEP) |
-| 039 | **ai-agents** | `ai_agents` (config Vera/Carlos) + `agent_conversations` (histórico por usuário) |
-| 043 | **alerts-finance** | 3 valores no enum `alert_type` (finance_cidade_vermelha, finance_teto_ultrapassado, finance_deficit_previsto) |
-| 044 | **rename-steve-to-vera** | UPDATE em `ai_agents`/`agent_conversations` trocando `steve` → `vera` + CHECK constraint atualizada |
+| 039 | **ai-agents** | `ai_agents` (config Steve/Carlos) + `agent_conversations` (histórico por usuário) |
 | 040 | **integrations-campaign-param** | `list_integrations_safe(p_campaign_id)` — super admin opera a campanha do view-as |
 
 > As DDLs completas estão em cada arquivo `supabase/migration-0XX-*.sql`. As três
@@ -371,7 +369,7 @@ client **service-role** para operações privilegiadas.
 |---|---|---|---|
 | **provision-user** | Cria membro da campanha (auth.user + senha temp `123456` + `campaign_users`). Recebe `campaign_id` e valida que o caller é admin/coordenador **daquela** campanha **ou** super admin. E-mail já existente → mensagem clara. | caller (autoriza) + service-role (cria) | `SUPABASE_*`, `APP_LOGIN_URL` |
 | **provision-campaign** | Cria nova campanha (cliente) + admin + integração Asaas. | super admin | `SUPABASE_*`, Asaas |
-| **agent-chat** | Backbone dos agentes Vera/Carlos. Monta contexto real (Vera) ou contexto de tela (Carlos), escolhe LLM e chama o provedor. Multi-turn. | caller autoriza membership/super admin; service-role lê dados/segredos | `SUPABASE_*` |
+| **agent-chat** | Backbone dos agentes Steve/Carlos. Monta contexto real (Steve) ou contexto de tela (Carlos), escolhe LLM e chama o provedor. Multi-turn. | caller autoriza membership/super admin; service-role lê dados/segredos | `SUPABASE_*` |
 | **mention-respond** | Resposta Rápida: `analyze` (analisa ataque) / `generate` (3 respostas). Seleciona provedor via `ai_feature_config`/`integrations`. | caller (RLS) | `SUPABASE_URL/ANON` |
 | **intelligence-analyze** | Roda a análise de Inteligência Eleitoral (IA sobre entrevistas) e grava em `campaign_intelligence`. | caller (RLS) | `SUPABASE_*` |
 | **interview-analyze** | Analisa uma entrevista de campo com IA. | caller (RLS) | `SUPABASE_*` |
@@ -418,7 +416,7 @@ model: (cfg.model ?? '').trim() || DEFAULT_MODELS[type]
 (Bug histórico: `config.model = ''` enviava modelo vazio → `Anthropic 400`. Corrigido em `agent-chat` e `mention-respond`.) Default Anthropic: `claude-sonnet-4-20250514`.
 
 ### 11.3 Agentes de IA
-- **Vera_IA** (estrategista): `/agentes/vera`. `agent-chat` monta **contexto real** da campanha (voters/supporters/field_interviews/mentions/events/campaign_intelligence; força por município derivada dos voters), injeta no system prompt e responde citando números. Histórico em `agent_conversations` (RLS **por usuário**).
+- **Steve_AI** (estrategista): `/agentes/steve`. `agent-chat` monta **contexto real** da campanha (voters/supporters/field_interviews/mentions/events/campaign_intelligence; força por município derivada dos voters), injeta no system prompt e responde citando números. Histórico em `agent_conversations` (RLS **por usuário**).
 - **Carlos_AI_Op** (operacional): balão flutuante em todas as telas (`AppLayout`). Sabe a tela atual (`location.pathname`). Não persiste histórico.
 - Config (nome/foto/LLM/ativo) na aba **Agentes de IA** em `/integracoes` (`migration-039`). Foto: galeria (pravatar) ou upload para o bucket `avatars`.
 
@@ -442,8 +440,8 @@ model: (cfg.model ?? '').trim() || DEFAULT_MODELS[type]
 - Cálculo puro: `src/lib/statsCalculator.ts` (distribuições, cruzamentos, confiabilidade por amostra). Orquestração: `src/lib/intelligenceJob.ts` + hook `useIntelligence`. IA: Edge `intelligence-analyze` → grava em `campaign_intelligence`.
 - Gating: item da Sidebar tem `module: 'inteligencia'` → só plano `top`.
 
-### 12.4 Vera_IA / Carlos_AI — ver §11.3
-- Front: `pages/VeraIAPage.tsx`, `components/agents/{VeraChat,CarlosDrawer,ChatMessage,QuickSuggestions,AgentAvatar,AgentsConfig,AgentPhotoPicker}.tsx`.
+### 12.4 Steve_AI / Carlos_AI — ver §11.3
+- Front: `pages/SteveAIPage.tsx`, `components/agents/{SteveChat,CarlosDrawer,ChatMessage,QuickSuggestions,AgentAvatar,AgentsConfig,AgentPhotoPicker}.tsx`.
 - Infra: `src/lib/agents/agentChat.ts` (wrapper), `src/hooks/useAgentConversation.ts` (histórico/persistência).
 
 ### 12.5 Lideranças — `/liderancas`
@@ -532,7 +530,7 @@ supabase functions deploy <nome> --project-ref iemajqwnlkmrubikhqas
 - `CampaignPlan`: `basico | intermediario | top` (label `top` = "Avançado")
 - `CampaignStatus`: `trial | active | suspended | cancelled | pending`
 - `GeoSource`: `gps | address | manual`
-- `AgentKey`: `vera | carlos`
+- `AgentKey`: `steve | carlos`
 
 ### 14.4 "Pegadinhas" operacionais (para o próximo engenheiro)
 - **Migrations são manuais** — o usuário/operador roda no SQL Editor; o app não migra sozinho.
@@ -634,7 +632,7 @@ erDiagram
   AI_AGENTS {
     uuid id PK
     uuid campaign_id FK
-    text agent_key "vera|carlos"
+    text agent_key "steve|carlos"
     text name
     text avatar_url
     bool is_active
@@ -750,7 +748,7 @@ supabase secrets set APP_LOGIN_URL="https://SEU-DOMINIO/login"
 1. Logar como super admin → **Admin Vórtice → Campanhas → provisionar** (ou
    Edge `provision-campaign`).
 2. Em **Integrações → Conexões**, conectar ao menos uma IA (Anthropic/OpenAI) com
-   `api_key` → habilita Vera/Carlos/Resposta Rápida/Inteligência.
+   `api_key` → habilita Steve/Carlos/Resposta Rápida/Inteligência.
 3. Provisionar a equipe em **Usuários**.
 
 ### F) Checklist de fumaça (smoke test)
@@ -758,7 +756,7 @@ supabase secrets set APP_LOGIN_URL="https://SEU-DOMINIO/login"
 - [ ] Cadastro de eleitor/liderança grava e aparece em tempo real.
 - [ ] Import CSV mostra preview e dedup.
 - [ ] "Geocodificar pendentes" preenche coordenadas.
-- [ ] Vera responde citando números reais.
+- [ ] Steve responde citando números reais.
 - [ ] Carlos abre o balão e responde dúvida.
 - [ ] Super admin "Ver como cliente" troca o contexto (Integrações mostram a campanha certa).
 

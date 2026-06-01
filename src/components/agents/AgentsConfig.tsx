@@ -25,7 +25,7 @@ interface AgentMeta {
 }
 
 const AGENTS: AgentMeta[] = [
-  { key: 'vera', defaultName: 'Vera_IA', subtitle: 'Estrategista Político', Icon: Brain },
+  { key: 'steve', defaultName: 'Steve_AI', subtitle: 'Estrategista Político', Icon: Brain },
   { key: 'carlos', defaultName: 'Carlos_AI_Op', subtitle: 'Assistente Operacional', Icon: MessageCircle },
 ];
 
@@ -40,14 +40,14 @@ function emptyForm(meta: AgentMeta): AgentForm {
   return { name: meta.defaultName, avatar_url: '', is_active: true, provider: 'auto' };
 }
 
-// Aba "Agentes de IA" em /integracoes: configura nome, foto e LLM de Vera e Carlos.
+// Aba "Agentes de IA" em /integracoes: configura nome, foto e LLM de Steve e Carlos.
 export function AgentsConfig({ integrations }: Props) {
   const session = useEffectiveSession();
   const campaignId = session?.campaign?.id ?? null;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<AgentKey | null>(null);
   const [forms, setForms] = useState<Record<AgentKey, AgentForm>>({
-    vera: emptyForm(AGENTS[0]),
+    steve: emptyForm(AGENTS[0]),
     carlos: emptyForm(AGENTS[1]),
   });
 

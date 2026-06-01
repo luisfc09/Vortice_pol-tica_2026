@@ -18,12 +18,12 @@ const SUGGESTIONS = [
   'Sugira agenda para os próximos 7 dias',
 ];
 
-export function VeraChat() {
+export function SteveChat() {
   const session = useEffectiveSession();
   const campaignId = session?.campaign?.id ?? null;
-  const convo = useAgentConversation('vera');
+  const convo = useAgentConversation('steve');
   const [agent, setAgent] = useState<{ name: string; avatar_url: string | null; is_active: boolean }>({
-    name: 'Vera_IA',
+    name: 'Steve_AI',
     avatar_url: null,
     is_active: true,
   });
@@ -37,11 +37,11 @@ export function VeraChat() {
         .from('ai_agents')
         .select('name, avatar_url, is_active')
         .eq('campaign_id', campaignId)
-        .eq('agent_key', 'vera')
+        .eq('agent_key', 'steve')
         .maybeSingle();
       if (data) {
         setAgent({
-          name: (data.name as string) || 'Vera_IA',
+          name: (data.name as string) || 'Steve_AI',
           avatar_url: data.avatar_url as string | null,
           is_active: data.is_active as boolean,
         });

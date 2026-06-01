@@ -1,7 +1,7 @@
 import { Brain } from 'lucide-react';
-import { VeraChat } from '@/components/agents/VeraChat';
+import { SteveChat } from '@/components/agents/SteveChat';
 
-export default function VeraIAPage() {
+export default function SteveAIPage() {
   return (
     <div className="space-y-5">
       <div>
@@ -12,13 +12,13 @@ export default function VeraIAPage() {
           </span>
         </div>
         <h2 className="font-display text-3xl tracking-wide text-foreground">
-          Vera_IA — Estrategista
+          Steve_AI — Estrategista
         </h2>
         <p className="text-sm text-muted-foreground">
           Análise baseada nos dados reais da sua campanha. Histórico salvo por usuário.
         </p>
       </div>
-      <VeraChat />
+      <SteveChat />
     </div>
   );
 }
