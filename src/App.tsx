@@ -64,6 +64,15 @@ export default function App() {
             <Route path="/campo" element={<CampoHubPage />} />
             <Route path="/campo/hoje" element={<CampoHojePage />} />
             <Route path="/campo/historico" element={<CampoHistoricoPage />} />
+            {/* Redirect legados — links antigos seguem funcionando */}
+            <Route
+              path="/campo/minhas-entrevistas"
+              element={<Navigate to="/campo/historico" replace />}
+            />
+            <Route
+              path="/campo/regionais"
+              element={<Navigate to="/pesquisas/perguntas-regionais" replace />}
+            />
             <Route path="/campo/entrevista" element={<CampoEntrevistaPage />} />
             <Route path="/campo/entrevista/:id" element={<CampoEntrevistaPage />} />
             <Route

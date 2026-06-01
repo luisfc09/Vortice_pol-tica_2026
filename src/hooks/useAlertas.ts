@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { collections, useCollection } from '@/lib/data';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
 import { detectAll, bucketByPriority, type AlertDraft } from '@/lib/alertDetector';
 import type { Alert, AlertPriority } from '@/types';
@@ -45,9 +46,17 @@ export function useAlertas() {
     );
     if (toInsert.length === 0) return;
 
+    // Insert direto com semântica "ON CONFLICT DO NOTHING" no índice único
+    // parcial alerts_dedup_open_idx (campaign_id, dedup_key) where is_resolved=false.
+    // - Não usamos collections.alerts.create() para evitar o console.warn
+    //   genérico do SupabaseCollection nas colisões de detectores rodando em
+    //   paralelo (em outras abas, p.ex.).
+    // - O realtime de collections.alerts pega o INSERT e atualiza o snapshot.
+    // - Erro 23505 (duplicate key) é silenciado por design.
     for (const d of toInsert) {
-      collections.alerts.create({
-        data: {
+      void supabase
+        .from('alerts')
+        .insert({
           campaign_id: session.campaign.id,
           type: d.type,
           priority: d.priority,
@@ -62,8 +71,14 @@ export function useAlertas() {
           is_read: false,
           is_resolved: false,
           expires_at: d.expires_at ?? null,
-        },
-      });
+        })
+        .then(({ error }) => {
+          if (!error) return;
+          const isDup =
+            error.code === '23505' ||
+            /duplicate key|unique constraint/i.test(error.message ?? '');
+          if (!isDup) console.warn('[alerts] insert falhou:', error.message);
+        });
     }
   }, [
     session?.campaign,
