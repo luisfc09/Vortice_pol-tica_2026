@@ -24,7 +24,13 @@ import {
 } from '@/types';
 import { INTEGRATION_CATALOG, LLM_PROVIDERS, specOf } from '@/data/integration-catalog';
 
-const FEATURES: AiFeature[] = ['mention_sentiment', 'mention_insights', 'reply_suggestions'];
+const FEATURES: AiFeature[] = [
+  'mention_sentiment',
+  'mention_insights',
+  'reply_suggestions',
+  'interview_analysis',
+  'electoral_intelligence',
+];
 
 interface RowState {
   integration_id: string | null;

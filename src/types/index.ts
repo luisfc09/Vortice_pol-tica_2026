@@ -292,7 +292,7 @@ export type AiFeature =
   | 'mention_insights'
   | 'reply_suggestions'
   | 'interview_analysis'
-  | 'campaign_intelligence';
+  | 'electoral_intelligence';
 
 export interface AiFeatureConfig {
   campaign_id: string;
@@ -308,7 +308,7 @@ export const AI_FEATURE_LABEL: Record<AiFeature, string> = {
   mention_insights: 'Insights de menções',
   reply_suggestions: 'Sugestões de resposta',
   interview_analysis: 'Análise de entrevista aprofundada',
-  campaign_intelligence: 'Inteligência eleitoral por IA',
+  electoral_intelligence: 'Inteligência Eleitoral (análise da base)',
 };
 
 export const AI_FEATURE_HELP: Record<AiFeature, string> = {
@@ -316,7 +316,8 @@ export const AI_FEATURE_HELP: Record<AiFeature, string> = {
   mention_insights: 'Resumo agregado das últimas 50 menções (tópicos, sentimento líquido).',
   reply_suggestions: 'Gera respostas sugeridas com tom adequado para o contexto.',
   interview_analysis: 'Analisa entrevista aprofundada e sugere perfil + próximo passo.',
-  campaign_intelligence: 'Agente especialista que cruza entrevistas e gera relatório estratégico.',
+  electoral_intelligence:
+    'Análise IA sobre toda a base de entrevistas: insights, riscos, oportunidades e score de saúde.',
 };
 
 // Recomendação editorial: qual LLM funciona melhor pra cada tarefa.
@@ -327,8 +328,8 @@ export const AI_FEATURE_RECOMMENDATION: Record<AiFeature, string> = {
   mention_insights: 'Claude Sonnet — resumo analítico com nuance.',
   reply_suggestions: 'Claude Sonnet — tom mais humano e político.',
   interview_analysis: 'Claude Sonnet ou GPT-4o — análise por entrevista.',
-  campaign_intelligence:
-    'Claude Sonnet 4.5 — schema complexo, PT-BR analítico, nuance política. Roda 1x/dia.',
+  electoral_intelligence:
+    'Claude Sonnet — schema complexo, PT-BR analítico, nuance política. Roda 1x/dia.',
 };
 
 export interface Integration {

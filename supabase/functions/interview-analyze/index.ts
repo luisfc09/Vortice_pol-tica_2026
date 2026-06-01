@@ -227,16 +227,23 @@ Deno.serve(async (req) => {
     let model = '';
     let baseUrl = '';
 
+    // Fix: api_key fica em `secrets` (não `config`); modelo vazio → default (||, não ??).
     if (featureCfg?.integration_id) {
       const { data: integ } = await admin
         .from('integrations')
-        .select('type, config')
+        .select('type, secrets, config, is_enabled')
         .eq('id', featureCfg.integration_id)
         .single();
-      if (integ && LLM_TYPES.includes(integ.type as IntegrationType)) {
+      if (
+        integ &&
+        integ.is_enabled &&
+        LLM_TYPES.includes(integ.type as IntegrationType)
+      ) {
         providerType = integ.type as IntegrationType;
-        apiKey = String((integ.config as Record<string, unknown>)?.api_key ?? '');
-        model = featureCfg.model || DEFAULT_MODELS[providerType];
+        apiKey = String((integ.secrets as Record<string, unknown>)?.api_key ?? '');
+        model =
+          (featureCfg.model as string | null)?.trim() ||
+          (integ.config as Record<string, unknown>)?.model as string || DEFAULT_MODELS[providerType];
         baseUrl = String((integ.config as Record<string, unknown>)?.base_url ?? '');
       }
     }
@@ -244,7 +251,7 @@ Deno.serve(async (req) => {
     if (!providerType) {
       const { data: integrations } = await admin
         .from('integrations')
-        .select('type, config')
+        .select('type, secrets, config')
         .eq('campaign_id', campaignId)
         .eq('is_enabled', true);
       const first = integrations?.find((i) =>
@@ -252,8 +259,9 @@ Deno.serve(async (req) => {
       );
       if (first) {
         providerType = first.type as IntegrationType;
-        apiKey = String((first.config as Record<string, unknown>)?.api_key ?? '');
-        model = DEFAULT_MODELS[providerType];
+        apiKey = String((first.secrets as Record<string, unknown>)?.api_key ?? '');
+        model =
+          ((first.config as Record<string, unknown>)?.model as string) || DEFAULT_MODELS[providerType];
         baseUrl = String((first.config as Record<string, unknown>)?.base_url ?? '');
       }
     }

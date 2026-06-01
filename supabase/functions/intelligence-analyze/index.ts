@@ -477,7 +477,7 @@ Deno.serve(async (req) => {
       .from('ai_feature_config')
       .select('integration_id, model')
       .eq('campaign_id', body.campaign_id)
-      .eq('feature', 'campaign_intelligence')
+      .eq('feature', 'electoral_intelligence')
       .maybeSingle();
 
     let providerType: IntegrationType | null = null;
@@ -485,16 +485,24 @@ Deno.serve(async (req) => {
     let model = '';
     let baseUrl = '';
 
+    // Fix: api_key fica em `secrets` (não `config`); modelo vazio → default (|| em vez de ??).
     if (featureCfg?.integration_id) {
       const { data: integ } = await admin
         .from('integrations')
-        .select('type, config')
+        .select('type, secrets, config, is_enabled')
         .eq('id', featureCfg.integration_id)
         .single();
-      if (integ && LLM_TYPES.includes(integ.type as IntegrationType)) {
+      if (
+        integ &&
+        integ.is_enabled &&
+        LLM_TYPES.includes(integ.type as IntegrationType)
+      ) {
         providerType = integ.type as IntegrationType;
-        apiKey = String((integ.config as Record<string, unknown>)?.api_key ?? '');
-        model = featureCfg.model || DEFAULT_MODELS[providerType];
+        apiKey = String((integ.secrets as Record<string, unknown>)?.api_key ?? '');
+        model =
+          (featureCfg.model as string | null)?.trim() ||
+          ((integ.config as Record<string, unknown>)?.model as string) ||
+          DEFAULT_MODELS[providerType];
         baseUrl = String((integ.config as Record<string, unknown>)?.base_url ?? '');
       }
     }
@@ -505,15 +513,17 @@ Deno.serve(async (req) => {
       // Anthropic (melhor pra essa tarefa). Se só tiver Gemini, usa Gemini.
       const { data: ints } = await admin
         .from('integrations')
-        .select('type, config')
+        .select('type, secrets, config')
         .eq('campaign_id', body.campaign_id)
         .eq('is_enabled', true);
       for (const preferred of PROVIDER_PRIORITY) {
         const match = ints?.find((i) => i.type === preferred);
         if (match) {
           providerType = preferred;
-          apiKey = String((match.config as Record<string, unknown>)?.api_key ?? '');
-          model = DEFAULT_MODELS[preferred];
+          apiKey = String((match.secrets as Record<string, unknown>)?.api_key ?? '');
+          model =
+            ((match.config as Record<string, unknown>)?.model as string) ||
+            DEFAULT_MODELS[preferred];
           baseUrl = String((match.config as Record<string, unknown>)?.base_url ?? '');
           break;
         }
