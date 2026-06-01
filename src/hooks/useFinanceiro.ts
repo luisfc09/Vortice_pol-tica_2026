@@ -198,45 +198,25 @@ export function useFinanceiro(): UseFinanceiroResult {
   }, [refresh]);
 
   // ---------------- Realtime ----------------
-  useEffect(() => {
-    if (!campaignId || USE_MOCKS) return;
-    const channel = supabase
-      .channel(`finance-${campaignId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'campaign_finance_config',
-          filter: `campaign_id=eq.${campaignId}`,
-        },
-        () => void refresh(),
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'finance_revenues',
-          filter: `campaign_id=eq.${campaignId}`,
-        },
-        () => void refresh(),
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'finance_city_plans',
-          filter: `campaign_id=eq.${campaignId}`,
-        },
-        () => void refresh(),
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [campaignId, refresh]);
+  // ⚠ DESATIVADO por ora (fix de emergência).
+  // O bloco anterior fazia `supabase.channel('finance-${campaignId}').on(...).on(...).on(...).subscribe()`.
+  // Como `useFinanceiro` é consumido em 3 lugares simultâneos (Header→AlertsBadge→useAlertas,
+  // Dashboard direto, FinanceDashboardWidget), o Supabase devolvia o MESMO channel pra todos —
+  // o primeiro fazia .subscribe() e os demais lançavam:
+  //   "cannot add `postgres_changes` callbacks ... after subscribe()"
+  // O throw travava o boot do React e dava tela preta em toda a app.
+  //
+  // Pra reintroduzir realtime no futuro:
+  //   1. Usar nome de channel único por instância:
+  //        const instanceId = useId();
+  //        supabase.channel(`finance-${campaignId}-${instanceId}`)
+  //      OU melhor:
+  //   2. Centralizar o estado em um Context/Zustand e fazer uma única subscription
+  //      no provider, em vez de 1 subscription por chamada de hook.
+  //
+  // Sem realtime, as mutations já fazem optimistic update (setConfig/setRevenues/
+  // setCityPlans) — UI continua reativa pra ações do próprio usuário.
+  // O que perdemos: sync automático quando OUTRO usuário/aba edita a campanha.
 
   // ---------------- Derivados ----------------
   const totalReceitas = useMemo(
