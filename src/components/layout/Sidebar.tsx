@@ -3,7 +3,6 @@ import {
   ChartNoAxesCombined,
   ChartColumnIncreasing,
   Users,
-  UserCheck,
   MapPin,
   Megaphone,
   ClipboardList,
@@ -52,7 +51,9 @@ const ITEMS: NavItem[] = [
     requiresCampaign: true,
   },
   { to: '/liderancas', label: 'Lideranças', icon: Users, requiresCampaign: true },
-  { to: '/eleitores', label: 'Eleitores', icon: UserCheck, requiresCampaign: true },
+  // Item /eleitores foi REMOVIDO daqui — a gestão de eleitores agora vive
+  // dentro do Mapa Eleitoral (aba "Eleitores", com pontos no mapa). A rota
+  // /eleitores continua existindo para não quebrar bookmarks/links antigos.
   { to: '/mapa', label: 'Mapa Eleitoral', icon: MapPin, requiresCampaign: true },
   {
     to: '/mencoes',

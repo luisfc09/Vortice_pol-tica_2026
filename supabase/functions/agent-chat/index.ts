@@ -376,7 +376,7 @@ const PAGE_DESCRIPTIONS: Record<string, string> = {
   '/dashboard': 'Dashboard principal',
   '/eleitores': 'lista de Eleitores',
   '/liderancas': 'lista de Lideranças',
-  '/mapa': 'Mapa Eleitoral',
+  '/mapa': 'Mapa Eleitoral com Eleitores',
   '/mencoes': 'Monitor de Menções',
   '/campo': 'Módulo de Pesquisas/Entrevistas',
   '/inteligencia': 'Inteligência Eleitoral',

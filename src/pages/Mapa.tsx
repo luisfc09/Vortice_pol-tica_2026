@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Map as MapIcon, Vote } from 'lucide-react';
+import { Map as MapIcon, Vote, UserCheck } from 'lucide-react';
+import { MapContainer, TileLayer } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { StateMap, type MapCell } from '@/components/mapa/StateMap';
 import { MapLegend } from '@/components/mapa/MapLegend';
 import { MunicipalityDrawer } from '@/components/mapa/MunicipalityDrawer';
@@ -7,8 +9,11 @@ import { TseControls } from '@/components/mapa/TseControls';
 import { TseResumoPanel } from '@/components/mapa/TseResumoPanel';
 import { TseMunicipioDrawer } from '@/components/mapa/TseMunicipioDrawer';
 import { CampanhaResumoPanel } from '@/components/mapa/CampanhaResumoPanel';
+import { VotersLayer } from '@/components/mapa/VotersLayer';
+import { VotersPanel } from '@/components/voters/VotersPanel';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { collections, useCollection } from '@/lib/data';
+import type { Voter } from '@/types';
 import { useTseEleicao } from '@/hooks/useTseEleicao';
 import { tseApi, type TseMapaMunicipio, type TseMunicipioRanking } from '@/lib/tseApi';
 import { colorForParty, tseNomeToIbge } from '@/lib/tseGeo';
@@ -19,7 +24,7 @@ import {
   type MuniStat,
 } from '@/data/municipalities-mg-coords';
 
-type Mode = 'campanha' | 'tse';
+type Mode = 'campanha' | 'tse' | 'voters';
 
 const LEGEND = [
   { color: '#1E293B', label: 'Sem cadastros' },
@@ -44,6 +49,9 @@ export default function MapaPage() {
   const supporters = useCollection(collections.supporters);
   const voters = useCollection(collections.voters);
   const [mode, setMode] = useState<Mode>('campanha');
+  // Modo Eleitores: o VotersPanel publica a lista filtrada aqui pra alimentar
+  // tanto a camada de pontos no mapa quanto o contador do header.
+  const [filteredVoters, setFilteredVoters] = useState<Voter[]>([]);
 
   // ----- Modo Campanha (força política — comportamento original) -----------
   const stats: MuniStat[] = useMemo(() => {
@@ -201,6 +209,9 @@ export default function MapaPage() {
           <ModeButton active={mode === 'tse'} onClick={() => setMode('tse')} icon={<Vote className="h-4 w-4" />}>
             Eleições (TSE)
           </ModeButton>
+          <ModeButton active={mode === 'voters'} onClick={() => setMode('voters')} icon={<UserCheck className="h-4 w-4" />}>
+            Eleitores
+          </ModeButton>
         </div>
 
         {mode === 'tse' ? (
@@ -212,6 +223,35 @@ export default function MapaPage() {
           />
         ) : null}
       </div>
+
+      {/* Modo Eleitores — mapa de pontos colorido por intenção + painel de gestão.
+          Os filtros do VotersPanel sincronizam os pontos no mapa. */}
+      {mode === 'voters' ? (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {filteredVoters.length} de {voters.length}{' '}
+            {voters.length === 1 ? 'eleitor' : 'eleitores'} no recorte ·{' '}
+            {filteredVoters.filter((v) => v.lat != null && v.lng != null).length} com coordenadas
+            no mapa · cores por intenção · use os filtros abaixo para refinar.
+          </p>
+          <div className="relative h-[480px] overflow-hidden rounded-xl border border-vortex-border">
+            <MapContainer
+              center={[-19.5, -44.5]}
+              zoom={7}
+              scrollWheelZoom
+              className="h-full w-full"
+            >
+              <TileLayer
+                attribution="&copy; OpenStreetMap"
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <VotersLayer voters={filteredVoters} />
+            </MapContainer>
+            <VotersMapLegend />
+          </div>
+          <VotersPanel onFilteredChange={setFilteredVoters} />
+        </>
+      ) : null}
 
       {/* Seletor de município (modo TSE) — busca alfabética. Sempre visível
           no modo TSE; desabilita enquanto a eleição não foi escolhida. */}
@@ -260,32 +300,36 @@ export default function MapaPage() {
         </div>
       ) : null}
 
-      <p className="text-sm text-muted-foreground">
-        {mode === 'campanha' ? (
-          <>
-            {stats.length} municípios mapeados (IBGE) · cor = força da campanha · clique pra ver o
-            detalhe.
-          </>
-        ) : (
-          <>
-            Cor = partido do candidato mais votado em cada município · clique pra ver o ranking.
-            {naoCasados > 0 ? (
-              <span className="ml-1 text-amber-300/80">
-                ({naoCasados} município(s) sem correspondência no mapa)
-              </span>
-            ) : null}
-          </>
-        )}
-      </p>
+      {mode !== 'voters' ? (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {mode === 'campanha' ? (
+              <>
+                {stats.length} municípios mapeados (IBGE) · cor = força da campanha · clique pra ver o
+                detalhe.
+              </>
+            ) : (
+              <>
+                Cor = partido do candidato mais votado em cada município · clique pra ver o ranking.
+                {naoCasados > 0 ? (
+                  <span className="ml-1 text-amber-300/80">
+                    ({naoCasados} município(s) sem correspondência no mapa)
+                  </span>
+                ) : null}
+              </>
+            )}
+          </p>
 
-      <div className="relative">
-        <StateMap cells={cells} onSelect={handleSelect} selectedCode={selectedCode} />
-        {mode === 'campanha' ? (
-          <div className="absolute bottom-4 right-4 z-[400] hidden lg:block">
-            <MapLegend scale={LEGEND} />
+          <div className="relative">
+            <StateMap cells={cells} onSelect={handleSelect} selectedCode={selectedCode} />
+            {mode === 'campanha' ? (
+              <div className="absolute bottom-4 right-4 z-[400] hidden lg:block">
+                <MapLegend scale={LEGEND} />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        </>
+      ) : null}
 
       {mode === 'campanha' ? (
         <div className="lg:hidden">
@@ -293,7 +337,8 @@ export default function MapaPage() {
         </div>
       ) : null}
 
-      {/* Painel abaixo do mapa */}
+      {/* Painel abaixo do mapa (campanha + tse). No modo voters, o VotersPanel
+          já é o painel — não duplica. */}
       {mode === 'tse' ? (
         <TseResumoPanel
           mapa={tse.mapa}
@@ -301,9 +346,9 @@ export default function MapaPage() {
           loading={tse.loadingData}
           error={tse.error}
         />
-      ) : (
+      ) : mode === 'campanha' ? (
         <CampanhaResumoPanel stats={stats} onSelect={setSelectedCampanha} />
-      )}
+      ) : null}
 
       {/* Drawers */}
       <MunicipalityDrawer
@@ -356,5 +401,35 @@ function ModeButton({
       {icon}
       {children}
     </button>
+  );
+}
+
+// Legenda das 5 cores de intenção exibida sobre o mapa de pontos.
+const VOTER_LEGEND = [
+  { color: '#22c55e', label: 'Apoiador' },
+  { color: '#86efac', label: 'Tendência a apoiar' },
+  { color: '#94a3b8', label: 'Indeciso' },
+  { color: '#fb923c', label: 'Tendência à oposição' },
+  { color: '#ef4444', label: 'Oposição' },
+];
+
+function VotersMapLegend() {
+  return (
+    <div className="absolute bottom-3 right-3 z-[400] rounded-lg border border-vortex-border bg-vortex-surface/95 p-2.5 backdrop-blur">
+      <p className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+        Intenção de voto
+      </p>
+      <ul className="space-y-1 text-xs">
+        {VOTER_LEGEND.map((it) => (
+          <li key={it.label} className="flex items-center gap-2">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: it.color }}
+            />
+            {it.label}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
