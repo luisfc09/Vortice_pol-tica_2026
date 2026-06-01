@@ -1,7 +1,7 @@
 // Supabase Edge Function — agent-chat
 //
 // Backbone dos agentes de IA do Vórtice:
-//   - agent 'steve'  → estrategista; injeta CONTEXTO REAL da campanha
+//   - agent 'vera'   → estrategista; injeta CONTEXTO REAL da campanha
 //   - agent 'carlos' → assistente operacional; injeta tela atual + usuário
 //
 // Toda a chamada ao LLM é server-side (as keys vivem em integrations.secrets).
@@ -13,7 +13,7 @@
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
-type Agent = 'steve' | 'carlos';
+type Agent = 'vera' | 'carlos';
 type IntegrationType = 'anthropic' | 'openai' | 'gemini' | 'mistral' | 'groq' | 'xai' | 'deepseek';
 type Role = 'user' | 'assistant';
 
@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
   if (!body.agent || !body.campaign_id || !Array.isArray(body.messages) || body.messages.length === 0) {
     return json({ error: 'Campos obrigatórios: agent, campaign_id, messages[]' }, 400);
   }
-  if (body.agent !== 'steve' && body.agent !== 'carlos') {
+  if (body.agent !== 'vera' && body.agent !== 'carlos') {
     return json({ error: 'agent inválido' }, 400);
   }
 
@@ -108,9 +108,9 @@ Deno.serve(async (req: Request) => {
   }
   if (!isMember && !isSuper) return json({ error: 'Sem acesso a esta campanha' }, 403);
 
-  // Steve é restrito a admin/candidato (ou super admin).
-  if (body.agent === 'steve' && !isSuper && !(isMember && (memberRole === 'admin' || memberRole === 'candidate'))) {
-    return json({ error: 'Steve_AI é restrito a admin e candidato.' }, 403);
+  // Vera é restrita a admin/candidato (ou super admin).
+  if (body.agent === 'vera' && !isSuper && !(isMember && (memberRole === 'admin' || memberRole === 'candidate'))) {
+    return json({ error: 'Vera_IA é restrita a admin e candidato.' }, 403);
   }
 
   // Service role para ler dados/segredos da campanha alvo (já autorizada).
@@ -127,9 +127,9 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { system, temperature, maxTokens } =
-      body.agent === 'steve'
+      body.agent === 'vera'
         ? {
-            system: await buildSteveSystem(admin, body.campaign_id),
+            system: await buildVeraSystem(admin, body.campaign_id),
             temperature: 0,
             maxTokens: 1500,
           }
@@ -200,7 +200,7 @@ async function selectAgentProvider(
 }
 
 // ---------------------------------------------------------------------------
-// Steve — contexto real da campanha
+// Vera — contexto real da campanha
 // ---------------------------------------------------------------------------
 
 const GOV_SCORE: Record<string, number> = { otimo: 5, bom: 4, regular: 3, ruim: 2, pessimo: 1 };
@@ -209,13 +209,13 @@ function pct(n: number, total: number): number {
   return total > 0 ? Math.round((n / total) * 100) : 0;
 }
 
-async function buildSteveSystem(admin: SupabaseClient, campaignId: string): Promise<string> {
+async function buildVeraSystem(admin: SupabaseClient, campaignId: string): Promise<string> {
   const [campaign, context] = await Promise.all([
     admin.from('campaigns').select('candidate_name, party, office, state').eq('id', campaignId).maybeSingle(),
     buildCampaignContext(admin, campaignId),
   ]);
   const c = (campaign.data ?? {}) as { candidate_name?: string; party?: string };
-  return STEVE_SYSTEM_PROMPT
+  return VERA_SYSTEM_PROMPT
     .replace('{candidate_name}', c.candidate_name ?? 'o candidato')
     .replace('{party}', c.party ?? '')
     .replace('{campaign_data}', context);
@@ -344,7 +344,7 @@ RISCOS MAPEADOS: ${(intel?.risk_alerts ?? []).length} · OPORTUNIDADES: ${(intel
 ${intel?.resumo_executivo ? `RESUMO EXECUTIVO IA: ${intel.resumo_executivo}` : ''}`;
 }
 
-const STEVE_SYSTEM_PROMPT = `Você é Steve_AI, estrategista político sênior com 30 anos de experiência em campanhas eleitorais brasileiras e internacionais.
+const VERA_SYSTEM_PROMPT = `Você é Vera_IA, estrategista política sênior com 30 anos de experiência em campanhas eleitorais brasileiras e internacionais.
 
 Seu perfil mescla:
 - Duda Mendonça: conexão emocional com o eleitor
@@ -384,7 +384,7 @@ const PAGE_DESCRIPTIONS: Record<string, string> = {
   '/usuarios': 'Gestão de Usuários',
   '/integracoes': 'Configurações de Integrações',
   '/branding': 'Identidade Visual',
-  '/agentes/steve': 'chat com Steve_AI',
+  '/agentes/vera': 'chat com Vera_IA',
 };
 
 function buildCarlosSystem(
@@ -425,7 +425,7 @@ MÓDULOS:
 - Usuários: gestão da equipe
 - Integrações: conectar APIs (IA, coleta, mídia, mensageria) e Agentes de IA
 - Identidade: logo e cores da campanha
-- Steve_AI: estrategista político (admin/candidato)
+- Vera_IA: estrategista política (admin/candidato)
 
 FLUXOS PRINCIPAIS:
 - Importar eleitores: Eleitores → "Importar CSV" → baixe o "Modelo", preencha, envie o arquivo, confira o preview (válidas/erros/duplicadas) e confirme.

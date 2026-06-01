@@ -46,8 +46,8 @@ const ITEMS: NavItem[] = [
     module: 'inteligencia', // só plano Avançado (top)
   },
   {
-    to: '/agentes/steve',
-    label: 'Steve_AI — Estrategista',
+    to: '/agentes/vera',
+    label: 'Vera_IA — Estrategista',
     icon: Brain,
     roles: ['admin', 'candidate'],
     requiresCampaign: true,

@@ -363,8 +363,8 @@ export interface IntegrationSafe {
   updated_at: string;
 }
 
-// --- Agentes de IA (Steve estrategista / Carlos operacional) ---
-export type AgentKey = 'steve' | 'carlos';
+// --- Agentes de IA (Vera estrategista / Carlos operacional) ---
+export type AgentKey = 'vera' | 'carlos';
 // null em llm_provider = automático (usa a melhor IA disponível na campanha)
 export type AgentLlmProvider = 'anthropic' | 'openai';
 

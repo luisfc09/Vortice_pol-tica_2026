@@ -22,7 +22,7 @@ import OnboardingPage from '@/pages/Onboarding';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoEntrevistaDetalhePage from '@/pages/CampoEntrevistaDetalhe';
 import InteligenciaPage from '@/pages/Inteligencia';
-import SteveAIPage from '@/pages/SteveAIPage';
+import VeraIAPage from '@/pages/VeraIAPage';
 import CampoQuestionarioPage from '@/pages/CampoQuestionario';
 import CampoFaqPage from '@/pages/CampoFaq';
 import CampoHistoricoPage from '@/pages/CampoHistorico';
@@ -111,10 +111,12 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* Steve_AI — estrategista (admin e candidato) */}
+        {/* Vera_IA — estrategista (admin e candidato) */}
         <Route element={<ProtectedRoute requireCampaign roles={['admin', 'candidate']} />}>
           <Route element={<AppLayout />}>
-            <Route path="/agentes/steve" element={<SteveAIPage />} />
+            <Route path="/agentes/vera" element={<VeraIAPage />} />
+            {/* Redirect legado: bookmarks antigos /agentes/steve continuam funcionando */}
+            <Route path="/agentes/steve" element={<Navigate to="/agentes/vera" replace />} />
           </Route>
         </Route>
 

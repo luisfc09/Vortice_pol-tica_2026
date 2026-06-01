@@ -1,6 +1,6 @@
 // Gerencia a conversa com um agente: histórico (sidebar), mensagens da conversa
 // atual, envio e persistência em agent_conversations (RLS restringe ao próprio
-// usuário). Usado pelo Steve (persistente). Carlos não usa (sem histórico).
+// usuário). Usado pela Vera (persistente). Carlos não usa (sem histórico).
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
