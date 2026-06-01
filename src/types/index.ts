@@ -138,7 +138,11 @@ export type AlertType =
   | 'spike_negativo_mencoes'
   | 'municipio_sem_lideranca'
   | 'meta_geral_critica'
-  | 'entrevistas_paradas';
+  | 'entrevistas_paradas'
+  // Módulo Financeiro (migration 043)
+  | 'finance_cidade_vermelha'
+  | 'finance_teto_ultrapassado'
+  | 'finance_deficit_previsto';
 
 export type AlertPriority = 'urgente' | 'critico' | 'atencao' | 'info';
 
@@ -920,6 +924,112 @@ export interface FaqItem {
   avoid_saying: string;
   is_active: boolean;
   created_at: string;
+}
+
+// ============================================================================
+// Módulo Financeiro (migration 042)
+// ============================================================================
+
+// Configuração financeira da campanha (1 linha por campanha).
+//   - budget_total       → teto total previsto (R$)
+//   - semaforo_*         → faixas de custo por voto (R$/voto) que
+//     definem cor do semáforo nas cidades. Verde = excelente, Amarelo =
+//     atenção, acima do amarelo = vermelho.
+//   - meta_votos_geral   → meta agregada de votos (denominador do
+//     cálculo geral de custo/voto). Pode ficar null e usar Campaign.vote_target.
+export interface FinanceConfig {
+  id: string;
+  campaign_id: string;
+  budget_total: number | null;
+  semaforo_verde_max: number;   // ex.: 25 → custo/voto ≤ 25 = verde
+  semaforo_amarelo_max: number; // ex.: 40 → custo/voto ≤ 40 = amarelo, > = vermelho
+  meta_votos_geral: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RevenueSourceType =
+  | 'fundo_eleitoral'
+  | 'doacao_pessoa_fisica'
+  | 'doacao_pessoa_juridica'
+  | 'recursos_proprios'
+  | 'outros';
+
+export const REVENUE_SOURCE_LABEL: Record<RevenueSourceType, string> = {
+  fundo_eleitoral: 'Fundo Eleitoral',
+  doacao_pessoa_fisica: 'Doação — Pessoa Física',
+  doacao_pessoa_juridica: 'Doação — Pessoa Jurídica',
+  recursos_proprios: 'Recursos Próprios',
+  outros: 'Outros',
+};
+
+export interface FinanceRevenue {
+  id: string;
+  campaign_id: string;
+  source_type: RevenueSourceType;
+  description: string | null;
+  amount: number;
+  revenue_date: string; // YYYY-MM-DD
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+// Plano por cidade — uma linha por (campaign × município). Para cargos
+// de cidade única (Prefeito/Vereador) haverá apenas uma linha.
+//
+// Convenção:
+//   - Colunas SEM sufixo `_real` são o PLANEJADO (orçamento).
+//   - Colunas com sufixo `_real` são o REALIZADO (gasto efetivo). São
+//     nullable porque entram só quando a campanha começa a executar.
+//   - `cabo_unit_value × cabos_qty` = `cabos_cost` (calculado no front
+//     para o planejado; armazenado só pro realizado).
+export interface FinanceCityPlan {
+  id: string;
+  campaign_id: string;
+  municipality_code: string | null;
+  city_name: string;
+  polo_logistico: string | null;
+  meta_votos_2022: number;
+  meta_votos_2026: number;
+
+  // PLANEJADO
+  coord_name: string | null;
+  coord_value: number;
+  cabos_qty: number;
+  cabo_unit_value: number;
+  vehicles_qty: number;
+  vehicles_cost: number;
+  fuel_cost: number;
+  materials_cost: number;
+  others_cost: number;
+
+  // REALIZADO (nullable)
+  coord_value_real: number | null;
+  cabos_cost_real: number | null;
+  vehicles_cost_real: number | null;
+  fuel_cost_real: number | null;
+  materials_cost_real: number | null;
+  others_cost_real: number | null;
+
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Resumo computado de uma cidade — soma planejado/realizado + custo/voto +
+// cor do semáforo. Calculado no front com base no FinanceConfig.
+export type SemaforoColor = 'verde' | 'amarelo' | 'vermelho' | 'indeterminado';
+
+export interface FinanceCitySummary {
+  plan: FinanceCityPlan;
+  total_planejado: number;
+  total_realizado: number | null;
+  custo_por_voto_planejado: number | null; // null quando meta_votos = 0
+  custo_por_voto_realizado: number | null;
+  semaforo: SemaforoColor;
 }
 
 // ----------------------------------------------------------------------------

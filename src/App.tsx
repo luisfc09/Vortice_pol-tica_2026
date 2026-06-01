@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
@@ -34,9 +36,22 @@ import AdminCampaignDetailPage from '@/pages/AdminCampaignDetail';
 import AdminSettingsPage from '@/pages/AdminSettings';
 import NotFoundPage from '@/pages/NotFound';
 
+// Code-split do módulo Financeiro — a página depende da lib `xlsx` (~600KB
+// minified) usada pelo importador de planilhas. Carregar sob demanda evita
+// inchar o bundle inicial pra usuários que não abrem essa tela.
+const FinanceiroPage = lazy(() => import('@/pages/Financeiro'));
+
 function BrandSync() {
   useBrandSync();
   return null;
+}
+
+function LazyFallback() {
+  return (
+    <div className="flex h-full min-h-[40vh] items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
 }
 
 export default function App() {
@@ -57,6 +72,14 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route
+              path="/financeiro"
+              element={
+                <Suspense fallback={<LazyFallback />}>
+                  <FinanceiroPage />
+                </Suspense>
+              }
+            />
             <Route path="/liderancas" element={<LiderancasPage />} />
             <Route path="/eleitores" element={<EleitoresPage />} />
             <Route path="/mapa" element={<MapaPage />} />

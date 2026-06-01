@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { collections, useCollection } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
+import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { detectAll, bucketByPriority, type AlertDraft } from '@/lib/alertDetector';
 import type { Alert, AlertPriority } from '@/types';
 
@@ -21,6 +22,16 @@ export function useAlertas() {
   const mentions = useCollection(collections.mentions);
   const alerts = useCollection(collections.alerts);
   const members = useCollection(collections.campaign_users);
+  // Módulo Financeiro — alimenta os 3 detectores finance_*.
+  // Quando a campanha não tem nada cadastrado, os detectores ficam ociosos
+  // (graças aos guards internos), então não geram falso positivo.
+  const {
+    config: financeConfig,
+    revenues: financeRevenues,
+    citySummaries: financeCitySummaries,
+    totalReceitas: financeTotalReceitas,
+    totalPlanejadoGeral: financeTotalPlanejado,
+  } = useFinanceiro();
 
   const voteTarget = session?.campaign?.vote_target ?? 0;
 
@@ -36,6 +47,11 @@ export function useAlertas() {
       mentions,
       members,
       voteTarget,
+      financeConfig,
+      financeRevenues,
+      financeCitySummaries,
+      financeTotalReceitas,
+      financeTotalPlanejado,
     });
     // Mapa de dedup_keys já abertos (não-resolvidos) pra evitar inserir duplicata
     const openKeys = new Set(
@@ -90,6 +106,11 @@ export function useAlertas() {
     members,
     alerts,
     voteTarget,
+    financeConfig,
+    financeRevenues,
+    financeCitySummaries,
+    financeTotalReceitas,
+    financeTotalPlanejado,
   ]);
 
   // Mantém referência atual em ref para o setInterval não disparar reset

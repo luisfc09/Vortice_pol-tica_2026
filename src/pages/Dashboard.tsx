@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   Radar as RadarIcon,
   BellRing,
+  DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,6 +33,7 @@ import { CampaignSignals } from '@/components/dashboard/CampaignSignals';
 import { IntelligenceTeaser } from '@/components/dashboard/IntelligenceTeaser';
 import { WeeklyRadar } from '@/components/dashboard/WeeklyRadar';
 import { AlertsHistory } from '@/components/alerts/AlertsHistory';
+import { FinanceDashboardWidget } from '@/components/dashboard/FinanceDashboardWidget';
 import { useAlertas } from '@/hooks/useAlertas';
 import { collections, useCollection } from '@/lib/data';
 import {
@@ -169,6 +171,10 @@ export default function DashboardPage() {
           <TabsTrigger value="strategic">
             <RadarIcon className="mr-1 h-4 w-4" />
             Painel Estratégico
+          </TabsTrigger>
+          <TabsTrigger value="finance">
+            <DollarSign className="mr-1 h-4 w-4" />
+            Financeiro
           </TabsTrigger>
           <TabsTrigger value="alerts">
             <BellRing className="mr-1 h-4 w-4" />
@@ -350,6 +356,10 @@ export default function DashboardPage() {
               />
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="finance" className="space-y-6">
+          <FinanceDashboardWidget />
         </TabsContent>
       </Tabs>
     </div>

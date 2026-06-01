@@ -14,6 +14,7 @@ import {
   Settings,
   Plug,
   Palette,
+  DollarSign,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,7 @@ interface NavItem {
 
 const ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, requiresCampaign: true },
+  { to: '/financeiro', label: 'Financeiro', icon: DollarSign, requiresCampaign: true },
   {
     to: '/inteligencia',
     label: 'Inteligência Eleitoral',

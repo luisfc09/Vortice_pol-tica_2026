@@ -11,6 +11,9 @@ import type {
   CampaignEvent,
   CampaignUser,
   FieldInterview,
+  FinanceCitySummary,
+  FinanceConfig,
+  FinanceRevenue,
   Mention,
   Supporter,
   Voter,
@@ -29,6 +32,13 @@ export interface DetectorInput {
   mentions: Mention[];
   members: CampaignUser[];
   voteTarget: number;
+  // Módulo Financeiro — todos opcionais para não quebrar callers antigos.
+  // Quando ausentes, os 3 detectores finance_* simplesmente não disparam.
+  financeConfig?: FinanceConfig | null;
+  financeRevenues?: FinanceRevenue[];
+  financeCitySummaries?: FinanceCitySummary[];
+  financeTotalReceitas?: number;
+  financeTotalPlanejado?: number;
 }
 
 export type AlertDraft = Pick<
@@ -396,6 +406,111 @@ function detectMetaGeralCritica(input: DetectorInput): AlertDraft[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Detectores do módulo Financeiro
+// ---------------------------------------------------------------------------
+
+const BR_CURRENCY = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+});
+
+function detectFinanceCidadeVermelha(input: DetectorInput): AlertDraft[] {
+  const summaries = input.financeCitySummaries ?? [];
+  return summaries
+    .filter((s) => s.semaforo === 'vermelho')
+    .map((s) => {
+      const cpv =
+        s.custo_por_voto_realizado ?? s.custo_por_voto_planejado ?? 0;
+      const code = s.plan.municipality_code ?? `name:${s.plan.city_name}`;
+      return draft({
+        type: 'finance_cidade_vermelha',
+        priority: 'critico',
+        title: `${s.plan.city_name} no vermelho: ${BR_CURRENCY.format(cpv)}/voto`,
+        description:
+          `Custo por voto acima da faixa amarela do semáforo. ` +
+          `Planejado: ${BR_CURRENCY.format(s.total_planejado)}` +
+          (s.plan.meta_votos_2026
+            ? ` para ${s.plan.meta_votos_2026.toLocaleString('pt-BR')} votos.`
+            : '.'),
+        acao_sugerida:
+          'Revise custos ou aumente a meta de votos da cidade. Pode indicar superdimensionamento da operação.',
+        acao_label: 'Abrir Financeiro',
+        acao_route: '/financeiro',
+        meta: {
+          municipality_code: s.plan.municipality_code,
+          city_name: s.plan.city_name,
+          custo_por_voto: cpv,
+          total_planejado: s.total_planejado,
+          total_realizado: s.total_realizado,
+        },
+        dedup_key: `finance_cidade_vermelha:${code}`,
+      });
+    });
+}
+
+function detectFinanceTetoUltrapassado(input: DetectorInput): AlertDraft[] {
+  const teto = input.financeConfig?.budget_total ?? null;
+  if (teto == null) return []; // só dispara se o teto estiver configurado
+  const planejado = input.financeTotalPlanejado ?? 0;
+  if (planejado <= teto) return [];
+  const excesso = planejado - teto;
+  const pct = teto > 0 ? Math.round((excesso / teto) * 100) : 0;
+  return [
+    draft({
+      type: 'finance_teto_ultrapassado',
+      priority: 'urgente',
+      title: `Orçamento estourado em ${BR_CURRENCY.format(excesso)}`,
+      description:
+        `Total planejado (${BR_CURRENCY.format(planejado)}) excede o teto ` +
+        `de ${BR_CURRENCY.format(teto)}${pct > 0 ? ` em ${pct}%` : ''}.`,
+      acao_sugerida:
+        'Reduza custos por cidade ou amplie o teto nas Configurações.',
+      acao_label: 'Abrir Financeiro',
+      acao_route: '/financeiro',
+      meta: {
+        teto,
+        planejado,
+        excesso,
+        excesso_pct: pct,
+      },
+      dedup_key: 'finance_teto_ultrapassado:total',
+    }),
+  ];
+}
+
+function detectFinanceDeficitPrevisto(input: DetectorInput): AlertDraft[] {
+  const receitas = input.financeRevenues ?? [];
+  if (receitas.length === 0) return []; // só dispara se houver receita
+  const totalRec = input.financeTotalReceitas ?? 0;
+  const planejado = input.financeTotalPlanejado ?? 0;
+  if (planejado <= totalRec) return [];
+  const deficit = planejado - totalRec;
+  const cobertura = planejado > 0 ? Math.round((totalRec / planejado) * 100) : 0;
+  return [
+    draft({
+      type: 'finance_deficit_previsto',
+      priority: 'atencao',
+      title: `Déficit previsto: ${BR_CURRENCY.format(deficit)}`,
+      description:
+        `Receitas (${BR_CURRENCY.format(totalRec)}) cobrem apenas ` +
+        `${cobertura}% do planejado (${BR_CURRENCY.format(planejado)}).`,
+      acao_sugerida:
+        'Acelere a captação ou revise os custos planejados.',
+      acao_label: 'Registrar receita',
+      acao_route: '/financeiro',
+      meta: {
+        receitas: totalRec,
+        planejado,
+        deficit,
+        cobertura_pct: cobertura,
+      },
+      dedup_key: 'finance_deficit_previsto:total',
+    }),
+  ];
+}
+
 // Mantém referência (silencia lint):
 void hoursAgo;
 
@@ -415,6 +530,10 @@ export function detectAll(input: DetectorInput): AlertDraft[] {
     ...detectEventoSemConfirmacao(input),
     ...detectCaboSumido(input),
     ...detectSpikeNegativoMencoes(input),
+    // Financeiro (migration 043)
+    ...detectFinanceCidadeVermelha(input),
+    ...detectFinanceTetoUltrapassado(input),
+    ...detectFinanceDeficitPrevisto(input),
   ];
 }
 
@@ -430,6 +549,9 @@ export const detectors = {
   detectCaboSumido,
   detectEntrevistasParadas,
   detectMetaGeralCritica,
+  detectFinanceCidadeVermelha,
+  detectFinanceTetoUltrapassado,
+  detectFinanceDeficitPrevisto,
 };
 
 // Aggregations úteis pro client
