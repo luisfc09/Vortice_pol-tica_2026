@@ -208,6 +208,11 @@ export default function LiderancasPage() {
           role: 'outro',
           role_custom: pickField(r, 'Papel', 'cargo', 'role') || null,
           status: 'ativo',
+          // Migration 045 — opcionais zerados na importação CSV
+          vote_potential: null,
+          whatsapp: null,
+          social_platform: null,
+          social_handle: null,
         },
       });
       ok++;

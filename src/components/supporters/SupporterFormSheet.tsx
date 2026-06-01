@@ -25,8 +25,11 @@ import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import {
+  SOCIAL_PLATFORM_LABEL,
+  SOCIAL_PLATFORM_OPTIONS,
   SUPPORTER_ROLE_LABEL,
   SUPPORTER_ROLE_OPTIONS,
+  type SocialPlatform,
   type Supporter,
   type SupporterRoleType,
   type SupporterStatus,
@@ -55,6 +58,11 @@ const EMPTY: FormState = {
   role: 'lideranca',
   role_custom: null,
   status: 'ativo',
+  // Campos novos (migration 045)
+  vote_potential: null,
+  whatsapp: null,
+  social_platform: null,
+  social_handle: null,
 };
 
 interface SupporterFormSheetProps {
@@ -84,6 +92,10 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
         role: editing.role,
         role_custom: editing.role_custom,
         status: editing.status,
+        vote_potential: editing.vote_potential,
+        whatsapp: editing.whatsapp,
+        social_platform: editing.social_platform,
+        social_handle: editing.social_handle,
       });
     } else if (open) {
       setForm(EMPTY);
@@ -136,6 +148,18 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
       numero: form.numero?.trim() || null,
       complemento: form.complemento?.trim() || null,
       role_custom: form.role === 'outro' ? form.role_custom?.trim() || null : null,
+      // Novos campos (migration 045) — normalização
+      vote_potential:
+        form.vote_potential != null && form.vote_potential >= 0
+          ? form.vote_potential
+          : null,
+      whatsapp: form.whatsapp?.trim() || null,
+      // Se não há plataforma selecionada, zera também o handle pra evitar
+      // dados órfãos no banco.
+      social_platform: form.social_platform,
+      social_handle: form.social_platform
+        ? form.social_handle?.trim() || null
+        : null,
     };
 
     if (editing) {
@@ -250,6 +274,73 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
                 type="email"
                 value={form.email ?? ''}
                 onChange={(e) => update('email', e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Migration 045 — campos extras de captação */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="vote_potential">Potencial de votos</Label>
+              <Input
+                id="vote_potential"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={form.vote_potential ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === '') {
+                    update('vote_potential', null);
+                    return;
+                  }
+                  const n = parseInt(raw, 10);
+                  update('vote_potential', Number.isFinite(n) ? Math.max(0, n) : null);
+                }}
+                placeholder="Ex.: 50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp">WhatsApp</Label>
+              <Input
+                id="whatsapp"
+                inputMode="tel"
+                value={form.whatsapp ?? ''}
+                onChange={(e) => update('whatsapp', formatPhone(e.target.value))}
+                placeholder="(31) 99999-9999"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Rede social</Label>
+              <Select
+                value={form.social_platform ?? ''}
+                onValueChange={(v) =>
+                  update('social_platform', (v || null) as SocialPlatform | null)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Plataforma…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOCIAL_PLATFORM_OPTIONS.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {SOCIAL_PLATFORM_LABEL[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="social_handle">@usuário ou link</Label>
+              <Input
+                id="social_handle"
+                value={form.social_handle ?? ''}
+                onChange={(e) => update('social_handle', e.target.value)}
+                placeholder="@usuario ou https://..."
+                disabled={!form.social_platform}
               />
             </div>
           </div>

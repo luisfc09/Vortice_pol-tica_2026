@@ -118,6 +118,37 @@ export const SUPPORTER_ROLE_OPTIONS: readonly SupporterRoleType[] = [
 
 export type SupporterStatus = 'ativo' | 'inativo' | 'pendente';
 
+// Rede social da liderança (migration 045). Lista alinhada ao CHECK
+// constraint em supporters.social_platform.
+export type SocialPlatform =
+  | 'instagram'
+  | 'facebook'
+  | 'x'
+  | 'tiktok'
+  | 'linkedin'
+  | 'youtube'
+  | 'outro';
+
+export const SOCIAL_PLATFORM_LABEL: Record<SocialPlatform, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  x: 'X (Twitter)',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  youtube: 'YouTube',
+  outro: 'Outra',
+};
+
+export const SOCIAL_PLATFORM_OPTIONS: readonly SocialPlatform[] = [
+  'instagram',
+  'facebook',
+  'x',
+  'tiktok',
+  'linkedin',
+  'youtube',
+  'outro',
+] as const;
+
 export type MentionSource = 'twitter' | 'google_news' | 'manual';
 
 export type Sentiment = 'positivo' | 'neutro' | 'negativo';
@@ -473,6 +504,11 @@ export interface Supporter {
   // Quando role === 'outro', guarda o cargo livre digitado pelo usuário.
   role_custom: string | null;
   status: SupporterStatus;
+  // Campos opcionais (migration 045). Todos nullable.
+  vote_potential: number | null;       // estimativa de votos entregues
+  whatsapp: string | null;             // número WhatsApp (formato pt-BR)
+  social_platform: SocialPlatform | null;
+  social_handle: string | null;        // @usuario ou URL
   created_by: string;
   created_at: string;
 }

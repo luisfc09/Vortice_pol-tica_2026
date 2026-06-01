@@ -120,6 +120,13 @@ create table if not exists supporters (
   municipality_code text references municipalities (ibge_code),
   role supporter_role_type not null default 'militante',
   status supporter_status not null default 'ativo',
+  -- Migration 045 — campos extras de captação (todos opcionais)
+  vote_potential integer check (vote_potential is null or vote_potential >= 0),
+  whatsapp text,
+  social_platform text check (social_platform is null or social_platform in (
+    'instagram','facebook','x','tiktok','linkedin','youtube','outro'
+  )),
+  social_handle text,
   created_by uuid not null references auth.users (id),
   created_at timestamptz not null default now()
 );
