@@ -87,6 +87,9 @@ Fonte: `package.json`.
 - `zustand` 4.5 (stores globais: auth, viewAs)
 - `react-hook-form` + `@hookform/resolvers` + `zod` (formulários/validação)
 - `date-fns` (calendário da Agenda)
+- `xlsx` 0.18 (SheetJS) — leitura/escrita de planilhas .xlsx usada pelo
+  importador do módulo Financeiro. Carregada **lazy** via `lazy()` na rota
+  `/financeiro` (chunk separado de ~466KB para não inchar o bundle inicial).
 
 **Scripts (`package.json`)**
 ```json
@@ -117,20 +120,27 @@ vortice/
 │  │  ├─ mencoes/            # feed + stepper de Resposta Rápida (Step1-5)
 │  │  ├─ alerts/             # Central de Alertas, AlertCard, badge
 │  │  ├─ campo/ field/       # questionário, Campo Hoje
-│  │  ├─ mapa/ maps/         # StateMap (TSE), OpenInMapsButton (deep links)
+│  │  ├─ mapa/ maps/         # StateMap (TSE), VotersLayer, OpenInMapsButton (deep links)
 │  │  ├─ integrations/       # IntegrationCard, IntegrationDrawer, AiFeatureMatrix
 │  │  ├─ billing/ admin/     # planos, cards de campanha
-│  │  ├─ voters/ supporters/ # form sheets de eleitor/liderança
+│  │  ├─ voters/ supporters/ # form sheets + VotersPanel (compartilhado /eleitores e /mapa)
 │  │  ├─ events/             # Agenda (form + calendário)
 │  │  ├─ team/               # ProvisionSheet, AvatarUpload, pendentes
 │  │  ├─ brand/ forms/       # BrandLogo, AddressFields
+│  │  ├─ financeiro/         # módulo Financeiro: SemaforoIndicator, FinanceConfig,
+│  │  │                      # FinanceCityTable, FinanceVisaoGeral, FinanceRevenueList,
+│  │  │                      # CityPlanFormSheet, ImportCityPlansXls
+│  │  └─ dashboard/          # KpiCard, FinanceDashboardWidget (4ª aba do Dashboard)
 │  ├─ lib/                   # regras puras + infra (ver §8, §11, §12)
-│  ├─ hooks/                 # useAuth, useEffectiveSession, useBrand, useGeolocation, ...
+│  │                         # destaques: financeScope, financeImporter (xlsx),
+│  │                         #            whatsappLink/socialUrl em utils.ts
+│  ├─ hooks/                 # useAuth, useEffectiveSession, useBrand, useGeolocation,
+│  │                         # useFinanceiro, useAlertas, useIntelligence, ...
 │  ├─ stores/                # auth.ts, viewAs.ts (zustand)
 │  ├─ data/                  # catálogos estáticos (municípios, regiões, FAQ, integrações, seeds)
 │  └─ types/index.ts         # TODOS os tipos/enums do domínio
 ├─ supabase/
-│  ├─ migration-0XX-*.sql    # migrations (002 → 040) — ver §9
+│  ├─ migration-0XX-*.sql    # migrations (002 → 045) — ver §9
 │  ├─ bootstrap*.sql         # scripts de primeiro admin / super admin
 │  ├─ schema.sql seed-faq.sql
 │  └─ functions/             # Edge Functions Deno — ver §10
@@ -352,12 +362,17 @@ Uso típico nas páginas: `const voters = useCollection(collections.voters)` e
 | 037 | voter-age-range | `voters.age_range` (enum 16-24..60+) |
 | 038 | **geocode** | `voters.geo_source` + tabela `geocode_cache` (cache de CEP) |
 | 039 | **ai-agents** | `ai_agents` (config Vera/Carlos) + `agent_conversations` (histórico por usuário) |
-| 043 | **alerts-finance** | 3 valores no enum `alert_type` (finance_cidade_vermelha, finance_teto_ultrapassado, finance_deficit_previsto) |
-| 044 | **rename-steve-to-vera** | UPDATE em `ai_agents`/`agent_conversations` trocando `steve` → `vera` + CHECK constraint atualizada |
 | 040 | **integrations-campaign-param** | `list_integrations_safe(p_campaign_id)` — super admin opera a campanha do view-as |
+| 041 | **interview-analysis + electoral_intelligence** | Adiciona valores ao enum `ai_feature` para a Inteligência Eleitoral analisar entrevistas |
+| 042 | **financeiro-modulo** | 3 tabelas (`campaign_finance_config`, `finance_revenues`, `finance_city_plans`) + RLS + GRANTs + triggers de `updated_at`. Base do módulo Financeiro |
+| 043 | **alerts-finance** | 3 valores no enum `alert_type` (`finance_cidade_vermelha`, `finance_teto_ultrapassado`, `finance_deficit_previsto`) |
+| 044 | **rename-steve-to-vera** | UPDATE em `ai_agents`/`agent_conversations` trocando `steve` → `vera` + CHECK constraint atualizada para `('vera','carlos')`. Default de `name` agora `'Vera_IA'` |
+| 045 | **supporters-novos-campos** | 4 colunas opcionais em `supporters`: `vote_potential int`, `whatsapp text`, `social_platform text` (CHECK), `social_handle text` |
 
-> As DDLs completas estão em cada arquivo `supabase/migration-0XX-*.sql`. As três
-> últimas (038/039/040) foram versionadas junto com esta documentação.
+> Todas as DDLs estão em `supabase/migration-0XX-*.sql`. A partir da 038 todas
+> são versionadas no repo junto com a documentação. Migrations 042 a 045 foram
+> entregues nesta linha de trabalho (módulo Financeiro + rename Vera_IA +
+> campos extras de captação em Lideranças).
 
 ---
 
@@ -446,9 +461,45 @@ model: (cfg.model ?? '').trim() || DEFAULT_MODELS[type]
 - Front: `pages/VeraIAPage.tsx`, `components/agents/{VeraChat,CarlosDrawer,ChatMessage,QuickSuggestions,AgentAvatar,AgentsConfig,AgentPhotoPicker}.tsx`.
 - Infra: `src/lib/agents/agentChat.ts` (wrapper), `src/hooks/useAgentConversation.ts` (histórico/persistência).
 
+### 12.4-bis Financeiro — `/financeiro` (todos os planos)
+
+Módulo de **orçamento, receitas e custo/voto** introduzido nas migrations 042 + 043.
+
+- **Rota carregada em lazy** (`App.tsx`: `const FinanceiroPage = lazy(() => import('@/pages/Financeiro'))`) — chunk separado `Financeiro-*.js` (~466KB) porque depende de `xlsx`. Bundle inicial fica enxuto pra quem não abre a tela.
+- **Frontend:**
+  - `src/pages/Financeiro.tsx` — página com **4 tabs**: Visão geral · Planejamento (Cidade/Cidades, label muda com cargo) · Receitas · Configurações.
+  - `src/components/financeiro/` (7 componentes):
+    - `SemaforoIndicator` — bolinha 🟢🟡🔴⚪ reusada na tabela, widget e alertas
+    - `FinanceConfig` — form da config geral (orçamento, faixas verde/amarelo, meta votos)
+    - `FinanceVisaoGeral` — 5 KPIs (Receitas, Planejado, Realizado, Saldo, R$/voto) + breakdown semáforo + top 5 cidades caras
+    - `FinanceCityTable` — tabela por cidade com filtro/busca, edição inline, link `OpenInMapsButton` opcional
+    - `CityPlanFormSheet` — sheet de cadastro/edição de cidade
+    - `FinanceRevenueList` — listagem de receitas com filtros por tipo e período
+    - `ImportCityPlansXls` — importador XLS via SheetJS com preview
+  - `src/components/dashboard/FinanceDashboardWidget.tsx` — 4ª aba do Dashboard, mostra KPIs resumidos + CTA "Abrir Financeiro"
+- **Hook central:** `src/hooks/useFinanceiro.ts` — busca config + revenues + city_plans, expõe cálculos puros derivados (`totalReceitas`, `totalPlanejadoGeral`, `totalRealizadoGeral`, `saldoPrevisto`, `custoPorVotoGeral`, `citySummaries`).
+  - ⚠ **Realtime atualmente DESATIVADO** — bloco de subscription tinha colisão de `supabase.channel('finance-${campaignId}')` por ser chamado em 3 lugares simultaneamente (Header→AlertsBadge→useAlertas, Dashboard direto, FinanceDashboardWidget). Subscription do segundo+ consumidor dava `cannot add postgres_changes callbacks after subscribe()` síncrono → tela preta. Pra reintroduzir: usar `useId()` por instância OU centralizar em Context com 1 subscription única no provider. Sem realtime, mutations já fazem optimistic update local — só não sincroniza entre tabs/usuários.
+- **Cálculos puros (`src/lib/financeScope.ts`):**
+  - `isSingleCityScope(office)` → `true` para Prefeito/Vereador (cargo numa cidade só). Layout adapta: tabela mostra 1 linha ou múltiplas.
+  - `getCustoPorVoto(plano)` → `total_planejado / meta_votos` (ou null se meta=0).
+  - `getSemaforo(custoVoto, config)` → `verde|amarelo|vermelho|indeterminado`.
+- **Importador XLS (`src/lib/financeImporter.ts`)** — usa `xlsx` (SheetJS):
+  - `parseFinanceXlsx(file)` → array de linhas tipadas + validação.
+  - Reconhece cabeçalhos em pt-BR (`Cidade`, `Meta de Votos`, `Coordenador`, `Cabos`, `Valor/Cabo`, `Veículos`, `Combustível`, `Materiais`, `Outros` + variações realizado `_realizado`/`_real`).
+  - Tolerante: aliases case-insensitive, decimais com `,` ou `.`, R$ removido automaticamente.
+- **Detectores de alerta** (`src/lib/alertDetector.ts`, plugados ao `useAlertas`):
+  - `finance_cidade_vermelha` (critico) — cidade com R$/voto > faixa amarela do semáforo. Um alerta por cidade.
+  - `finance_teto_ultrapassado` (urgente) — total planejado > `budget_total` configurado.
+  - `finance_deficit_previsto` (atencao) — total receitas < total planejado, e há pelo menos 1 receita lançada.
+
 ### 12.5 Lideranças — `/liderancas`
 - `pages/Liderancas.tsx` + `components/supporters/SupporterFormSheet.tsx`.
 - 23 cargos (`SupporterRoleType`) + `role_custom`. Import/Export CSV (ver §12.6) + deep link Maps (`components/maps/OpenInMapsButton.tsx`).
+- **Campos extras de captação (migration 045)**:
+  - `vote_potential int` (≥ 0) — estimativa de votos da liderança. Renderiza como chip violeta `🎯 Potencial: N votos` no card quando > 0.
+  - `whatsapp text` — número formatado com a mesma máscara do telefone. Card mostra ícone `MessageCircle` verde clicável → abre `wa.me/55…` em nova aba via helper `whatsappLink()` em `src/lib/utils.ts` (adiciona DDI 55 automático).
+  - `social_platform text` (CHECK enum: instagram/facebook/x/tiktok/linkedin/youtube/outro) + `social_handle text`. Card exibe ícone Lucide específico da plataforma + label + handle, clicável quando há URL inferível via helper `socialUrl()` (aceita `@user`, `user` ou URL completa). TikTok usa `Music2` (Lucide não tem ícone próprio); "outro" usa `Globe`.
+- **CSV** agora exporta/importa as 4 colunas novas. Parsing de `social_platform` tolerante a aliases (`Insta`/`IG`/`Instagram`, `FB`/`Facebook`, `twitter`/`X`, `TT`/`TikTok`, `LI`/`LinkedIn`, `YT`/`YouTube`). Valores inválidos viram `null` com warning no preview — não bloqueiam importação.
 
 ### 12.6 Eleitores — `/eleitores`
 - `pages/Eleitores.tsx` + `components/voters/VoterFormSheet.tsx`.
@@ -536,11 +587,17 @@ supabase functions deploy <nome> --project-ref iemajqwnlkmrubikhqas
 
 ### 14.4 "Pegadinhas" operacionais (para o próximo engenheiro)
 - **Migrations são manuais** — o usuário/operador roda no SQL Editor; o app não migra sozinho.
+- **Versione SEMPRE a migration no repo ANTES de pedir pra rodar.** SQL inline no chat tem alto risco de "sumir": a migration-042 foi rodada e validada com sucesso, mas depois as 3 tabelas reapareceram como inexistentes (provavelmente rodada em branch/preview). Sem arquivo `.sql` no repo, não há como reproduzir/auditar. **Sempre crie `supabase/migration-0XX-*.sql` ANTES de pedir pro usuário copiar e rodar.**
+- **`supabase.channel(nome)` com nome igual em múltiplas instâncias do hook BLOQUEIA tudo.** Se um hook que cria channel é chamado de 2+ lugares simultaneamente (ex.: `useFinanceiro` chamado de Header + Dashboard + Widget), todos pegam o mesmo channel. O primeiro `.subscribe()` lacra o channel; os seguintes `.on('postgres_changes', ...)` lançam **erro síncrono** que mata o React no boot → **tela preta total**. Fixes: (a) `useId()` por instância no nome do channel; (b) singleton via Context com 1 subscription única; (c) remover realtime (foi o que fizemos no `useFinanceiro` por hora).
+- **Postgres enum: novos valores DEVEM ser commitados antes de uso.** Em uma única transação no SQL Editor, `ALTER TYPE … ADD VALUE 'x'` + `SELECT ... where col = 'x'` falha com `unsafe use of new value`. Solução: rodar `ALTER TYPE` em um bloco, dar `commit`, e o `SELECT` em outro. Para evitar isso, use `CHECK constraint` em vez de enum quando a lista de valores ainda pode crescer (vide `supporters.social_platform`, `finance_revenues.source_type`).
+- **CHECK constraints com nomes auto-gerados pelo Postgres** podem ser difíceis de "achar e dropar" idempotentemente. Pattern: ler `pg_constraint` por padrão `LIKE 'X%'` ou nomear explicitamente com `CONSTRAINT name CHECK (...)`. Vide migration-044 que faz `DROP CONSTRAINT IF EXISTS supporters_social_platform_check`.
+- **Railway às vezes não dispara redeploy automático no push** — fica em fila ou pula commits empty/identicos. Quando o bundle de produção continuar com hash antigo após `git push`, force com `git commit --allow-empty -m "chore: trigger redeploy" && git push`. Ou Settings → Deployments → "Deploy" no dashboard.
+- **Múltiplos clones do mesmo repo na máquina podem confundir.** O Railway está conectado a UM clone específico via `git remote`. Para evitar pushar "do clone errado", confirme `git remote -v` antes. Pesquisa rápida: `find ~ -maxdepth 4 -name .git -type d | xargs -I {} bash -c 'cd {}/.. && git remote get-url origin 2>/dev/null'`.
 - **view-as é client-side** — funções SQL não o respeitam; passe `campaign_id` explícito quando o super admin precisar operar outra campanha (ver `provision-user`, `list_integrations_safe`).
 - **`current_campaign_id()` ignora campanhas excluídas/suspensas** — ao excluir (soft delete) a campanha "mais antiga", o contexto migra para a próxima ativa.
 - **`??` vs `||` para modelo de LLM** — `config.model = ''` precisa cair no default; use `||`.
 - **Sem service worker** — atualização de produção exige hard-refresh.
-- **Bundle hasheado** — confirme deploy comparando `index-XXXX.js` local x produção.
+- **Bundle hasheado** — confirme deploy comparando `index-XXXX.js` local x produção. Comando rápido: `curl -s https://...up.railway.app/ | grep -oE 'index-[A-Za-z0-9_-]+\.js'`.
 - **CLI cwd** — comandos do Supabase CLI precisam rodar a partir da raiz do repo.
 
 ---
@@ -574,10 +631,14 @@ erDiagram
   CAMPAIGNS ||--o{ CAMPAIGN_QUESTIONS : "campaign_id"
   CAMPAIGNS ||--o{ CAMPAIGN_DELETION_LOGS : "campaign_id"
   CAMPAIGNS ||--o{ FAQ_ITEMS : "campaign_id (null=global)"
+  CAMPAIGNS ||--|| CAMPAIGN_FINANCE_CONFIG : "1:1 (campaign_id)"
+  CAMPAIGNS ||--o{ FINANCE_REVENUES : "campaign_id"
+  CAMPAIGNS ||--o{ FINANCE_CITY_PLANS : "campaign_id"
 
   MUNICIPALITIES ||--o{ SUPPORTERS : "municipality_code"
   MUNICIPALITIES ||--o{ VOTERS : "municipality_code"
   MUNICIPALITIES ||--o{ FIELD_INTERVIEWS : "municipality_code"
+  MUNICIPALITIES ||--o{ FINANCE_CITY_PLANS : "municipality_code"
   MUNICIPALITIES ||--o{ TSE_RESULTADOS : "ibge_code"
 
   CAMPAIGN_QUESTIONS ||--o{ INTERVIEW_CUSTOM_ANSWERS : "question_id"
@@ -640,6 +701,62 @@ erDiagram
     bool is_active
     text llm_provider "anthropic|openai|null"
   }
+  SUPPORTERS {
+    uuid id PK
+    uuid campaign_id FK
+    text name
+    text phone
+    text whatsapp "migration 045"
+    text email
+    text city
+    text municipality_code FK
+    supporter_role_type role
+    text role_custom
+    supporter_status status
+    int vote_potential ">=0, migration 045"
+    text social_platform "CHECK: instagram|facebook|x|tiktok|linkedin|youtube|outro"
+    text social_handle "migration 045"
+  }
+  CAMPAIGN_FINANCE_CONFIG {
+    uuid id PK
+    uuid campaign_id FK "UNIQUE"
+    numeric budget_total
+    numeric semaforo_verde_max "default 25"
+    numeric semaforo_amarelo_max "default 40"
+    int meta_votos_geral
+    text notes
+  }
+  FINANCE_REVENUES {
+    uuid id PK
+    uuid campaign_id FK
+    text source_type "CHECK: fundo_eleitoral|doacao_pf|doacao_pj|recursos_proprios|outros"
+    text description
+    numeric amount
+    date revenue_date
+    uuid created_by FK
+  }
+  FINANCE_CITY_PLANS {
+    uuid id PK
+    uuid campaign_id FK
+    text municipality_code FK
+    text city_name
+    text polo_logistico
+    int meta_votos_2022
+    int meta_votos_2026
+    numeric coord_value "planejado"
+    int cabos_qty
+    numeric cabo_unit_value
+    numeric vehicles_cost
+    numeric fuel_cost
+    numeric materials_cost
+    numeric others_cost
+    numeric coord_value_real "realizado (nullable)"
+    numeric cabos_cost_real
+    numeric vehicles_cost_real
+    numeric fuel_cost_real
+    numeric materials_cost_real
+    numeric others_cost_real
+  }
 ```
 
 > O Mermaid acima renderiza no GitHub/VS Code. Tabelas auxiliares não desenhadas
@@ -668,7 +785,31 @@ invited_by, created_at`, `unique(campaign_id, user_id)` + `is_active` (031).
 **`supporters`** — `id, campaign_id FK, name, cpf, phone, email, city,
 neighborhood, municipality_code FK, role(supporter_role_type), status,
 created_by, created_at` + endereço estruturado (014: `cep, logradouro, numero,
-complemento`) + `role_custom` (020).
+complemento`) + `role_custom` (020) + **captação extra (045)**: `vote_potential
+integer (>= 0)`, `whatsapp text`, `social_platform text` (CHECK enum: `instagram
+|facebook|x|tiktok|linkedin|youtube|outro`), `social_handle text`.
+
+**`campaign_finance_config`** (migration 042) — 1:1 com campanha. Campos:
+`id, campaign_id FK UNIQUE, budget_total numeric(12,2), semaforo_verde_max
+numeric(8,2) default 25, semaforo_amarelo_max numeric(8,2) default 40,
+meta_votos_geral integer, notes, created_at, updated_at`. Trigger
+`touch_finance_config_updated_at` mantém `updated_at`.
+
+**`finance_revenues`** (migration 042) — cada aporte/receita. `id, campaign_id
+FK, source_type` (CHECK em `fundo_eleitoral|doacao_pessoa_fisica|
+doacao_pessoa_juridica|recursos_proprios|outros`), `description, amount
+numeric(12,2), revenue_date date, notes, created_by, created_at`. Índice
+`idx_finance_revenues_campaign (campaign_id, revenue_date desc)`.
+
+**`finance_city_plans`** (migration 042) — orçamento por cidade. `id,
+campaign_id FK, municipality_code FK (nullable), city_name, polo_logistico,
+meta_votos_2022 int, meta_votos_2026 int` + **PLANEJADO**: `coord_name,
+coord_value, cabos_qty, cabo_unit_value, vehicles_qty, vehicles_cost,
+fuel_cost, materials_cost, others_cost` + **REALIZADO** (todos nullable):
+`coord_value_real, cabos_cost_real, vehicles_cost_real, fuel_cost_real,
+materials_cost_real, others_cost_real` + `notes, created_by, created_at,
+updated_at`. `unique(campaign_id, municipality_code)`. Trigger
+`touch_finance_city_plans_updated_at`.
 
 **`voters`** — `id, campaign_id FK, name, phone, address, city,
 municipality_code FK, vote_intention, notes, lat, lng, created_by, created_at`
@@ -712,7 +853,10 @@ automaticamente quando um usuário nasce em `auth.users` — por isso o
 1. Criar projeto no Supabase; anotar `Project URL` e `anon key` (Settings → API).
 2. No **SQL Editor**, rodar **em ordem**:
    1. `supabase/schema.sql` (tabelas-núcleo, enums, RLS base, trigger, realtime).
-   2. `supabase/migration-002` … `migration-040` (em ordem numérica).
+   2. `supabase/migration-002` … `migration-045` (em ordem numérica). ⚠ Atenção
+      especial à 043 (enum `alert_type`): rodar `ALTER TYPE` em um bloco e
+      depois o `SELECT` de verificação em outro — Postgres exige enum commitado
+      antes do uso (vide §14.4). 044 também usa `notify pgrst` no fim.
    3. `supabase/seed-faq.sql` (FAQ global, opcional).
 3. Criar o **primeiro super admin / admin**: rodar `bootstrap-super-admin.sql`
    (ajustando o e-mail) — depois de o usuário existir em `auth.users`.
@@ -743,8 +887,10 @@ supabase secrets set APP_LOGIN_URL="https://SEU-DOMINIO/login"
    VITE_SUPABASE_URL=https://<NOVO_REF>.supabase.co
    VITE_SUPABASE_ANON_KEY=<anon key>
    ```
-2. `npm install && npm run build`
+2. `npm install && npm run build` (`xlsx` é dependência runtime do módulo Financeiro).
 3. Deploy no Railway (ou `npm run preview` local). Deploy automático ao push em `main`.
+   Se o Railway não disparar (commit pulado ou em fila), force com
+   `git commit --allow-empty -m "chore: trigger redeploy" && git push`.
 
 ### E) Configurar a 1ª campanha
 1. Logar como super admin → **Admin Vórtice → Campanhas → provisionar** (ou
