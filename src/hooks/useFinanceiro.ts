@@ -16,7 +16,7 @@
 // devolve estado vazio (sem ruído no dev).
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { supabase, USE_MOCKS } from '@/lib/supabase';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import type {
@@ -146,6 +146,12 @@ export interface UseFinanceiroResult {
 export function useFinanceiro(): UseFinanceiroResult {
   const session = useEffectiveSession();
   const campaignId = session?.campaign?.id ?? null;
+  // String estável por instância do hook. Usada no nome do channel pra
+  // evitar colisão quando o hook é chamado de múltiplos lugares
+  // (Header→AlertsBadge→useAlertas, Dashboard direto, FinanceDashboardWidget).
+  // Sem isso, todos pegavam o MESMO channel e o segundo .subscribe()
+  // travava o boot do React. Ver lição em §14.4 das docs.
+  const instanceId = useId();
 
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<FinanceConfig | null>(null);
@@ -198,25 +204,51 @@ export function useFinanceiro(): UseFinanceiroResult {
   }, [refresh]);
 
   // ---------------- Realtime ----------------
-  // ⚠ DESATIVADO por ora (fix de emergência).
-  // O bloco anterior fazia `supabase.channel('finance-${campaignId}').on(...).on(...).on(...).subscribe()`.
-  // Como `useFinanceiro` é consumido em 3 lugares simultâneos (Header→AlertsBadge→useAlertas,
-  // Dashboard direto, FinanceDashboardWidget), o Supabase devolvia o MESMO channel pra todos —
-  // o primeiro fazia .subscribe() e os demais lançavam:
-  //   "cannot add `postgres_changes` callbacks ... after subscribe()"
-  // O throw travava o boot do React e dava tela preta em toda a app.
-  //
-  // Pra reintroduzir realtime no futuro:
-  //   1. Usar nome de channel único por instância:
-  //        const instanceId = useId();
-  //        supabase.channel(`finance-${campaignId}-${instanceId}`)
-  //      OU melhor:
-  //   2. Centralizar o estado em um Context/Zustand e fazer uma única subscription
-  //      no provider, em vez de 1 subscription por chamada de hook.
-  //
-  // Sem realtime, as mutations já fazem optimistic update (setConfig/setRevenues/
-  // setCityPlans) — UI continua reativa pra ações do próprio usuário.
-  // O que perdemos: sync automático quando OUTRO usuário/aba edita a campanha.
+  // Cada instância do hook abre o SEU próprio channel via `useId()` no nome —
+  // evita a colisão histórica de 3 consumers pegando o mesmo channel
+  // (Header→AlertsBadge→useAlertas, Dashboard direto, FinanceDashboardWidget).
+  // Tradeoff: tráfego duplicado (N subscriptions × 3 tables). Aceitável até
+  // ~5 instâncias. Se escalar, migrar pra um Zustand store singleton com 1
+  // subscription única — vide pendência registrada em §14.4 das docs.
+  useEffect(() => {
+    if (!campaignId || USE_MOCKS) return;
+    const channel = supabase
+      .channel(`finance-${campaignId}-${instanceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'campaign_finance_config',
+          filter: `campaign_id=eq.${campaignId}`,
+        },
+        () => void refresh(),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'finance_revenues',
+          filter: `campaign_id=eq.${campaignId}`,
+        },
+        () => void refresh(),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'finance_city_plans',
+          filter: `campaign_id=eq.${campaignId}`,
+        },
+        () => void refresh(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [campaignId, refresh, instanceId]);
 
   // ---------------- Derivados ----------------
   const totalReceitas = useMemo(
