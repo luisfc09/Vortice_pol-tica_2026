@@ -6,6 +6,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { useBrandSync } from '@/hooks/useBrand';
 import LoginPage from '@/pages/Login';
+import ConvitePage from '@/pages/Convite';
+import MinhaRedePage from '@/pages/MinhaRede';
 import TrocarSenhaPage from '@/pages/TrocarSenha';
 import AguardandoAtivacaoPage from '@/pages/AguardandoAtivacao';
 import RenovarPage from '@/pages/Renovar';
@@ -60,6 +62,9 @@ export default function App() {
       <BrandSync />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Migration 047 — convite descartável. Rota pública: qualquer um
+            com o link pode aceitar e criar conta. Vem ANTES do ProtectedRoute. */}
+        <Route path="/convite/:code" element={<ConvitePage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/trocar-senha" element={<TrocarSenhaPage />} />
@@ -108,6 +113,8 @@ export default function App() {
             />
             <Route path="/campo/faq" element={<CampoFaqPage />} />
             <Route path="/agenda" element={<AgendaPage />} />
+            {/* Migration 047 — visão restrita do supporter (Fase 2 hierarquia) */}
+            <Route path="/minha-rede" element={<MinhaRedePage />} />
           </Route>
         </Route>
 

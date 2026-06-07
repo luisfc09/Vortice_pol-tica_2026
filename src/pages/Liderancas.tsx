@@ -383,6 +383,7 @@ export default function LiderancasPage() {
         // referrer_id intencionalmente OMITIDO neste pass — vai ser
         // resolvido no PASS 2 abaixo.
         referrer_id: null,
+        invite_used_at: null,
       };
 
       const { data, error } = await supabase
@@ -766,22 +767,34 @@ export default function LiderancasPage() {
                 ) : null}
               </div>
 
-              {/* Invite code (rodapé discreto — Fase 1 da hierarquia). Será
-                  usado pela rota pública /convite/[code] na Fase 2. */}
+              {/* Invite code (rodapé discreto). Migration 047: quando o
+                  invite_used_at está preenchido, o código foi consumido
+                  via /convite/[code] e não pode mais ser usado. */}
               {s.invite_code ? (
                 <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <KeyRound className="h-3 w-3" />
                   <span>Código:</span>
-                  <span className="font-mono tracking-wider text-foreground/80">{s.invite_code}</span>
-                  <button
-                    type="button"
-                    onClick={() => copyInviteCode(s.invite_code!)}
-                    aria-label="Copiar código de convite"
-                    title="Copiar código"
-                    className="ml-0.5 rounded p-0.5 text-muted-foreground hover:bg-vortex-bg/60 hover:text-foreground"
-                  >
-                    <Copy className="h-3 w-3" />
-                  </button>
+                  <span className={cn(
+                    'font-mono tracking-wider',
+                    s.invite_used_at ? 'text-muted-foreground/60 line-through' : 'text-foreground/80',
+                  )}>
+                    {s.invite_code}
+                  </span>
+                  {s.invite_used_at ? (
+                    <span className="ml-1 text-amber-300/80" title={`Usado em ${new Date(s.invite_used_at).toLocaleString('pt-BR')}`}>
+                      · usado
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => copyInviteCode(s.invite_code!)}
+                      aria-label="Copiar código de convite"
+                      title="Copiar código"
+                      className="ml-0.5 rounded p-0.5 text-muted-foreground hover:bg-vortex-bg/60 hover:text-foreground"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               ) : null}
             </div>

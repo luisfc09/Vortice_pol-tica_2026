@@ -129,6 +129,8 @@ export default function OnboardingPage() {
             social_handle: null,
             // Migration 046 — hierarquia: onboarding sempre cria raízes
             referrer_id: null,
+            // Migration 047 — convite ativo (não foi consumido)
+            invite_used_at: null,
           },
         });
         ok++;

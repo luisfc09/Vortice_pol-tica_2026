@@ -509,14 +509,17 @@ export interface Supporter {
   whatsapp: string | null;             // número WhatsApp (formato pt-BR)
   social_platform: SocialPlatform | null;
   social_handle: string | null;        // @usuario ou URL
-  // Hierarquia (migration 046 — Fase 1).
+  // Hierarquia (migration 046 — Fase 1 + 047 — Fase 2).
   //   • referrer_id: id de outra liderança da mesma campanha que indicou esta.
   //     null = liderança raiz (sem indicador).
   //   • invite_code: código alfanumérico único de 8 chars gerado automaticamente
   //     pelo banco. OPCIONAL no TS pra permitir omitir no INSERT (DB tem
   //     default); SEMPRE preenchido no SELECT.
+  //   • invite_used_at: timestamp de quando o convite foi consumido pela
+  //     primeira (e única) pessoa via /convite/[code]. null = ainda ativo.
   referrer_id: string | null;
   invite_code?: string;
+  invite_used_at: string | null;
   created_by: string;
   created_at: string;
 }

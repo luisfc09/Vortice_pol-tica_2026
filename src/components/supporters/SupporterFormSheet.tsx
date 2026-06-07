@@ -72,6 +72,8 @@ const EMPTY: FormState = {
   // Hierarquia (migration 046 — Fase 1). Combobox vem no Passo H2;
   // por enquanto novas lideranças nascem como raiz (sem indicador).
   referrer_id: null,
+  // Migration 047 — convite ativo (nunca usado).
+  invite_used_at: null,
 };
 
 interface SupporterFormSheetProps {
@@ -109,6 +111,7 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
         social_platform: editing.social_platform,
         social_handle: editing.social_handle,
         referrer_id: editing.referrer_id,
+        invite_used_at: editing.invite_used_at,
       });
     } else if (open) {
       setForm(EMPTY);

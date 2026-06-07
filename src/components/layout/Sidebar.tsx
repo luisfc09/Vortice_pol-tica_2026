@@ -15,6 +15,7 @@ import {
   Plug,
   Palette,
   DollarSign,
+  Network,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -53,6 +54,14 @@ const ITEMS: NavItem[] = [
     requiresCampaign: true,
   },
   { to: '/liderancas', label: 'Lideranças', icon: Users, requiresCampaign: true },
+  {
+    // Migration 047 — visão restrita do supporter da própria pirâmide
+    to: '/minha-rede',
+    label: 'Minha Rede',
+    icon: Network,
+    roles: ['supporter'],
+    requiresCampaign: true,
+  },
   // Item /eleitores foi REMOVIDO daqui — a gestão de eleitores agora vive
   // dentro do Mapa Eleitoral (aba "Eleitores", com pontos no mapa). A rota
   // /eleitores continua existindo para não quebrar bookmarks/links antigos.
