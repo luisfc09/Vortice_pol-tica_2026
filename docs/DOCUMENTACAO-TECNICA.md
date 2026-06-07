@@ -125,6 +125,8 @@ vortice/
 │  │  ├─ billing/ admin/     # planos, cards de campanha
 │  │  ├─ voters/ supporters/ # form sheets + VotersPanel + ReferrerCombobox (hierarquia)
 │  │  ├─ liderancas/         # SupporterTree (visualização da rede em árvore)
+│  ├─ pages/Convite.tsx      # rota pública /convite/[code] — auto-cadastro Fase 2
+│  ├─ pages/MinhaRede.tsx    # rota /minha-rede — visão restrita pro role 'supporter'
 │  │  ├─ events/             # Agenda (form + calendário)
 │  │  ├─ team/               # ProvisionSheet, AvatarUpload, pendentes
 │  │  ├─ brand/ forms/       # BrandLogo, AddressFields
@@ -371,11 +373,13 @@ Uso típico nas páginas: `const voters = useCollection(collections.voters)` e
 | 044 | **rename-steve-to-vera** | UPDATE em `ai_agents`/`agent_conversations` trocando `steve` → `vera` + CHECK constraint atualizada para `('vera','carlos')`. Default de `name` agora `'Vera_IA'` |
 | 045 | **supporters-novos-campos** | 4 colunas opcionais em `supporters`: `vote_potential int`, `whatsapp text`, `social_platform text` (CHECK), `social_handle text` |
 | 046 | **supporters-hierarquia-fase1** | Hierarquia em pirâmide: `referrer_id uuid` (auto-FK, ON DELETE SET NULL) + `invite_code text UNIQUE NOT NULL` (default `upper(substr(md5(gen_random_uuid()::text),1,8))`) + trigger `supporters_check_referrer()` que valida non-self e same-campaign. Índice parcial `idx_supporters_referrer`. |
+| 047 | **supporters-hierarquia-fase2** | Convite descartável: `supporters.invite_used_at timestamptz` (null = ainda ativo; preenchido = consumido) + RPC pública `get_invite_info(p_code text)` `SECURITY DEFINER STABLE` que devolve só campos não-sensíveis (referrer_name, candidate_name, party, plan) e bloqueia code inválido/usado/inativo. GRANT EXECUTE para `anon` e `authenticated`. |
 
 > Todas as DDLs estão em `supabase/migration-0XX-*.sql`. A partir da 038 todas
-> são versionadas no repo junto com a documentação. Migrations 042 a 046 foram
+> são versionadas no repo junto com a documentação. Migrations 042 a 047 foram
 > entregues nesta linha de trabalho (módulo Financeiro + rename Vera_IA +
-> campos extras de captação + hierarquia de Lideranças).
+> campos extras de captação + hierarquia de Lideranças Fase 1 + auto-cadastro
+> via convite Fase 2).
 
 ---
 
@@ -390,6 +394,7 @@ client **service-role** para operações privilegiadas.
 | **provision-user** | Cria membro da campanha (auth.user + senha temp `123456` + `campaign_users`). Recebe `campaign_id` e valida que o caller é admin/coordenador **daquela** campanha **ou** super admin. E-mail já existente → mensagem clara. | caller (autoriza) + service-role (cria) | `SUPABASE_*`, `APP_LOGIN_URL` |
 | **provision-campaign** | Cria nova campanha (cliente) + admin + integração Asaas. | super admin | `SUPABASE_*`, Asaas |
 | **agent-chat** | Backbone dos agentes Vera/Carlos. Monta contexto real (Vera) ou contexto de tela (Carlos), escolhe LLM e chama o provedor. Multi-turn. | caller autoriza membership/super admin; service-role lê dados/segredos | `SUPABASE_*` |
+| **accept-invite** | Auto-cadastro Fase 2 da hierarquia. Recebe `{ code, name, email, phone, city }`. Valida code via `get_invite_info`, cria `auth.users` + `profiles` + `supporters` + `campaign_users` (is_active=false), queima o convite (`invite_used_at=now()`) e devolve session tokens pra auto-login. Rollback do `auth.user` se algum INSERT falhar. | **público** (sem JWT); service-role | `SUPABASE_*` |
 | **mention-respond** | Resposta Rápida: `analyze` (analisa ataque) / `generate` (3 respostas). Seleciona provedor via `ai_feature_config`/`integrations`. | caller (RLS) | `SUPABASE_URL/ANON` |
 | **intelligence-analyze** | Roda a análise de Inteligência Eleitoral (IA sobre entrevistas) e grava em `campaign_intelligence`. | caller (RLS) | `SUPABASE_*` |
 | **interview-analyze** | Analisa uma entrevista de campo com IA. | caller (RLS) | `SUPABASE_*` |
@@ -525,6 +530,92 @@ Cada liderança pode indicar outras formando uma árvore livre (1 pai por nó, p
 - **CSV 2-pass**: coluna "Indicado Por" no export (nome do referrer) e no import. Aliases tolerantes (`indicado_por`, `referrer`, `indicador`). **PASS 1** INSERT direto via `supabase.from(...).insert(...).select('id, name').single()` (não usa `collection.create` porque precisa do ID real, não do tempUuid otimista); **PASS 2** UPDATE `referrer_id` priorizando nomes do próprio CSV antes dos já cadastrados. Throttle 50ms entre inserts pra CSVs >100 linhas. Toast: `"X importadas · Y vinculadas · Z sem vínculo"`.
 - **Aba "Rede" (`components/liderancas/SupporterTree.tsx`)**: toggle Lista/Rede no header (default lista). Árvore com indentação 24px/nível + `border-l` conectora. Tudo expandido por padrão; expansão manual via ▶/▼. Busca destaca matches (ring violet) + força expansão dos ancestrais. 4 cards de métricas no topo: Total, Potencial total, Profundidade máxima, Raízes. Cada nó tem chip de Potencial, Indicações, e badge de nível (Bronze/Prata/Ouro/Diamante via `NIVEL_INFLUENCIA_LABEL`). Click em nó abre o sheet de edição. Empty state explica como começar quando nenhuma indicação foi feita.
 - **Delete cascata**: `ConfirmDelete` ganhou prop opcional `confirmLabel`. Quando o supporter tem filhos diretos, o dialog mostra título de aviso (`⚠️ Esta liderança indicou N outras`) + descrição explicando que filhos perderão o vínculo + botão "Excluir mesmo assim". Sem filhos: dialog padrão inalterado.
+
+#### Fórmula PIP Score & Classificação
+
+`computePipScore(supporters, supporterId)` em `src/lib/hierarchy.ts`:
+
+```
+pip_score = vote_potential_próprio × 1.0
+          + Σ (vote_potential_descendente × 0.8^depth)
+```
+
+**Exemplo** (cada nó com `vote_potential=10`, 3 filhos diretos, 9 netos):
+- nível 0 (próprio): 10 × 1.0 = 10
+- nível 1 (filhos): 3 × 10 × 0.8 = 24
+- nível 2 (netos): 9 × 10 × 0.64 = 57.6
+- **pip_score = 91.6**
+
+Constantes em `hierarchy.ts` (`PIP_DECAY = 0.8`). Faixas de `classifyInfluencia()`:
+
+| Faixa pip_score | NivelInfluencia | Label (NIVEL_INFLUENCIA_LABEL) |
+|---|---|---|
+| < 50 | `baixo` | Bronze |
+| 50 – 199 | `medio` | Prata |
+| 200 – 499 | `alto` | Ouro |
+| ≥ 500 | `muito_alto` | Diamante |
+
+Fácil ajustar: mudar os números em `classifyInfluencia()` e/ou `NIVEL_INFLUENCIA_LABEL` em `types/index.ts` — nada quebra, todos os badges/cores se adaptam automaticamente.
+
+#### Auto-cadastro via convite — Fase 2 (migration 047)
+
+Permite que pessoas se cadastrem por conta própria via link público vinculado a um indicador, sem precisar da intervenção do admin.
+
+**Schema (migration 047)**:
+- `supporters.invite_used_at timestamptz` nullable — `null` = code ainda ativo, preenchido = consumido (1 vez só).
+- Índice parcial `idx_supporters_invite_used` (where invite_used_at IS NULL) — só os "vivos" ficam indexados.
+- RPC pública `get_invite_info(p_code text) RETURNS TABLE(...)` — `SECURITY DEFINER STABLE`, retorna **só campos públicos** (nome do indicador, candidato, partido, plano). Bloqueia code inválido/usado/inativo/campanha excluída. GRANT EXECUTE para `anon` + `authenticated`.
+
+**Edge function `supabase/functions/accept-invite/index.ts`** — pública (sem JWT). Fluxo:
+1. Recebe `{ code, name, email, phone, city, municipality_code }`
+2. Valida via `get_invite_info` (rejeita 410 se inválido)
+3. Cria `auth.users` com senha temp `123456` + `email_confirm=true` (mesma receita do `provision-user`). Email duplicado → 409.
+4. UPSERT em `profiles` (`full_name`, `phone`, `must_change_password=true`)
+5. INSERT em `supporters`: `referrer_id` = indicador, `campaign_id` = mesmo da campanha, `status='ativo'`, `created_by` = `novo_user_id` (auto-relação)
+6. INSERT em `campaign_users`: `role='supporter'`, `is_active=false` (admin aprova depois via `/usuarios`)
+7. UPDATE indicador: `invite_used_at = now()` (queima o code)
+8. Sign-in com a senha temp e devolve `{ access_token, refresh_token, supporter_id, must_change_password: true }` pra auto-login
+- Em caso de falha pós-auth: rollback do `auth.user` via `admin.auth.admin.deleteUser` (evita lixo)
+
+**Frontend novo**:
+- `src/pages/Convite.tsx` — rota pública sem AppLayout. Estados loading/erro/form. Mostra "Você foi convidado(a) por X pra campanha de Y". Submit chama `accept-invite`, salva session via `supabase.auth.setSession`, navega pra `/trocar-senha`.
+- `src/pages/MinhaRede.tsx` — visão restrita pro role `supporter`. Identifica o próprio supporter via `created_by = session.id`. Mostra: 4 cards de métricas (indicados diretos, rede total, profundidade abaixo, nível), card "Compartilhar meu link" (com botão copy do URL completo `https://.../convite/<code>` ou aviso "consumido" se já usado), breadcrumb de ancestrais (path até a raiz), lista de descendentes diretos com badges.
+- `src/App.tsx`: `<Route path="/convite/:code">` **ANTES do ProtectedRoute** (pública); `<Route path="/minha-rede">` dentro do `requireCampaign` (não filtra role — gating é só na Sidebar).
+- `src/components/layout/Sidebar.tsx`: item "Minha Rede" com `roles: ['supporter']` (visível só pra essa role).
+- Card de Lideranças (em `Liderancas.tsx`): quando `invite_used_at` está preenchido, mostra o `invite_code` com `line-through` + label "· usado" em amber (em vez do botão copy ativo).
+
+**Fluxo end-to-end**:
+```
+1. Admin abre /liderancas → copia invite_code do card de WALLISON
+2. Admin envia: https://app/.../convite/188E8FBC pra Maria
+3. Maria abre o link em qualquer navegador (sem login)
+   → Convite.tsx valida via get_invite_info
+   → vê "Você foi convidado(a) por WALLISON pra Deputado Heleno"
+4. Maria preenche nome/email/telefone/cidade → submit
+   → accept-invite edge function (sem JWT):
+     • auth.users created (senha 123456)
+     • profiles updated (must_change_password)
+     • supporters INSERT (referrer_id=WALLISON, status=ativo)
+     • campaign_users INSERT (role=supporter, is_active=false)
+     • supporters UPDATE WALLISON.invite_used_at=now() ← queima
+     • sign-in + devolve session
+5. Auto-login → /trocar-senha (troca 123456) → /aguardando-ativacao
+6. Admin volta em /usuarios → "Aguardando aprovação" → aprova Maria
+   → campaign_users.is_active=true
+7. Maria faz login normalmente → vê só "Minha Rede" na sidebar
+   → /minha-rede mostra path "WALLISON › Maria (você)" + seu próprio
+     invite_code pra convidar mais gente
+```
+
+#### Pendências futuras (hierarquia)
+
+Não bloqueantes — funcionalidade central Fase 1 + Fase 2 está em produção.
+
+- **Notificação ao indicador** quando alguém usa o convite dele. Pode ser realtime via `postgres_changes` ou um detector novo no `alertDetector.ts` tipo `convite_usado` que dispara quando `invite_used_at` muda de null pra preenchido.
+- **Botão "Regenerar convite"** no card de Lideranças quando `invite_used_at IS NOT NULL`. RPC nova `regenerate_invite_code(supporter_id)` que faz UPDATE setando `invite_code` novo + `invite_used_at = NULL`. Precisa policy (admin/coord da campanha OU o próprio supporter dono).
+- **Edge function `approve-supporter-invite`** para aprovar rapidamente o cadastro vindo via `/convite` — hoje admin usa o fluxo genérico `approve_user` (migration-012) na aba "Aguardando ativação" do `/usuarios`. Atalho dedicado pode mostrar contexto extra (quem indicou, etc).
+- **Tabela `invites` separada** se quisermos vários convites simultâneos por liderança (hoje é 1 por supporter). Schema: `id, supporter_id FK, code UNIQUE, used_by user_id, used_at, expires_at`. Migração não-trivial — só fazer se a demanda do produto pedir.
+- **Recursive RLS** pra supporter ver SÓ a própria sub-árvore via SQL (hoje frontend filtra de tudo da campanha). Útil em campanhas com 10k+ lideranças onde trafegar tudo via realtime ficaria caro. Implementação: policy via WITH RECURSIVE.
 
 ### 12.6 Eleitores — `/eleitores`
 - `pages/Eleitores.tsx` + `components/voters/VoterFormSheet.tsx`.
@@ -888,10 +979,10 @@ automaticamente quando um usuário nasce em `auth.users` — por isso o
 1. Criar projeto no Supabase; anotar `Project URL` e `anon key` (Settings → API).
 2. No **SQL Editor**, rodar **em ordem**:
    1. `supabase/schema.sql` (tabelas-núcleo, enums, RLS base, trigger, realtime).
-   2. `supabase/migration-002` … `migration-046` (em ordem numérica). ⚠ Atenção
+   2. `supabase/migration-002` … `migration-047` (em ordem numérica). ⚠ Atenção
       especial à 043 (enum `alert_type`): rodar `ALTER TYPE` em um bloco e
       depois o `SELECT` de verificação em outro — Postgres exige enum commitado
-      antes do uso (vide §14.4). 044 e 046 também usam `notify pgrst` no fim.
+      antes do uso (vide §14.4). 044, 046 e 047 também usam `notify pgrst` no fim.
    3. `supabase/seed-faq.sql` (FAQ global, opcional).
 3. Criar o **primeiro super admin / admin**: rodar `bootstrap-super-admin.sql`
    (ajustando o e-mail) — depois de o usuário existir em `auth.users`.
@@ -907,7 +998,8 @@ supabase login
 supabase link --project-ref <NOVO_REF>
 for fn in provision-user provision-campaign agent-chat mention-respond \
           intelligence-analyze interview-analyze collect-mentions \
-          test-integration generate-payment asaas-webhook send-notification; do
+          test-integration generate-payment asaas-webhook send-notification \
+          accept-invite; do
   supabase functions deploy $fn --project-ref <NOVO_REF>
 done
 # secrets opcionais:
