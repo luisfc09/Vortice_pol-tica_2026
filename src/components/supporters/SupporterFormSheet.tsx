@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/select';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { AddressFields, type AddressValue } from '@/components/forms/AddressFields';
-import { collections } from '@/lib/data';
+import { ReferrerCombobox } from '@/components/supporters/ReferrerCombobox';
+import { collections, useCollection } from '@/lib/data';
 import { formatPhone } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
@@ -41,7 +42,12 @@ const STATUS_OPTIONS: { value: SupporterStatus; label: string }[] = [
   { value: 'inativo', label: 'Inativo' },
 ];
 
-type FormState = Omit<Supporter, 'id' | 'campaign_id' | 'created_by' | 'created_at'>;
+// invite_code é OMITIDO do form: gerado pelo banco via default (migration 046).
+// referrer_id está presente — UI dele vem no H2 (combobox "Indicado por").
+type FormState = Omit<
+  Supporter,
+  'id' | 'campaign_id' | 'created_by' | 'created_at' | 'invite_code'
+>;
 
 const EMPTY: FormState = {
   name: '',
@@ -63,6 +69,9 @@ const EMPTY: FormState = {
   whatsapp: null,
   social_platform: null,
   social_handle: null,
+  // Hierarquia (migration 046 — Fase 1). Combobox vem no Passo H2;
+  // por enquanto novas lideranças nascem como raiz (sem indicador).
+  referrer_id: null,
 };
 
 interface SupporterFormSheetProps {
@@ -73,6 +82,9 @@ interface SupporterFormSheetProps {
 
 export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFormSheetProps) {
   const session = useAuthStore((s) => s.session);
+  // Carrega TODOS os supporters da campanha pra alimentar o ReferrerCombobox.
+  // useCollection já é scoped por campanha (RLS + filtro frontend).
+  const supporters = useCollection(collections.supporters);
   const [form, setForm] = useState<FormState>(EMPTY);
 
   useEffect(() => {
@@ -96,6 +108,7 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
         whatsapp: editing.whatsapp,
         social_platform: editing.social_platform,
         social_handle: editing.social_handle,
+        referrer_id: editing.referrer_id,
       });
     } else if (open) {
       setForm(EMPTY);
@@ -343,6 +356,22 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
                 disabled={!form.social_platform}
               />
             </div>
+          </div>
+
+          {/* Hierarquia (migration 046 — Fase 1) */}
+          <div className="space-y-2">
+            <Label>Indicado por</Label>
+            <ReferrerCombobox
+              value={form.referrer_id}
+              onChange={(id) => update('referrer_id', id)}
+              supporters={supporters}
+              currentId={editing?.id ?? null}
+              placeholder="Buscar liderança que indicou…"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Opcional. Use para registrar quem trouxe esta liderança para a campanha.
+              Lideranças descendentes da atual não aparecem (evita ciclo).
+            </p>
           </div>
 
           <div className="space-y-2">

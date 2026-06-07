@@ -127,6 +127,8 @@ export default function OnboardingPage() {
             whatsapp: null,
             social_platform: null,
             social_handle: null,
+            // Migration 046 — hierarquia: onboarding sempre cria raízes
+            referrer_id: null,
           },
         });
         ok++;

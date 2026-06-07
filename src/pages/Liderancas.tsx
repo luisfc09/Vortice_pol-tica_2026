@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import {
   Plus,
   Pencil,
@@ -18,6 +19,12 @@ import {
   Music2,
   Globe,
   ExternalLink,
+  ChevronRight,
+  UsersRound,
+  KeyRound,
+  Copy,
+  List,
+  Network,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,6 +36,7 @@ import { SearchBar } from '@/components/data/SearchBar';
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SupporterFormSheet } from '@/components/supporters/SupporterFormSheet';
+import { SupporterTree } from '@/components/liderancas/SupporterTree';
 import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import {
   Select,
@@ -38,8 +46,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { collections, useCollection } from '@/lib/data';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
-import { whatsappLink, socialUrl } from '@/lib/utils';
+import { whatsappLink, socialUrl, cn } from '@/lib/utils';
+import { indexById, indexByParent } from '@/lib/hierarchy';
 import {
   SOCIAL_PLATFORM_LABEL,
   SUPPORTER_ROLE_LABEL,
@@ -127,6 +137,8 @@ export default function LiderancasPage() {
   const [editing, setEditing] = useState<Supporter | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Supporter | null>(null);
+  // Migration 046 — H5: alternância entre lista (cards) e rede (árvore).
+  const [viewMode, setViewMode] = useState<'lista' | 'rede'>('lista');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -144,6 +156,12 @@ export default function LiderancasPage() {
     return m;
   }, [supporters]);
 
+  // Migration 046 — índices da hierarquia, memoizados.
+  //   • supportersById: pra resolver referrer.name em O(1) no card
+  //   • childrenByParent: pra contar "N indicações" em O(1)
+  const supportersById = useMemo(() => indexById(supporters), [supporters]);
+  const childrenByParent = useMemo(() => indexByParent(supporters), [supporters]);
+
   function openNew() {
     setEditing(null);
     setSheetOpen(true);
@@ -152,9 +170,21 @@ export default function LiderancasPage() {
     setEditing(s);
     setSheetOpen(true);
   }
+  function openReferrer(referrerId: string) {
+    const r = supportersById.get(referrerId);
+    if (r) openEdit(r);
+  }
   function confirmDelete() {
     if (!deleteTarget) return;
     collections.supporters.remove(deleteTarget.id);
+  }
+  async function copyInviteCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success('Código copiado!');
+    } catch {
+      toast.error('Não foi possível copiar — copie manualmente.');
+    }
   }
 
   const canManage = session?.role === 'admin' || session?.role === 'coordinator';
@@ -184,6 +214,10 @@ export default function LiderancasPage() {
         value: (s) => (s.social_platform ? SOCIAL_PLATFORM_LABEL[s.social_platform] : null),
       },
       { header: 'Rede Social Usuário', value: (s) => s.social_handle },
+      {
+        header: 'Indicado Por',
+        value: (s) => (s.referrer_id ? supportersById.get(s.referrer_id)?.name ?? null : null),
+      },
       { header: 'Status', value: (s) => STATUS_LABEL[s.status] ?? s.status },
       { header: 'Cadastrado em', value: (s) => csvDate(s.created_at) },
     ]);
@@ -201,6 +235,17 @@ export default function LiderancasPage() {
     const seenNamePhone = new Set<string>();
     const seenNameCity = new Set<string>();
 
+    // Migration 046 — set de nomes elegíveis pra "Indicado Por":
+    //   • supporters já cadastrados no banco
+    //   • OUTRAS linhas do MESMO CSV (vão ser inseridas no PASS 1
+    //     antes do PASS 2 de vinculação)
+    const namesPool = new Set<string>();
+    for (const s of supporters) namesPool.add(normText(s.name));
+    for (const r of rows) {
+      const n = pickField(r, 'Nome', 'name').trim();
+      if (n) namesPool.add(normText(n));
+    }
+
     return rows.map((r, i): ImportRowResult => {
       const line = i + 1;
       const name = pickField(r, 'Nome', 'name').trim();
@@ -211,6 +256,8 @@ export default function LiderancasPage() {
       // segue mesmo se vierem inválidos (substituímos por null).
       const potencialRaw = pickField(r, 'Potencial de Votos', 'potencial', 'vote_potential').trim();
       const redeRaw = pickField(r, 'Rede Social', 'rede social', 'social_platform').trim();
+      // Migration 046 — referência hierárquica (nome do indicador)
+      const indicadoRaw = pickField(r, 'Indicado Por', 'indicado por', 'indicado_por', 'referrer', 'indicador').trim();
       const secondary = [cidade, papel, phone].filter(Boolean).join(' · ') || undefined;
 
       // ERRO — não importa
@@ -259,6 +306,13 @@ export default function LiderancasPage() {
         warnings.push(`Potencial "${potencialRaw}" não é número inteiro — será ignorado`);
       if (redeRaw && !parseSocialPlatform(redeRaw))
         warnings.push(`Rede social "${redeRaw}" não reconhecida — será ignorada`);
+      if (indicadoRaw) {
+        if (normText(indicadoRaw) === normText(name)) {
+          warnings.push('Indicador é a própria liderança — vínculo ignorado');
+        } else if (!namesPool.has(normText(indicadoRaw))) {
+          warnings.push(`Indicador "${indicadoRaw}" não encontrado — será importada sem vínculo`);
+        }
+      }
 
       if (warnings.length > 0)
         return {
@@ -272,7 +326,30 @@ export default function LiderancasPage() {
 
   async function importSupporters(rows: Record<string, string>[]) {
     if (!session?.campaign) return { ok: 0 };
+    const campaignId = session.campaign.id;
+    const createdBy = session.id;
+
+    // Throttle: 50 ms entre inserts quando o CSV é grande (>100 linhas).
+    // Evita timeout/rate-limit do Supabase em imports massivos.
+    const useThrottle = rows.length > 100;
+    const throttleMs = 50;
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    // ----------------------------------------------------------------
+    // PASS 1 — INSERT de todas as linhas SEM referrer_id.
+    //
+    // Usamos `supabase.from('supporters').insert(...).select('id, name').single()`
+    // direto (em vez do `collections.supporters.create` que devolve um
+    // tempUuid otimista) porque o PASS 2 precisa do ID REAL retornado
+    // pelo banco pra fazer o UPDATE de referrer_id.
+    //
+    // Linha-a-linha pra capturar o ID real de cada uma na ordem do CSV.
+    // Para imports grandes (>500), pode evoluir pra batch INSERT + RETURNING
+    // mantendo a ordem.
+    // ----------------------------------------------------------------
+    const insertedByRowIndex: ({ id: string; name: string } | null)[] = [];
     let ok = 0;
+
     for (const r of rows) {
       const name = pickField(r, 'Nome', 'name');
       // Migration 045 — parse tolerante dos campos opcionais
@@ -282,33 +359,100 @@ export default function LiderancasPage() {
       const platform = redeRaw ? parseSocialPlatform(redeRaw) : null;
       const handleRaw = pickField(r, 'Rede Social Usuário', 'rede social usuario', 'social_handle', 'social user').trim();
 
-      await collections.supporters.create({
-        data: {
-          campaign_id: session.campaign.id,
-          created_by: session.id,
-          name,
-          cpf: pickField(r, 'CPF', 'cpf') || null,
-          phone: pickField(r, 'Telefone', 'phone', 'celular') || null,
-          email: pickField(r, 'Email', 'e-mail') || null,
-          city: pickField(r, 'Cidade', 'city') || null,
-          neighborhood: pickField(r, 'Bairro', 'neighborhood') || null,
-          municipality_code: null,
-          cep: null,
-          logradouro: null,
-          numero: null,
-          complemento: null,
-          role: 'outro',
-          role_custom: pickField(r, 'Papel', 'cargo', 'role') || null,
-          status: 'ativo',
-          // Migration 045 — agora carrega do CSV quando presente
-          vote_potential: potencialNum != null && potencialNum >= 0 ? potencialNum : null,
-          whatsapp: pickField(r, 'WhatsApp', 'whatsapp', 'zap') || null,
-          social_platform: platform,
-          social_handle: platform ? handleRaw || null : null,
-        },
-      });
+      const payload = {
+        campaign_id: campaignId,
+        created_by: createdBy,
+        name,
+        cpf: pickField(r, 'CPF', 'cpf') || null,
+        phone: pickField(r, 'Telefone', 'phone', 'celular') || null,
+        email: pickField(r, 'Email', 'e-mail') || null,
+        city: pickField(r, 'Cidade', 'city') || null,
+        neighborhood: pickField(r, 'Bairro', 'neighborhood') || null,
+        municipality_code: null,
+        cep: null,
+        logradouro: null,
+        numero: null,
+        complemento: null,
+        role: 'outro' as const,
+        role_custom: pickField(r, 'Papel', 'cargo', 'role') || null,
+        status: 'ativo' as const,
+        vote_potential: potencialNum != null && potencialNum >= 0 ? potencialNum : null,
+        whatsapp: pickField(r, 'WhatsApp', 'whatsapp', 'zap') || null,
+        social_platform: platform,
+        social_handle: platform ? handleRaw || null : null,
+        // referrer_id intencionalmente OMITIDO neste pass — vai ser
+        // resolvido no PASS 2 abaixo.
+        referrer_id: null,
+      };
+
+      const { data, error } = await supabase
+        .from('supporters')
+        .insert(payload)
+        .select('id, name')
+        .single();
+      if (error) {
+        console.warn('[liderancas import] PASS 1 falhou:', error.message);
+        insertedByRowIndex.push(null);
+        continue;
+      }
+      insertedByRowIndex.push({ id: data.id as string, name: data.name as string });
       ok++;
+      if (useThrottle) await sleep(throttleMs);
     }
+
+    // ----------------------------------------------------------------
+    // PASS 2 — UPDATE referrer_id nas linhas que têm "Indicado Por".
+    //
+    // Ordem de busca do nome (case/accent-insensitive):
+    //   1) recém-inseridos do PASS 1 (mais provável de ser o caso quando
+    //      o usuário coloca hierarquia interna ao próprio CSV)
+    //   2) supporters já existentes no snapshot da campanha
+    //
+    // Se não encontrar: ignora silenciosamente (warning já foi
+    // mostrado no preview pelo validateSupporterRows).
+    // Se for self-reference (indicador = própria linha): ignora.
+    // ----------------------------------------------------------------
+    const nameToId = new Map<string, string>();
+    // 2º na ordem = supporters já existentes (sobrescritos pelos novos abaixo)
+    for (const s of supporters) nameToId.set(normText(s.name), s.id);
+    // 1º na ordem (maior prioridade) = recém-inseridos
+    for (const ins of insertedByRowIndex) {
+      if (ins) nameToId.set(normText(ins.name), ins.id);
+    }
+
+    let linked = 0;        // quantas vincularam com sucesso no PASS 2
+    let noLinkAttempt = 0; // quantas tentaram vincular mas falharam (não achou nome ou self)
+
+    for (let i = 0; i < rows.length; i++) {
+      const ins = insertedByRowIndex[i];
+      if (!ins) continue;
+      const indicadoRaw = pickField(rows[i], 'Indicado Por', 'indicado por', 'indicado_por', 'referrer', 'indicador').trim();
+      if (!indicadoRaw) continue;          // não tentou vincular — não conta
+      const referrerKey = normText(indicadoRaw);
+      const referrerId = nameToId.get(referrerKey);
+      if (!referrerId || referrerId === ins.id) {
+        noLinkAttempt++;                   // tentou vincular mas não rolou
+        continue;
+      }
+
+      const { error: updErr } = await supabase
+        .from('supporters')
+        .update({ referrer_id: referrerId })
+        .eq('id', ins.id);
+      if (updErr) {
+        console.warn(`[liderancas import] PASS 2 falhou em "${ins.name}":`, updErr.message);
+        noLinkAttempt++;
+      } else {
+        linked++;
+      }
+    }
+
+    // Toast detalhado da hierarquia (separado do toast genérico do
+    // ImportCsvButtons que mostra erros/duplicados/total).
+    toast.info(
+      `${ok} importada${ok === 1 ? '' : 's'} · ${linked} vinculada${linked === 1 ? '' : 's'}${noLinkAttempt > 0 ? ` · ${noLinkAttempt} sem vínculo` : ''}`,
+    );
+
     return { ok };
   }
 
@@ -332,6 +476,11 @@ export default function LiderancasPage() {
               'Potencial de Votos': '50',
               'Rede Social': 'Instagram',
               'Rede Social Usuário': '@mariasouza',
+              // Migration 046 — coluna opcional. Use o NOME EXATO (case-insensitive)
+              // de uma liderança que já está na planilha OU já cadastrada no sistema.
+              // Se o nome não for encontrado, a liderança é importada sem vínculo
+              // e o aviso aparece no preview.
+              'Indicado Por': 'Roberto Carneiro',
             }}
             templateColumns={[
               { header: 'Nome', value: (r) => r.Nome },
@@ -344,6 +493,7 @@ export default function LiderancasPage() {
               { header: 'Potencial de Votos', value: (r) => r['Potencial de Votos'] },
               { header: 'Rede Social', value: (r) => r['Rede Social'] },
               { header: 'Rede Social Usuário', value: (r) => r['Rede Social Usuário'] },
+              { header: 'Indicado Por', value: (r) => r['Indicado Por'] },
             ]}
             validateRows={validateSupporterRows}
             onImport={importSupporters}
@@ -387,9 +537,56 @@ export default function LiderancasPage() {
             })}
           </SelectContent>
         </Select>
+
+        {/* Toggle Lista / Rede (H5) — segmented control */}
+        <div className="ml-auto inline-flex items-center gap-1 rounded-md border border-vortex-border bg-vortex-surface/40 p-1">
+          <button
+            type="button"
+            onClick={() => setViewMode('lista')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+              viewMode === 'lista'
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            aria-pressed={viewMode === 'lista'}
+          >
+            <List className="h-3.5 w-3.5" />
+            Lista
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('rede')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+              viewMode === 'rede'
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            aria-pressed={viewMode === 'rede'}
+          >
+            <Network className="h-3.5 w-3.5" />
+            Rede
+          </button>
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {viewMode === 'rede' ? (
+        supporters.length === 0 ? (
+          <EmptyState
+            title="Nenhuma liderança cadastrada"
+            description="Adicione lideranças para começar a montar a rede."
+            icon={<Users className="h-5 w-5" />}
+            action={
+              <Button onClick={openNew}>
+                <Plus className="h-4 w-4" /> Adicionar
+              </Button>
+            }
+          />
+        ) : (
+          <SupporterTree supporters={supporters} onOpen={openEdit} />
+        )
+      ) : filtered.length === 0 ? (
         <EmptyState
           title="Nenhuma liderança encontrada"
           description="Cadastre líderes, cabos e militantes para começar a montar sua base."
@@ -490,6 +687,27 @@ export default function LiderancasPage() {
                     );
                   })()
                 ) : null}
+                {/* Migration 046 — chip "Indicado por" (discreto, clicável) */}
+                {s.referrer_id ? (
+                  (() => {
+                    const ref = supportersById.get(s.referrer_id);
+                    if (!ref) return null;
+                    return (
+                      <p className="flex items-center gap-2 text-muted-foreground">
+                        <ChevronRight className="h-3.5 w-3.5" />
+                        <span>Indicado por </span>
+                        <button
+                          type="button"
+                          onClick={() => openReferrer(s.referrer_id!)}
+                          className="truncate font-medium text-foreground/90 hover:text-primary"
+                          title={`Abrir ficha de ${ref.name}`}
+                        >
+                          {ref.name}
+                        </button>
+                      </p>
+                    );
+                  })()
+                ) : null}
                 <p className="flex items-center gap-2 text-muted-foreground">
                   <MapPin className="h-3.5 w-3.5" />
                   <span>
@@ -498,13 +716,29 @@ export default function LiderancasPage() {
                 </p>
               </div>
 
-              {/* Chip de potencial de votos — só renderiza se > 0 */}
-              {s.vote_potential != null && s.vote_potential > 0 ? (
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-vortex-violet/40 bg-vortex-violet/15 px-2.5 py-1 text-[11px] font-medium text-vortex-violet">
-                  <Target className="h-3 w-3" />
-                  Potencial: {s.vote_potential.toLocaleString('pt-BR')} voto{s.vote_potential === 1 ? '' : 's'}
-                </div>
-              ) : null}
+              {/* Chips — Potencial (vote_potential > 0) e/ou Indicações (N filhos > 0).
+                  Mesma linha horizontal pra economizar espaço; quebra se faltar largura. */}
+              {(() => {
+                const childrenCount = (childrenByParent.get(s.id) ?? []).length;
+                const hasPotencial = s.vote_potential != null && s.vote_potential > 0;
+                if (!hasPotencial && childrenCount === 0) return null;
+                return (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {hasPotencial ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-full border border-vortex-violet/40 bg-vortex-violet/15 px-2.5 py-1 text-[11px] font-medium text-vortex-violet">
+                        <Target className="h-3 w-3" />
+                        Potencial: {s.vote_potential!.toLocaleString('pt-BR')} voto{s.vote_potential === 1 ? '' : 's'}
+                      </div>
+                    ) : null}
+                    {childrenCount > 0 ? (
+                      <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/15 px-2.5 py-1 text-[11px] font-medium text-sky-300">
+                        <UsersRound className="h-3 w-3" />
+                        {childrenCount} indicaç{childrenCount === 1 ? 'ão' : 'ões'}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()}
 
               <div className="mt-4 flex flex-wrap gap-2 border-t border-vortex-border pt-3">
                 <Button variant="ghost" size="sm" onClick={() => openEdit(s)}>
@@ -531,19 +765,56 @@ export default function LiderancasPage() {
                   </Button>
                 ) : null}
               </div>
+
+              {/* Invite code (rodapé discreto — Fase 1 da hierarquia). Será
+                  usado pela rota pública /convite/[code] na Fase 2. */}
+              {s.invite_code ? (
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <KeyRound className="h-3 w-3" />
+                  <span>Código:</span>
+                  <span className="font-mono tracking-wider text-foreground/80">{s.invite_code}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyInviteCode(s.invite_code!)}
+                    aria-label="Copiar código de convite"
+                    title="Copiar código"
+                    className="ml-0.5 rounded p-0.5 text-muted-foreground hover:bg-vortex-bg/60 hover:text-foreground"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
       )}
 
       <SupporterFormSheet open={sheetOpen} onOpenChange={setSheetOpen} editing={editing} />
-      <ConfirmDelete
-        open={deleteTarget !== null}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Excluir liderança?"
-        description={`Remover ${deleteTarget?.name ?? ''} da base. Essa ação não pode ser desfeita.`}
-        onConfirm={confirmDelete}
-      />
+      {/* Migration 046 — H6: quando o alvo tem filhos diretos, mostrar aviso
+          explícito de que eles perderão o vínculo hierárquico (referrer_id vira
+          null por causa do ON DELETE SET NULL da migration). */}
+      {(() => {
+        const target = deleteTarget;
+        const childrenCount = target ? (childrenByParent.get(target.id) ?? []).length : 0;
+        const hasChildren = childrenCount > 0;
+        const title = hasChildren
+          ? `⚠️ Esta liderança indicou ${childrenCount} outra${childrenCount === 1 ? '' : 's'}`
+          : 'Excluir liderança?';
+        const description = hasChildren
+          ? `Ao excluir ${target?.name ?? ''}, ${childrenCount === 1 ? 'essa liderança perderá' : `essas ${childrenCount} lideranças perderão`} o vínculo hierárquico e ${childrenCount === 1 ? 'passará a ser raiz independente' : 'passarão a ser raízes independentes'} na rede. Esta ação não pode ser desfeita.`
+          : `Remover ${target?.name ?? ''} da base. Essa ação não pode ser desfeita.`;
+        const confirmLabel = hasChildren ? 'Excluir mesmo assim' : 'Excluir';
+        return (
+          <ConfirmDelete
+            open={target !== null}
+            onOpenChange={(o) => !o && setDeleteTarget(null)}
+            title={title}
+            description={description}
+            confirmLabel={confirmLabel}
+            onConfirm={confirmDelete}
+          />
+        );
+      })()}
     </div>
   );
 }

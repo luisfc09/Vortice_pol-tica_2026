@@ -8,6 +8,8 @@ interface ConfirmDeleteProps {
   title: string;
   description: string;
   onConfirm: () => void;
+  /** Texto do botão de confirmação. Default: "Excluir". */
+  confirmLabel?: string;
 }
 
 export function ConfirmDelete({
@@ -16,6 +18,7 @@ export function ConfirmDelete({
   title,
   description,
   onConfirm,
+  confirmLabel = 'Excluir',
 }: ConfirmDeleteProps) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -42,7 +45,7 @@ export function ConfirmDelete({
                 onOpenChange(false);
               }}
             >
-              Excluir
+              {confirmLabel}
             </Button>
           </div>
         </DialogPrimitive.Content>

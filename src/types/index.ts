@@ -509,9 +509,30 @@ export interface Supporter {
   whatsapp: string | null;             // número WhatsApp (formato pt-BR)
   social_platform: SocialPlatform | null;
   social_handle: string | null;        // @usuario ou URL
+  // Hierarquia (migration 046 — Fase 1).
+  //   • referrer_id: id de outra liderança da mesma campanha que indicou esta.
+  //     null = liderança raiz (sem indicador).
+  //   • invite_code: código alfanumérico único de 8 chars gerado automaticamente
+  //     pelo banco. OPCIONAL no TS pra permitir omitir no INSERT (DB tem
+  //     default); SEMPRE preenchido no SELECT.
+  referrer_id: string | null;
+  invite_code?: string;
   created_by: string;
   created_at: string;
 }
+
+// Classificação derivada do pip_score (calculada no frontend — ver
+// src/lib/hierarchy.ts).
+export type NivelInfluencia = 'baixo' | 'medio' | 'alto' | 'muito_alto';
+
+// Escala "metal" — derivada do pip_score (computado em src/lib/hierarchy.ts).
+// Faixas e limites estão em classifyInfluencia(); rótulos aqui são puro display.
+export const NIVEL_INFLUENCIA_LABEL: Record<NivelInfluencia, string> = {
+  baixo: 'Bronze',
+  medio: 'Prata',
+  alto: 'Ouro',
+  muito_alto: 'Diamante',
+};
 
 export interface Voter {
   id: string;
