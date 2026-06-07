@@ -21,8 +21,7 @@ import {
   ExternalLink,
   ChevronRight,
   UsersRound,
-  KeyRound,
-  Copy,
+  Share2,
   List,
   Network,
   type LucideIcon,
@@ -37,6 +36,7 @@ import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SupporterFormSheet } from '@/components/supporters/SupporterFormSheet';
 import { SupporterTree } from '@/components/liderancas/SupporterTree';
+import { InviteModal } from '@/components/liderancas/InviteModal';
 import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import {
   Select,
@@ -137,6 +137,10 @@ export default function LiderancasPage() {
   const [editing, setEditing] = useState<Supporter | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Supporter | null>(null);
+  // Convite: liderança alvo do InviteModal (WhatsApp/SMS/E-mail/Copiar link).
+  // Migration 047 — quando invite_used_at está preenchido, o botão "Convidar"
+  // do card é escondido (opção A), então só caem aqui códigos válidos.
+  const [inviteTarget, setInviteTarget] = useState<Supporter | null>(null);
   // Migration 046 — H5: alternância entre lista (cards) e rede (árvore).
   const [viewMode, setViewMode] = useState<'lista' | 'rede'>('lista');
 
@@ -178,15 +182,6 @@ export default function LiderancasPage() {
     if (!deleteTarget) return;
     collections.supporters.remove(deleteTarget.id);
   }
-  async function copyInviteCode(code: string) {
-    try {
-      await navigator.clipboard.writeText(code);
-      toast.success('Código copiado!');
-    } catch {
-      toast.error('Não foi possível copiar — copie manualmente.');
-    }
-  }
-
   const canManage = session?.role === 'admin' || session?.role === 'coordinator';
 
   const STATUS_LABEL: Record<string, string> = {
@@ -755,6 +750,19 @@ export default function LiderancasPage() {
                     cep: s.cep,
                   }}
                 />
+                {/* Migration 047 — opção A: esconde o botão "Convidar" quando o
+                    invite_code já foi consumido (invite_used_at preenchido).
+                    Também esconde quando o código não existe (defensivo). */}
+                {s.invite_code && !s.invite_used_at ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setInviteTarget(s)}
+                    className="text-vortex-lime hover:text-vortex-lime"
+                  >
+                    <Share2 className="h-3.5 w-3.5" /> Convidar
+                  </Button>
+                ) : null}
                 {canManage ? (
                   <Button
                     variant="ghost"
@@ -767,34 +775,15 @@ export default function LiderancasPage() {
                 ) : null}
               </div>
 
-              {/* Invite code (rodapé discreto). Migration 047: quando o
-                  invite_used_at está preenchido, o código foi consumido
-                  via /convite/[code] e não pode mais ser usado. */}
-              {s.invite_code ? (
-                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <KeyRound className="h-3 w-3" />
-                  <span>Código:</span>
-                  <span className={cn(
-                    'font-mono tracking-wider',
-                    s.invite_used_at ? 'text-muted-foreground/60 line-through' : 'text-foreground/80',
-                  )}>
-                    {s.invite_code}
-                  </span>
-                  {s.invite_used_at ? (
-                    <span className="ml-1 text-amber-300/80" title={`Usado em ${new Date(s.invite_used_at).toLocaleString('pt-BR')}`}>
-                      · usado
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => copyInviteCode(s.invite_code!)}
-                      aria-label="Copiar código de convite"
-                      title="Copiar código"
-                      className="ml-0.5 rounded p-0.5 text-muted-foreground hover:bg-vortex-bg/60 hover:text-foreground"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-                  )}
+              {/* Selo discreto "convite usado" — substitui o antigo bloco do
+                  código copiável quando invite_used_at está preenchido. Mantém
+                  a info no card sem poluir as ações. */}
+              {s.invite_used_at ? (
+                <div
+                  className="mt-2 text-[11px] text-amber-300/80"
+                  title={`Usado em ${new Date(s.invite_used_at).toLocaleString('pt-BR')}`}
+                >
+                  · convite usado
                 </div>
               ) : null}
             </div>
@@ -828,6 +817,19 @@ export default function LiderancasPage() {
           />
         );
       })()}
+
+      {/* Modal de convite (Migration 047 — auto-cadastro via /convite/[code]).
+          Aberto pelo botão "Convidar" no card. Permanece montado para
+          animar fade-out limpo quando inviteTarget volta a null. */}
+      <InviteModal
+        open={inviteTarget !== null}
+        onClose={() => setInviteTarget(null)}
+        supporter={
+          inviteTarget && inviteTarget.invite_code
+            ? { name: inviteTarget.name, invite_code: inviteTarget.invite_code }
+            : null
+        }
+      />
     </div>
   );
 }
