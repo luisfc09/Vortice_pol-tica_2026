@@ -123,7 +123,8 @@ vortice/
 │  │  ├─ mapa/ maps/         # StateMap (TSE), VotersLayer, OpenInMapsButton (deep links)
 │  │  ├─ integrations/       # IntegrationCard, IntegrationDrawer, AiFeatureMatrix
 │  │  ├─ billing/ admin/     # planos, cards de campanha
-│  │  ├─ voters/ supporters/ # form sheets + VotersPanel (compartilhado /eleitores e /mapa)
+│  │  ├─ voters/ supporters/ # form sheets + VotersPanel + ReferrerCombobox (hierarquia)
+│  │  ├─ liderancas/         # SupporterTree (visualização da rede em árvore)
 │  │  ├─ events/             # Agenda (form + calendário)
 │  │  ├─ team/               # ProvisionSheet, AvatarUpload, pendentes
 │  │  ├─ brand/ forms/       # BrandLogo, AddressFields
@@ -133,6 +134,7 @@ vortice/
 │  │  └─ dashboard/          # KpiCard, FinanceDashboardWidget (4ª aba do Dashboard)
 │  ├─ lib/                   # regras puras + infra (ver §8, §11, §12)
 │  │                         # destaques: financeScope, financeImporter (xlsx),
+│  │                         #            hierarchy (rede de Lideranças),
 │  │                         #            whatsappLink/socialUrl em utils.ts
 │  ├─ hooks/                 # useAuth, useEffectiveSession, useBrand, useGeolocation,
 │  │                         # useFinanceiro, useAlertas, useIntelligence, ...
@@ -368,11 +370,12 @@ Uso típico nas páginas: `const voters = useCollection(collections.voters)` e
 | 043 | **alerts-finance** | 3 valores no enum `alert_type` (`finance_cidade_vermelha`, `finance_teto_ultrapassado`, `finance_deficit_previsto`) |
 | 044 | **rename-steve-to-vera** | UPDATE em `ai_agents`/`agent_conversations` trocando `steve` → `vera` + CHECK constraint atualizada para `('vera','carlos')`. Default de `name` agora `'Vera_IA'` |
 | 045 | **supporters-novos-campos** | 4 colunas opcionais em `supporters`: `vote_potential int`, `whatsapp text`, `social_platform text` (CHECK), `social_handle text` |
+| 046 | **supporters-hierarquia-fase1** | Hierarquia em pirâmide: `referrer_id uuid` (auto-FK, ON DELETE SET NULL) + `invite_code text UNIQUE NOT NULL` (default `upper(substr(md5(gen_random_uuid()::text),1,8))`) + trigger `supporters_check_referrer()` que valida non-self e same-campaign. Índice parcial `idx_supporters_referrer`. |
 
 > Todas as DDLs estão em `supabase/migration-0XX-*.sql`. A partir da 038 todas
-> são versionadas no repo junto com a documentação. Migrations 042 a 045 foram
+> são versionadas no repo junto com a documentação. Migrations 042 a 046 foram
 > entregues nesta linha de trabalho (módulo Financeiro + rename Vera_IA +
-> campos extras de captação em Lideranças).
+> campos extras de captação + hierarquia de Lideranças).
 
 ---
 
@@ -501,6 +504,28 @@ Módulo de **orçamento, receitas e custo/voto** introduzido nas migrations 042 
   - `social_platform text` (CHECK enum: instagram/facebook/x/tiktok/linkedin/youtube/outro) + `social_handle text`. Card exibe ícone Lucide específico da plataforma + label + handle, clicável quando há URL inferível via helper `socialUrl()` (aceita `@user`, `user` ou URL completa). TikTok usa `Music2` (Lucide não tem ícone próprio); "outro" usa `Globe`.
 - **CSV** agora exporta/importa as 4 colunas novas. Parsing de `social_platform` tolerante a aliases (`Insta`/`IG`/`Instagram`, `FB`/`Facebook`, `twitter`/`X`, `TT`/`TikTok`, `LI`/`LinkedIn`, `YT`/`YouTube`). Valores inválidos viram `null` com warning no preview — não bloqueiam importação.
 
+#### Hierarquia em pirâmide (migration 046 — Fase 1)
+
+Cada liderança pode indicar outras formando uma árvore livre (1 pai por nó, profundidade ilimitada). Implementação 100% sem libs externas (CSS puro + funções TS).
+
+- **Schema**: `referrer_id uuid` auto-FK em `supporters` com `ON DELETE SET NULL` (filhos viram raízes ao excluir pai) + `invite_code text UNIQUE NOT NULL` gerado por default no banco (8 chars hex, ~4.3 bi combinações). Trigger `supporters_check_referrer()` bloqueia auto-indicação e cross-campaign.
+- **Frontend (cálculos puros — `src/lib/hierarchy.ts`)**:
+  - `indexById`, `indexByParent` — Map { id → node } / { parentId → children[] } memoizáveis
+  - `getDirectChildren`, `getDescendants` (BFS iterativa anti-stack-overflow), `getAncestors`
+  - `isAncestorOf(supporters, ancestorId, descendantId)` — usado no combobox pra prevenir ciclos
+  - `computePipScore` — soma `vote_potential` do nó (peso 1.0) + descendentes com decay `0.8^depth`
+  - `classifyInfluencia(pip)` — `baixo | medio | alto | muito_alto` (faixas 50/200/500)
+  - `buildForest` — devolve `TreeNode[]` enraizada; órfãos (referrer_id apontando para id ausente) viram roots adicionais
+- **Form (`components/supporters/ReferrerCombobox.tsx`)**: combobox dedicado com busca por nome (mín. 2 chars, normalize NFD), filtros de domínio (status=ativo, anti-self, anti-loop via `isAncestorOf`), chip selecionado + botão clear, navegação por teclado.
+- **Card visual (`pages/Liderancas.tsx`)**:
+  - Linha "› Indicado por [Nome]" clicável (abre ficha do indicador)
+  - Chip sky "👥 N indicações" ao lado do chip de Potencial
+  - Rodapé com `invite_code` em `font-mono tracking-wider` + botão `Copy` (toast "Código copiado!")
+  - Performance: índices `supportersById` e `childrenByParent` memoizados na top do componente — lookup O(1) por card
+- **CSV 2-pass**: coluna "Indicado Por" no export (nome do referrer) e no import. Aliases tolerantes (`indicado_por`, `referrer`, `indicador`). **PASS 1** INSERT direto via `supabase.from(...).insert(...).select('id, name').single()` (não usa `collection.create` porque precisa do ID real, não do tempUuid otimista); **PASS 2** UPDATE `referrer_id` priorizando nomes do próprio CSV antes dos já cadastrados. Throttle 50ms entre inserts pra CSVs >100 linhas. Toast: `"X importadas · Y vinculadas · Z sem vínculo"`.
+- **Aba "Rede" (`components/liderancas/SupporterTree.tsx`)**: toggle Lista/Rede no header (default lista). Árvore com indentação 24px/nível + `border-l` conectora. Tudo expandido por padrão; expansão manual via ▶/▼. Busca destaca matches (ring violet) + força expansão dos ancestrais. 4 cards de métricas no topo: Total, Potencial total, Profundidade máxima, Raízes. Cada nó tem chip de Potencial, Indicações, e badge de nível (Bronze/Prata/Ouro/Diamante via `NIVEL_INFLUENCIA_LABEL`). Click em nó abre o sheet de edição. Empty state explica como começar quando nenhuma indicação foi feita.
+- **Delete cascata**: `ConfirmDelete` ganhou prop opcional `confirmLabel`. Quando o supporter tem filhos diretos, o dialog mostra título de aviso (`⚠️ Esta liderança indicou N outras`) + descrição explicando que filhos perderão o vínculo + botão "Excluir mesmo assim". Sem filhos: dialog padrão inalterado.
+
 ### 12.6 Eleitores — `/eleitores`
 - `pages/Eleitores.tsx` + `components/voters/VoterFormSheet.tsx`.
 - **CSV:** `src/lib/csv-export.ts` (sep `;`, BOM `﻿` p/ Excel pt-BR) + `src/lib/csv-import.ts` (`parseCsv`, `pickField`, helpers de validação) + `components/data/ImportCsvButtons.tsx` (preview/validação/dedup antes de gravar).
@@ -584,6 +609,8 @@ supabase functions deploy <nome> --project-ref iemajqwnlkmrubikhqas
 - `CampaignStatus`: `trial | active | suspended | cancelled | pending`
 - `GeoSource`: `gps | address | manual`
 - `AgentKey`: `vera | carlos`
+- `SocialPlatform`: `instagram | facebook | x | tiktok | linkedin | youtube | outro`
+- `NivelInfluencia`: `baixo | medio | alto | muito_alto` — labels exibidos como `Bronze / Prata / Ouro / Diamante` (`NIVEL_INFLUENCIA_LABEL`). Computado no frontend via `src/lib/hierarchy.ts` (não armazenado no banco)
 
 ### 14.4 "Pegadinhas" operacionais (para o próximo engenheiro)
 - **Migrations são manuais** — o usuário/operador roda no SQL Editor; o app não migra sozinho.
@@ -716,7 +743,10 @@ erDiagram
     int vote_potential ">=0, migration 045"
     text social_platform "CHECK: instagram|facebook|x|tiktok|linkedin|youtube|outro"
     text social_handle "migration 045"
+    uuid referrer_id FK "auto-FK; ON DELETE SET NULL; migration 046"
+    text invite_code "UNIQUE NOT NULL; default md5; migration 046"
   }
+  SUPPORTERS ||--o{ SUPPORTERS : "referrer_id (hierarquia)"
   CAMPAIGN_FINANCE_CONFIG {
     uuid id PK
     uuid campaign_id FK "UNIQUE"
@@ -787,7 +817,11 @@ neighborhood, municipality_code FK, role(supporter_role_type), status,
 created_by, created_at` + endereço estruturado (014: `cep, logradouro, numero,
 complemento`) + `role_custom` (020) + **captação extra (045)**: `vote_potential
 integer (>= 0)`, `whatsapp text`, `social_platform text` (CHECK enum: `instagram
-|facebook|x|tiktok|linkedin|youtube|outro`), `social_handle text`.
+|facebook|x|tiktok|linkedin|youtube|outro`), `social_handle text` + **hierarquia
+(046)**: `referrer_id uuid` (auto-FK em `supporters(id) ON DELETE SET NULL`;
+indexado parcial onde não-nulo), `invite_code text` (UNIQUE NOT NULL; default
+`upper(substr(md5(gen_random_uuid()::text), 1, 8))` no banco — 8 chars hex). Trigger
+`supporters_check_referrer` valida non-self e same-campaign em INSERT/UPDATE.
 
 **`campaign_finance_config`** (migration 042) — 1:1 com campanha. Campos:
 `id, campaign_id FK UNIQUE, budget_total numeric(12,2), semaforo_verde_max
@@ -853,10 +887,10 @@ automaticamente quando um usuário nasce em `auth.users` — por isso o
 1. Criar projeto no Supabase; anotar `Project URL` e `anon key` (Settings → API).
 2. No **SQL Editor**, rodar **em ordem**:
    1. `supabase/schema.sql` (tabelas-núcleo, enums, RLS base, trigger, realtime).
-   2. `supabase/migration-002` … `migration-045` (em ordem numérica). ⚠ Atenção
+   2. `supabase/migration-002` … `migration-046` (em ordem numérica). ⚠ Atenção
       especial à 043 (enum `alert_type`): rodar `ALTER TYPE` em um bloco e
       depois o `SELECT` de verificação em outro — Postgres exige enum commitado
-      antes do uso (vide §14.4). 044 também usa `notify pgrst` no fim.
+      antes do uso (vide §14.4). 044 e 046 também usam `notify pgrst` no fim.
    3. `supabase/seed-faq.sql` (FAQ global, opcional).
 3. Criar o **primeiro super admin / admin**: rodar `bootstrap-super-admin.sql`
    (ajustando o e-mail) — depois de o usuário existir em `auth.users`.
