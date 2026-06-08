@@ -131,6 +131,7 @@ export default function OnboardingPage() {
             referrer_id: null,
             // Migration 047 — convite ativo (não foi consumido)
             invite_used_at: null,
+            notes: null,
           },
         });
         ok++;

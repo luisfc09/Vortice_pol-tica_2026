@@ -480,6 +480,69 @@ function detectFinanceTetoUltrapassado(input: DetectorInput): AlertDraft[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Detector: novo apoiador cadastrado por supporter/leader em /minha-rede
+// (migration 048). Avisa admin/coord quando a rede expande organicamente.
+//
+// Critério: supporter foi criado nas últimas 24h, E o created_by é um user
+// que tem role 'supporter' ou 'leader' em campaign_users (descarta cadastros
+// feitos por admin/coord/etc — esses não geram alerta).
+//
+// Dedup por supporter.id → no máximo 1 alerta por novo apoiador, idempotente
+// mesmo se o detector rodar várias vezes na mesma janela.
+// ---------------------------------------------------------------------------
+function detectNovoApoiadorCadastrado(input: DetectorInput): AlertDraft[] {
+  const cutoff = Date.now() - 24 * MS_DAY;
+
+  // Set de user_ids cujo role atual é supporter ou leader. Cadastros feitos
+  // por esses users disparam alerta. (Admin/coord/researcher/etc cadastram
+  // o tempo todo — não tem por que notificar.)
+  const fieldRoles = new Set(['supporter', 'leader']);
+  const grassrootUsers = new Set(
+    input.members
+      .filter((m) => m.is_active && fieldRoles.has(m.role))
+      .map((m) => m.user_id),
+  );
+
+  if (grassrootUsers.size === 0) return [];
+
+  // Index dos supporters por id pra resolver o nome do referrer rapidamente.
+  const byId = new Map(input.supporters.map((s) => [s.id, s]));
+
+  return input.supporters
+    .filter((s) => {
+      if (+new Date(s.created_at) < cutoff) return false;
+      if (!grassrootUsers.has(s.created_by)) return false;
+      return true;
+    })
+    .map((s) => {
+      // Nome do referrer (quem indicou). Pode ser o próprio created_by se a
+      // pessoa cadastrou via formulário (referrer_id = id do supporter dela)
+      // ou outro nó da árvore. Fallback genérico se referrer não bateu.
+      const referrer = s.referrer_id ? byId.get(s.referrer_id) : null;
+      const referrerName = referrer?.name ?? 'a rede';
+      return draft({
+        type: 'novo_apoiador_cadastrado',
+        priority: 'info',
+        title: 'Novo apoiador cadastrado pela rede',
+        description: `${s.name}${s.city ? ` (${s.city})` : ''} foi cadastrado por ${referrerName}.`,
+        acao_label: 'Ver lideranças',
+        acao_route: '/liderancas',
+        meta: {
+          supporter_id: s.id,
+          supporter_name: s.name,
+          city: s.city ?? null,
+          referrer_id: s.referrer_id,
+          referrer_name: referrer?.name ?? null,
+          created_by: s.created_by,
+        },
+        // Dedup por supporter — garante 1 alerta único por cadastro,
+        // independente de quantas vezes o detector rodar.
+        dedup_key: `novo_apoiador_cadastrado:${s.id}`,
+      });
+    });
+}
+
 function detectFinanceDeficitPrevisto(input: DetectorInput): AlertDraft[] {
   const receitas = input.financeRevenues ?? [];
   if (receitas.length === 0) return []; // só dispara se houver receita
@@ -534,6 +597,8 @@ export function detectAll(input: DetectorInput): AlertDraft[] {
     ...detectFinanceCidadeVermelha(input),
     ...detectFinanceTetoUltrapassado(input),
     ...detectFinanceDeficitPrevisto(input),
+    // Hierarquia — cadastro manual pela rede (migration 048)
+    ...detectNovoApoiadorCadastrado(input),
   ];
 }
 
@@ -552,6 +617,7 @@ export const detectors = {
   detectFinanceCidadeVermelha,
   detectFinanceTetoUltrapassado,
   detectFinanceDeficitPrevisto,
+  detectNovoApoiadorCadastrado,
 };
 
 // Aggregations úteis pro client

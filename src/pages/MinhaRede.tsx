@@ -33,6 +33,9 @@ import {
   Layers,
   Award,
   Share2,
+  UserPlus,
+  Link2,
+  Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -46,6 +49,8 @@ import {
   getDescendants,
   indexById,
 } from '@/lib/hierarchy';
+import { AddSupporterSheet } from '@/components/minha-rede/AddSupporterSheet';
+import { InviteModal } from '@/components/liderancas/InviteModal';
 import {
   NIVEL_INFLUENCIA_LABEL,
   SUPPORTER_ROLE_LABEL,
@@ -94,6 +99,13 @@ export default function MinhaRedePage() {
 
   const pip = useMemo(() => (me ? computePipScore(supporters, me.id) : 0), [supporters, me]);
   const nivel = classifyInfluencia(pip);
+
+  // -------- estados dos modais ----------------------------------------
+  // Cadastro manual (AddSupporterSheet) — null = cadastro novo, supporter = edição
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<Supporter | null>(null);
+  // Convite por link (reusa InviteModal das Lideranças)
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   // -------- copy do link de convite ----------------------------------
   const [copied, setCopied] = useState(false);
@@ -255,15 +267,45 @@ export default function MinhaRedePage() {
 
       {/* Sub-árvore embaixo ------------------------------------------ */}
       <div className="rounded-xl border border-vortex-border bg-vortex-surface/60 p-5 backdrop-blur">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-display text-lg">Pessoas que você indicou</h3>
-          <span className="text-xs text-muted-foreground">
-            {descendants.length} no total ({directChildren.length} direta{directChildren.length === 1 ? '' : 's'})
-          </span>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg">Pessoas que você indicou</h3>
+            <span className="text-xs text-muted-foreground">
+              {descendants.length} no total ({directChildren.length} direta{directChildren.length === 1 ? '' : 's'})
+            </span>
+          </div>
+          {/* 2 ações principais — cadastro manual + convite por link */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(null);
+                setAddSheetOpen(true);
+              }}
+            >
+              <UserPlus className="h-4 w-4" />
+              Cadastrar apoiador
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setInviteOpen(true)}
+              disabled={!me.invite_code || !!me.invite_used_at}
+              title={
+                me.invite_used_at
+                  ? 'Seu convite já foi consumido. Solicite ao admin um novo.'
+                  : undefined
+              }
+            >
+              <Link2 className="h-4 w-4" />
+              Convidar por link
+            </Button>
+          </div>
         </div>
         {descendants.length === 0 ? (
           <p className="rounded-lg border border-dashed border-vortex-border bg-vortex-bg/30 px-3 py-6 text-center text-sm text-muted-foreground">
-            Você ainda não indicou ninguém. Use o link acima pra convidar a primeira pessoa.
+            Você ainda não indicou ninguém. Cadastre um apoiador acima ou
+            envie seu link de convite.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -298,12 +340,44 @@ export default function MinhaRedePage() {
                   >
                     {NIVEL_INFLUENCIA_LABEL[childNivel]}
                   </span>
+                  {/* Botão Editar — abre AddSupporterSheet em modo edição.
+                      Sem Excluir: apoiador só pode ser removido por admin/coord. */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Editar ${child.name}`}
+                    onClick={() => {
+                      setEditing(child);
+                      setAddSheetOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                 </li>
               );
             })}
           </ul>
         )}
       </div>
+
+      {/* ---- Sheets / Modais ---- */}
+      <AddSupporterSheet
+        open={addSheetOpen}
+        onOpenChange={(o) => {
+          setAddSheetOpen(o);
+          // Ao fechar, limpa modo edição pra próxima abertura ser cadastro.
+          if (!o) setEditing(null);
+        }}
+        editing={editing}
+        myId={me.id}
+      />
+      <InviteModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        supporter={
+          me.invite_code ? { name: me.name, invite_code: me.invite_code } : null
+        }
+      />
 
       <p className="text-center text-[11px] text-muted-foreground">
         Cargo atual: <strong className="text-foreground/80">{roleLabel}</strong> · Nível pessoal:{' '}

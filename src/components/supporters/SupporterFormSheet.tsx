@@ -74,6 +74,8 @@ const EMPTY: FormState = {
   referrer_id: null,
   // Migration 047 — convite ativo (nunca usado).
   invite_used_at: null,
+  // Migration 048 — campo livre de observações.
+  notes: null,
 };
 
 interface SupporterFormSheetProps {
@@ -112,6 +114,7 @@ export function SupporterFormSheet({ open, onOpenChange, editing }: SupporterFor
         social_handle: editing.social_handle,
         referrer_id: editing.referrer_id,
         invite_used_at: editing.invite_used_at,
+        notes: editing.notes,
       });
     } else if (open) {
       setForm(EMPTY);

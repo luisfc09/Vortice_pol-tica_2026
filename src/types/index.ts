@@ -173,7 +173,10 @@ export type AlertType =
   // Módulo Financeiro (migration 043)
   | 'finance_cidade_vermelha'
   | 'finance_teto_ultrapassado'
-  | 'finance_deficit_previsto';
+  | 'finance_deficit_previsto'
+  // Migration 048 — apoiador cadastrado manualmente por supporter/leader
+  // em /minha-rede (admin/coord recebe notificação na Central de Alertas).
+  | 'novo_apoiador_cadastrado';
 
 export type AlertPriority = 'urgente' | 'critico' | 'atencao' | 'info';
 
@@ -520,6 +523,9 @@ export interface Supporter {
   referrer_id: string | null;
   invite_code?: string;
   invite_used_at: string | null;
+  // Migration 048 — campo livre de observações usado pelo formulário de
+  // cadastro manual do apoiador em /minha-rede (AddSupporterSheet).
+  notes: string | null;
   created_by: string;
   created_at: string;
 }
