@@ -37,7 +37,7 @@ import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SupporterFormSheet } from '@/components/supporters/SupporterFormSheet';
 import { SupporterTree } from '@/components/liderancas/SupporterTree';
 import { InviteModal } from '@/components/liderancas/InviteModal';
-import { ConvidarLiderancaFab } from '@/components/liderancas/ConvidarLiderancaFab';
+import { ConvidarLiderancaButton } from '@/components/liderancas/ConvidarLiderancaButton';
 import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import {
   Select,
@@ -499,6 +499,10 @@ export default function LiderancasPage() {
           <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4" /> Exportar CSV
           </Button>
+          {/* Convidar Liderança — botão outline, mesmo nível visual das outras
+              ações. Renderiza null para roles sem permissão (researcher,
+              supporter, leader, field_agent). */}
+          <ConvidarLiderancaButton />
           <Button onClick={openNew}>
             <Plus className="h-4 w-4" /> Nova liderança
           </Button>
@@ -832,11 +836,6 @@ export default function LiderancasPage() {
         }
       />
 
-      {/* FAB "Convidar Liderança" — link genérico da campanha (usa o
-          invite_code do supporter do próprio admin/candidato/coord; auto-cria
-          se ainda não existir). Visível só pra esses 3 roles. Renderizado
-          ACIMA do CarlosDrawer (que ocupa bottom-5 right-5). */}
-      <ConvidarLiderancaFab />
     </div>
   );
 }

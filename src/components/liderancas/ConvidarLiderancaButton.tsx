@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { useMySupporter } from '@/hooks/useMySupporter';
 import { InviteModal } from '@/components/liderancas/InviteModal';
@@ -14,19 +15,24 @@ import type { UserRole } from '@/types';
 const ALLOWED_ROLES = ['admin', 'candidate', 'coordinator'] as const satisfies readonly UserRole[];
 
 /**
- * FAB (floating action button) que abre o `InviteModal` com o invite_code
- * do próprio usuário logado — link de convite "genérico" da campanha.
+ * Botão inline "Convidar Liderança" — abre o `InviteModal` com o invite_code
+ * do próprio usuário logado (link genérico da campanha).
  *
- * Quem clica vira raiz/pai das lideranças que se cadastrarem pelo link.
- * Se o user ainda não tem linha em `supporters`, `useMySupporter().ensure()`
- * cria silenciosamente na primeira chamada (ver hook pra detalhes).
+ * Histórico: começou como FAB (canto inferior direito, fixed). Em 2026-06-08
+ * foi promovido pro toolbar do topo da página /liderancas, ao lado do botão
+ * "Nova liderança", por pedido do usuário (mais descoberto, padrão de UX
+ * mais consistente com as outras ações da página).
  *
- * Posicionamento: `fixed bottom-24 right-5 z-40` — fica ACIMA do
- * `CarlosDrawer` (que está em `bottom-5 right-5 h-14 w-14`, ~76px ocupado),
- * com folga de ~20px entre os dois. Ambos no mesmo `z-40` (não competem
- * com overlays de modal em `z-50`).
+ * Lógica preservada do FAB:
+ *   • Quem clica vira raiz/pai das lideranças que se cadastrarem pelo link.
+ *   • Se o user ainda não tem linha em `supporters`, `useMySupporter().ensure()`
+ *     cria silenciosamente na primeira chamada.
+ *   • Loading spinner enquanto resolve o supporter próprio.
+ *
+ * Renderiza `null` quando o role não tem permissão ou não há campanha ativa —
+ * pai não precisa gateiar.
  */
-export function ConvidarLiderancaFab() {
+export function ConvidarLiderancaButton() {
   const session = useEffectiveSession();
   const { ensure } = useMySupporter();
 
@@ -45,9 +51,9 @@ export function ConvidarLiderancaFab() {
     setLoading(true);
     try {
       const mine = await ensure();
-      // Defensivo: invite_code é gerado pelo default do banco, então o
-      // INSERT acima sempre devolve com ele preenchido. Mas em casos de
-      // schema desatualizado (PostgREST cache stale) pode vir undefined.
+      // Defensivo: invite_code vem do default do banco, então o INSERT
+      // sempre devolve com ele preenchido. Mas em casos de schema stale
+      // (PostgREST cache) pode vir undefined.
       if (!mine.invite_code) {
         toast.error('Sem invite_code gerado. Recarregue a página.');
         return;
@@ -55,11 +61,8 @@ export function ConvidarLiderancaFab() {
       setTarget({ name: mine.name, invite_code: mine.invite_code });
       setModalOpen(true);
     } catch (e) {
-      // Erros típicos aqui: RLS bloqueando INSERT (improvável — o user
-      // está logado), ou rede caída. Toast genérico já basta — o erro
-      // real vai pro console pra debug.
       // eslint-disable-next-line no-console
-      console.error('[ConvidarLiderancaFab] ensure() falhou:', e);
+      console.error('[ConvidarLiderancaButton] ensure() falhou:', e);
       toast.error(e instanceof Error ? e.message : 'Falha ao gerar link de convite');
     } finally {
       setLoading(false);
@@ -68,22 +71,25 @@ export function ConvidarLiderancaFab() {
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        variant="outline"
         onClick={handleClick}
         disabled={loading}
         aria-label="Convidar nova liderança via link público"
-        className="fixed bottom-24 right-5 z-40 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <Send className="h-4 w-4" />
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Send className="h-4 w-4" />
+        )}
         Convidar Liderança
-      </button>
+      </Button>
 
       <InviteModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         supporter={target}
-        // Convite genérico: a mensagem referencia o nome do candidato
+        // Convite genérico: mensagem referencia o nome do candidato
         // (recipient não conhece o admin/coord, mas reconhece o candidato).
         // session.campaign já está garantida não-null pelo gate acima.
         campaignName={session.campaign.candidate_name}
