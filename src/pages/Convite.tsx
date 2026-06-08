@@ -278,11 +278,6 @@ export default function ConvitePage() {
                 )}
                 {submitting ? 'Criando sua conta…' : 'Aceitar convite e criar conta'}
               </Button>
-
-              <p className="text-center text-[11px] text-muted-foreground">
-                Após criar a conta, um administrador da campanha precisa aprovar seu acesso. Você receberá
-                acesso completo ao painel quando isso for feito.
-              </p>
             </form>
           ) : null}
         </div>
