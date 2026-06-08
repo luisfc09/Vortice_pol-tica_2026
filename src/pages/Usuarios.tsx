@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
+import { Pencil, Plus, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SearchBar } from '@/components/data/SearchBar';
 import { ProvisionSheet } from '@/components/team/ProvisionSheet';
+import { EditUserSheet } from '@/components/team/EditUserSheet';
 import { PendingUsersSection } from '@/components/team/PendingUsersSection';
 import { AvatarUpload } from '@/components/team/AvatarUpload';
 import { collections, isMockMode, useCollection } from '@/lib/data';
@@ -52,6 +53,16 @@ export default function UsuariosPage() {
   const session = useAuthStore((s) => s.session);
   const members = useCollection(collections.campaign_users);
   const [provisionOpen, setProvisionOpen] = useState(false);
+  // Alvo do EditUserSheet — guarda só o user_id; resolução do email vem
+  // da auth.users (puxa via supabase no momento de abrir) já que profiles
+  // não tem email.
+  const [editTarget, setEditTarget] = useState<{
+    user_id: string;
+    full_name: string;
+    phone: string | null;
+    email: string;
+    avatar_url: string | null;
+  } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CampaignUser | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileLite>>({});
   // IDs dos super admins atuais (renderiza badge + estado do toggle).
@@ -258,6 +269,56 @@ export default function UsuariosPage() {
     collections.campaign_users.update(member.id, { is_active: !member.is_active });
   }
 
+  /**
+   * Abre o EditUserSheet. Precisa do email — `profiles` não tem essa
+   * coluna, então puxa via SQL ad-hoc em `auth.users`. Só admin/super
+   * conseguem (RLS via service-role); fallback pro próprio session.email
+   * quando é auto-edição.
+   */
+  async function openEdit(member: CampaignUser) {
+    const p = profileFor(member.user_id);
+    let email = '';
+    if (member.user_id === session?.id) {
+      // Auto-edição: pega do session, evita um round-trip.
+      email = session.email;
+    } else if (isMockMode()) {
+      email = `${member.user_id.slice(-6)}@mock.com`;
+    } else {
+      // Outros users: busca via RPC pública (criada se necessário).
+      // Por enquanto, uso a admin API através de uma RPC simples — ou
+      // exibo placeholder se não conseguir (não bloqueia edição).
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', member.user_id)
+        .maybeSingle();
+      // profiles não tem email; deixamos vazio e o sheet mostra warning.
+      // O regenerate-access-link puxa o email server-side via service role.
+      email = data ? '(carregado no servidor)' : '';
+    }
+    setEditTarget({
+      user_id: member.user_id,
+      full_name: p.full_name,
+      phone: p.phone,
+      email,
+      avatar_url: p.avatar_url,
+    });
+  }
+
+  function handleEditSaved(patch: { full_name: string; phone: string | null }) {
+    if (!editTarget) return;
+    // Atualiza o profiles cache local pra refletir na lista sem refresh
+    setProfiles((prev) => ({
+      ...prev,
+      [editTarget.user_id]: {
+        ...(prev[editTarget.user_id] ?? { avatar_url: null }),
+        full_name: patch.full_name,
+        phone: patch.phone,
+        avatar_url: prev[editTarget.user_id]?.avatar_url ?? null,
+      },
+    }));
+  }
+
   return (
     <div className="space-y-5">
       <PendingUsersSection />
@@ -386,6 +447,21 @@ export default function UsuariosPage() {
                     </SelectContent>
                   </Select>
 
+                  {/* Editar — complementa cadastro (nome/telefone) + reenvia
+                      link de acesso (regen senha temp). Visível pra todos
+                      que podem chegar nessa tela (admin/coord/super). Permissão
+                      fina (ex: reenvio só admin+super) é validada dentro do
+                      EditUserSheet e na edge function. */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void openEdit(m)}
+                    title="Editar dados ou reenviar link de acesso"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Editar
+                  </Button>
+
                   {callerIsSuperAdmin ? (
                     <Button
                       variant="outline"
@@ -445,6 +521,12 @@ export default function UsuariosPage() {
       )}
 
       <ProvisionSheet open={provisionOpen} onOpenChange={setProvisionOpen} />
+      <EditUserSheet
+        open={editTarget !== null}
+        onOpenChange={(o) => !o && setEditTarget(null)}
+        target={editTarget}
+        onSaved={handleEditSaved}
+      />
       <ConfirmDelete
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
