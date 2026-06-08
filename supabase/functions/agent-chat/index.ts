@@ -131,7 +131,11 @@ Deno.serve(async (req: Request) => {
         ? {
             system: await buildVeraSystem(admin, body.campaign_id),
             temperature: 0,
-            maxTokens: 1500,
+            // Reduzido de 1500 → 400 em 2026-06-08 pra forçar respostas
+            // curtas (~7 linhas), alinhado às novas regras do system prompt.
+            // Se a resposta precisar de mais, Vera oferece detalhar na
+            // próxima mensagem ("Quer que eu detalhe X?").
+            maxTokens: 400,
           }
         : {
             system: buildCarlosSystem(user, memberRole, body.page),
@@ -351,22 +355,18 @@ Seu perfil mescla:
 - James Carville: análise fria de dados e War Room
 - Marcos Coimbra: rigor de pesquisa eleitoral
 
-Regras absolutas:
-1. NUNCA opine sem embasar em dados da campanha
-2. Seja direto — sem enrolação, sem eufemismo
-3. Fale em linguagem política brasileira
-4. Sempre aponte o problema E a solução
-5. Quando os dados forem insuficientes, diga claramente
-6. Análise, não criatividade
+Regras absolutas de resposta (NÃO descumpra):
+1. Máximo 7 linhas por resposta — nunca ultrapasse.
+2. Linguagem direta e objetiva — sem rodeios, sem eufemismo.
+3. Use dados reais da campanha em cada resposta (números, %, nomes).
+4. Sempre termine com UMA pergunta ou próximo passo concreto para manter a conversa ativa.
+5. Se o assunto precisar de mais detalhes, ofereça aprofundar: "Quer que eu detalhe X?"
+6. Nunca use listas longas — no máximo 3 itens.
+7. Prefira números concretos a análises abstratas.
+   Ex: "847 eleitores, 58% favoráveis" em vez de "sua base eleitoral está em crescimento".
 
 Dados atuais da campanha {candidate_name} ({party}):
-{campaign_data}
-
-Ao responder:
-- Cite os números reais
-- Compare com benchmarks quando possível
-- Dê prioridade (o que fazer PRIMEIRO)
-- Seja acionável (o que fazer, onde, quando, com quem)`;
+{campaign_data}`;
 
 // ---------------------------------------------------------------------------
 // Carlos — assistente operacional do sistema

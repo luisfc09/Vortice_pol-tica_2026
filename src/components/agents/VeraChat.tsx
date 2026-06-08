@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Send, Loader2, MessageSquareText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { QuickSuggestions } from '@/components/agents/QuickSuggestions';
 import { useAgentConversation } from '@/hooks/useAgentConversation';
 import { supabase } from '@/lib/supabase';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
+import { collections, useCollection } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
 const SUGGESTIONS = [
@@ -29,6 +30,38 @@ export function VeraChat() {
   });
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Welcome dinâmico: enquanto useCollection hidrata, mostra fallback
+  // genérico (B1); quando carrega com 0 eleitores, mostra mensagem
+  // alternativa onboarding-friendly (C1); caso contrário, números reais.
+  // SupabaseCollection retorna [] enquanto carrega, então diferenciamos
+  // "ainda carregando" de "carregou vazio" via flag.
+  const voters = useCollection(collections.voters);
+  const [votersLoaded, setVotersLoaded] = useState(false);
+  useEffect(() => {
+    // Marca como carregado depois do primeiro tick (mesmo que o array seja
+    // vazio — diferencia "vazio porque ainda carregou nada" de "vazio porque
+    // a campanha realmente não tem eleitores"). Usa setTimeout(0) pra dar
+    // 1 ciclo de hidratação ao SupabaseCollection.
+    const t = window.setTimeout(() => setVotersLoaded(true), 600);
+    return () => window.clearTimeout(t);
+  }, [campaignId]);
+
+  const welcomeMessage = useMemo(() => {
+    if (!votersLoaded) {
+      return 'Olá! Sou a Vera, sua estrategista. Carregando os dados da sua campanha…';
+    }
+    if (voters.length === 0) {
+      return (
+        'Olá! Sou a Vera, sua estrategista. Sua campanha ainda não tem eleitores ' +
+        'mapeados. Por onde quer começar — entrevistas de campo, plano financeiro, ou outro?'
+      );
+    }
+    const apoiadores = voters.filter((v) => v.vote_intention === 'apoiador').length;
+    const pct = Math.round((apoiadores / voters.length) * 100);
+    const fmt = new Intl.NumberFormat('pt-BR').format(voters.length);
+    return `Olá! Sou a Vera, sua estrategista. Hoje você tem ${fmt} eleitores mapeados e ${pct}% favoráveis. Por onde quer começar?`;
+  }, [votersLoaded, voters]);
 
   useEffect(() => {
     if (!campaignId) return;
@@ -105,7 +138,7 @@ export function VeraChat() {
               <div className="flex items-start gap-2">
                 <AgentAvatar url={agent.avatar_url} name={agent.name} size={32} />
                 <div className="max-w-[80%] rounded-2xl border border-vortex-border bg-vortex-surface/60 px-3 py-2 text-sm text-foreground/90">
-                  Tenho acesso aos dados atuais da sua campanha. Por onde quer começar?
+                  {welcomeMessage}
                 </div>
               </div>
               <QuickSuggestions
