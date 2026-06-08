@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
+import { resolveHomeRoute } from '@/lib/homeRoute';
 import type { UserRole } from '@/types';
 
 interface ProtectedRouteProps {
@@ -49,17 +50,8 @@ export function ProtectedRoute({
 
   // "Home" de fallback do role — usado em todos os redirects de rota negada.
   // Cada role bloqueado precisa cair numa rota que ele PODE acessar (senão
-  // vira loop infinito). Matriz de permissões:
-  //   • supporter → /minha-rede (única rota dele de fato, exceto /agenda)
-  //   • leader    → /agenda (leader NÃO pode acessar /dashboard na matriz)
-  //   • outros    → /dashboard (admin, candidate, coordinator, researcher,
-  //                 field_agent — todos têm acesso)
-  const fallbackHome =
-    session.role === 'supporter'
-      ? '/minha-rede'
-      : session.role === 'leader'
-        ? '/agenda'
-        : '/dashboard';
+  // vira loop infinito). Fonte única em src/lib/homeRoute.ts.
+  const fallbackHome = resolveHomeRoute(session.role);
 
   if (requireSuperAdmin && !session.is_super_admin) {
     return <Navigate to={fallbackHome} replace />;

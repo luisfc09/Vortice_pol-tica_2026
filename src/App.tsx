@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { useBrandSync } from '@/hooks/useBrand';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
+import { resolveHomeRoute } from '@/lib/homeRoute';
 import LoginPage from '@/pages/Login';
 import ConvitePage from '@/pages/Convite';
 import MinhaRedePage from '@/pages/MinhaRede';
@@ -58,22 +59,16 @@ function LazyFallback() {
 }
 
 /**
- * Resolve a "home" do user baseado no role. Espelha o `fallbackHome` do
- * ProtectedRoute — mantém os 2 sincronizados pra evitar loops.
- *
- * - supporter → /minha-rede (não pode acessar /dashboard)
- * - leader    → /agenda     (não pode acessar /dashboard)
- * - demais (admin, candidate, coordinator, researcher, field_agent) → /dashboard
+ * Resolve a "home" do user baseado no role. Usa o helper único de
+ * src/lib/homeRoute.ts — mesma fonte usada por ProtectedRoute, TrocarSenha
+ * e AguardandoAtivacao (single source of truth pra evitar dessincroniza).
  *
  * Renderizado apenas dentro do <ProtectedRoute requireCampaign>, então
  * session.role sempre existe quando este componente roda.
  */
 function HomeRedirect() {
   const session = useEffectiveSession();
-  const role = session?.role;
-  const target =
-    role === 'supporter' ? '/minha-rede' : role === 'leader' ? '/agenda' : '/dashboard';
-  return <Navigate to={target} replace />;
+  return <Navigate to={resolveHomeRoute(session?.role)} replace />;
 }
 
 export default function App() {

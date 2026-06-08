@@ -5,15 +5,21 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { VorticeLogo } from '@/components/brand/VorticeLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { initials } from '@/lib/utils';
+import { resolveHomeRoute } from '@/lib/homeRoute';
 import { toast } from 'sonner';
 
 export default function AguardandoAtivacaoPage() {
   const { session, signOut } = useAuth();
 
-  // Se o usuário já foi aprovado e voltou aqui por engano, manda pro dashboard
+  // Se o usuário já foi aprovado e voltou aqui por engano, manda pra home.
+  // Importante usar resolveHomeRoute em vez de /dashboard hardcoded —
+  // supporters aprovados (via accept-invite com is_active=true) caem aqui
+  // por race condition do useAuth, e mandá-los pra /dashboard dispara loop
+  // de redirect via ProtectedRoute (supporter NÃO pode acessar /dashboard).
   if (!session) return <Navigate to="/login" replace />;
-  if (session.campaign || session.is_super_admin) {
-    return <Navigate to="/dashboard" replace />;
+  if (session.is_super_admin) return <Navigate to="/admin/campaigns" replace />;
+  if (session.campaign) {
+    return <Navigate to={resolveHomeRoute(session.role)} replace />;
   }
 
   async function copyEmail() {

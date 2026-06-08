@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase, USE_MOCKS } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
+import { resolveHomeRoute } from '@/lib/homeRoute';
 
 const MIN_LENGTH = 8;
 
@@ -46,7 +47,11 @@ export default function TrocarSenhaPage() {
           profile: { ...session.profile, must_change_password: false },
         });
         toast.success('Senha atualizada (modo demonstração).');
-        navigate('/dashboard', { replace: true });
+        // Resolve home por role — supporter → /minha-rede, leader → /agenda,
+        // demais → /dashboard. Sem isso, supporter cai em /dashboard e o
+        // ProtectedRoute redireciona, gerando 1 hop a mais (funciona, mas
+        // este branch direto é mais limpo).
+        navigate(resolveHomeRoute(session.role), { replace: true });
         return;
       }
 
@@ -68,7 +73,8 @@ export default function TrocarSenhaPage() {
         profile: { ...session.profile, must_change_password: false },
       });
       toast.success('Senha atualizada. Bem-vindo!');
-      navigate('/dashboard', { replace: true });
+      // Mesmo branch do mock acima — supporter vai direto pra /minha-rede.
+      navigate(resolveHomeRoute(session.role), { replace: true });
     } finally {
       setSubmitting(false);
     }

@@ -14,8 +14,9 @@
 //     4. INSERT em supporters: name, email, phone, city, referrer_id (do
 //        indicador), campaign_id (do indicador), status='ativo',
 //        created_by=novo_user_id.
-//     5. INSERT em campaign_users: role='supporter', is_active=false
-//        (admin precisa aprovar), invited_by=referrer.created_by.
+//     5. INSERT em campaign_users: role='supporter', is_active=true
+//        (aprovação automática — convite é a aprovação implícita feita por
+//        quem gerou o link).
 //     6. UPDATE supporters do indicador → invite_used_at = now()  (queima).
 //     7. Faz sign-in com a senha temp e devolve {access_token, refresh_token,
 //        user, supporter_id, must_change_password:true}.
@@ -175,14 +176,19 @@ Deno.serve(async (req: Request) => {
     return json({ error: `Falha ao registrar liderança: ${supporterErr.message}` }, 500);
   }
 
-  // ----- 5) campaign_users (pendente — admin aprova depois) -----
+  // ----- 5) campaign_users (APROVAÇÃO AUTOMÁTICA — sem espera de admin) -----
+  // Quem gerou o link de convite (admin/coord/leader/supporter da rede) já é
+  // a "aprovação implícita" — não faz sentido pedir ao admin pra confirmar
+  // de novo. Mudança aplicada em 2026-06-08 a pedido do usuário; o fluxo
+  // de provision-user (admin cria usuário manualmente) continua exigindo
+  // aprovação por toggle de is_active na lista de Usuários.
   const { error: cuErr } = await admin
     .from('campaign_users')
     .insert({
       campaign_id: invite.campaign_id,
       user_id: userId,
       role: 'supporter',
-      is_active: false,                      // ⬅ pendente
+      is_active: true,                       // ⬅ ATIVO de cara
       // invited_by: campos do RPC não traz quem indicou no nível de user;
       // deixamos null por ora. O frontend vai mostrar pela hierarquia em
       // supporters.referrer_id quando precisar.
