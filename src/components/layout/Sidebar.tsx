@@ -35,40 +35,34 @@ interface NavItem {
   module?: string;
 }
 
-// Whitelist de "todos menos supporter" — espelha as rotas do GRUPO A em App.tsx.
-// Quando o item NÃO tem `roles` configurado, é aberto a todos os roles, o que
-// vazaria pro supporter. Usado nos itens "genéricos" do menu (Dashboard,
-// Financeiro, Lideranças, Mapa, Pesquisas) que existem pra todo mundo da
-// campanha menos supporter (ele vê só Minha Rede + Agenda).
-const ALL_ROLES_EXCEPT_SUPPORTER: UserRole[] = [
-  'admin',
-  'candidate',
-  'coordinator',
-  'researcher',
-  'leader',
-  'field_agent',
-];
+// Matriz de visibilidade dos itens da sidebar — espelha 1:1 as restrições de
+// rota em App.tsx. Mantida aqui como `roles` por item (em vez de uma whitelist
+// global) porque cada feature tem um conjunto diferente de roles permitidos.
+// Ver §6.5 da DOCUMENTACAO-TECNICA.md para a matriz completa.
 
 const ITEMS: NavItem[] = [
   {
     to: '/dashboard',
     label: 'Dashboard',
     icon: ChartNoAxesCombined,
-    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    // Sem supporter (vai pra /minha-rede) nem leader (vai pra /agenda).
+    roles: ['admin', 'candidate', 'coordinator', 'researcher', 'field_agent'],
     requiresCampaign: true,
   },
   {
     to: '/financeiro',
     label: 'Financeiro',
     icon: DollarSign,
-    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    // Só quem decide / executa orçamento.
+    roles: ['admin', 'candidate', 'coordinator'],
     requiresCampaign: true,
   },
   {
     to: '/inteligencia',
     label: 'Inteligência Eleitoral',
     icon: ChartColumnIncreasing,
-    roles: ['admin', 'candidate', 'coordinator', 'researcher'],
+    // Inclui field_agent (lê insights pra atuar em campo). Sem leader.
+    roles: ['admin', 'candidate', 'coordinator', 'researcher', 'field_agent'],
     requiresCampaign: true,
     module: 'inteligencia', // só plano Avançado (top)
   },
@@ -83,15 +77,18 @@ const ITEMS: NavItem[] = [
     to: '/liderancas',
     label: 'Lideranças',
     icon: Users,
-    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    // Leader entra aqui pra cadastrar/gerenciar sua rede. Researcher e
+    // field_agent ficam fora (não cadastram pirâmide).
+    roles: ['admin', 'candidate', 'coordinator', 'leader'],
     requiresCampaign: true,
   },
   {
-    // Migration 047 — visão restrita do supporter da própria pirâmide
+    // Migration 047 — visão restrita da própria sub-árvore.
+    // Supporter sempre tem; leader também (ele indica supporters via convite).
     to: '/minha-rede',
     label: 'Minha Rede',
     icon: Network,
-    roles: ['supporter'],
+    roles: ['supporter', 'leader'],
     requiresCampaign: true,
   },
   // Item /eleitores foi REMOVIDO daqui — a gestão de eleitores agora vive
@@ -101,14 +98,23 @@ const ITEMS: NavItem[] = [
     to: '/mapa',
     label: 'Mapa Eleitoral',
     icon: MapPin,
-    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    // 6 roles (todos menos supporter).
+    roles: [
+      'admin',
+      'candidate',
+      'coordinator',
+      'researcher',
+      'leader',
+      'field_agent',
+    ],
     requiresCampaign: true,
   },
   {
     to: '/mencoes',
     label: 'Menções',
     icon: Megaphone,
-    roles: ['admin', 'coordinator', 'researcher'],
+    // Inclui candidate (quem responde menções).
+    roles: ['admin', 'candidate', 'coordinator', 'researcher'],
     requiresCampaign: true,
     module: 'mencoes', // Intermediário e Avançado
   },
@@ -116,7 +122,8 @@ const ITEMS: NavItem[] = [
     to: '/campo',
     label: 'Pesquisas',
     icon: ClipboardList,
-    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    // Trabalho de campo operacional — sem candidate, sem leader.
+    roles: ['admin', 'coordinator', 'researcher', 'field_agent'],
     requiresCampaign: true,
   },
   // Agenda — aberta a TODOS (inclui supporter, que vê em read-only via

@@ -58,17 +58,21 @@ function LazyFallback() {
 }
 
 /**
- * Resolve a "home" do user baseado no role.
- * - supporter → /minha-rede (única rota que ele acessa de fato como dono)
- * - todos os outros (admin, candidate, coordinator, researcher, leader,
- *   field_agent) → /dashboard
+ * Resolve a "home" do user baseado no role. Espelha o `fallbackHome` do
+ * ProtectedRoute — mantém os 2 sincronizados pra evitar loops.
+ *
+ * - supporter → /minha-rede (não pode acessar /dashboard)
+ * - leader    → /agenda     (não pode acessar /dashboard)
+ * - demais (admin, candidate, coordinator, researcher, field_agent) → /dashboard
  *
  * Renderizado apenas dentro do <ProtectedRoute requireCampaign>, então
  * session.role sempre existe quando este componente roda.
  */
 function HomeRedirect() {
   const session = useEffectiveSession();
-  const target = session?.role === 'supporter' ? '/minha-rede' : '/dashboard';
+  const role = session?.role;
+  const target =
+    role === 'supporter' ? '/minha-rede' : role === 'leader' ? '/agenda' : '/dashboard';
   return <Navigate to={target} replace />;
 }
 
@@ -90,25 +94,35 @@ export default function App() {
 
         {/* ------------------------------------------------------------------
             Rotas da campanha — exigem membership ativo.
-            Divididas em 3 grupos por nível de acesso:
+            Matriz completa de permissões por role implementada via sub-grupos
+            de ProtectedRoute — cada bloco abaixo lista os roles permitidos
+            naquela rota. ProtectedRoute redireciona para `fallbackHome` quando
+            o role do user NÃO está na lista (supporter→/minha-rede,
+            leader→/agenda, demais→/dashboard).
 
-            GRUPO A — todas as rotas EXCETO supporter (bloqueio explícito).
-              Roles permitidos: admin, candidate, coordinator, researcher,
-              leader, field_agent (legado). Supporter NÃO acessa nenhuma
-              dessas — qualquer tentativa via URL redireciona pra /minha-rede.
+            Quem pode o quê (ver docs/DOCUMENTACAO-TECNICA.md §6.5):
 
-            GRUPO B — aberto a TODOS os roles da campanha (inclui supporter).
-              Hoje: /agenda apenas (supporter vê em read-only, sem editar).
-
-            GRUPO C — exclusivo do supporter (/minha-rede).
-              Admin/coord/etc não precisam — eles veem a árvore completa em
-              /liderancas → aba Rede.
-
-            HomeRedirect resolve "/" dinamicamente (supporter → /minha-rede,
-            outros → /dashboard).
+              Rota               | adm | cand | coord | res | sup | lead | field
+              -------------------|-----|------|-------|-----|-----|------|------
+              /dashboard         |  ✅ |  ✅  |  ✅   | ✅  |  ❌ |  ❌  |  ✅
+              /inteligencia      |  ✅ |  ✅  |  ✅   | ✅  |  ❌ |  ❌  |  ✅
+              /financeiro        |  ✅ |  ✅  |  ✅   | ❌  |  ❌ |  ❌  |  ❌
+              /liderancas        |  ✅ |  ✅  |  ✅   | ❌  |  ❌ |  ✅  |  ❌
+              /eleitores, /mapa  |  ✅ |  ✅  |  ✅   | ✅  |  ❌ |  ✅  |  ✅
+              /campo/*           |  ✅ |  ❌  |  ✅   | ✅  |  ❌ |  ❌  |  ✅
+              /agentes/vera      |  ✅ |  ✅  |  ❌   | ❌  |  ❌ |  ❌  |  ❌
+              /mencoes/*         |  ✅ |  ✅  |  ✅   | ✅  |  ❌ |  ❌  |  ❌
+              /perguntas-region. |  ✅ |  ❌  |  ✅   | ❌  |  ❌ |  ❌  |  ❌
+              /onboarding        |  ✅ |  ❌  |  ❌   | ❌  |  ❌ |  ❌  |  ❌
+              /usuarios, /integr.|  ✅ |  ❌  |  ✅   | ❌  |  ❌ |  ❌  |  ❌
+              /campanha/branding |  ✅ |  ❌  |  ✅   | ❌  |  ❌ |  ❌  |  ❌
+              /minha-rede        |  ❌ |  ❌  |  ❌   | ❌  |  ✅ |  ✅  |  ❌
+              /agenda            |  ✅ |  ✅  |  ✅   | ✅  |  ✅ |  ✅  |  ✅
+              /admin/*           |  super_admin only (qualquer role base)
             ------------------------------------------------------------------ */}
 
-        {/* GRUPO B + HomeRedirect — abertos a todos os roles da campanha */}
+        {/* Universal — abertos a TODOS os roles da campanha (inclui supporter
+            e leader). HomeRedirect resolve "/" por role. */}
         <Route element={<ProtectedRoute requireCampaign />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<HomeRedirect />} />
@@ -116,7 +130,60 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* GRUPO A — bloqueado para supporter */}
+        {/* Dashboard + Inteligência — 5 roles (sem supporter, sem leader) */}
+        <Route
+          element={
+            <ProtectedRoute
+              requireCampaign
+              roles={['admin', 'candidate', 'coordinator', 'researcher', 'field_agent']}
+            />
+          }
+        >
+          <Route element={<AppLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/inteligencia" element={<InteligenciaPage />} />
+          </Route>
+        </Route>
+
+        {/* Financeiro — apenas admin, candidate, coordinator */}
+        <Route
+          element={
+            <ProtectedRoute
+              requireCampaign
+              roles={['admin', 'candidate', 'coordinator']}
+            />
+          }
+        >
+          <Route element={<AppLayout />}>
+            <Route
+              path="/financeiro"
+              element={
+                <Suspense fallback={<LazyFallback />}>
+                  <FinanceiroPage />
+                </Suspense>
+              }
+            />
+          </Route>
+        </Route>
+
+        {/* Lideranças — admin, candidate, coordinator, leader.
+            Researcher e field_agent ficam de fora (não cadastram pirâmide).
+            Supporter usa /minha-rede pra ver a própria sub-árvore. */}
+        <Route
+          element={
+            <ProtectedRoute
+              requireCampaign
+              roles={['admin', 'candidate', 'coordinator', 'leader']}
+            />
+          }
+        >
+          <Route element={<AppLayout />}>
+            <Route path="/liderancas" element={<LiderancasPage />} />
+          </Route>
+        </Route>
+
+        {/* Eleitores + Mapa — 6 roles (sem supporter). /eleitores é fallback
+            legado mantido pra bookmarks antigos; navegação real é via /mapa. */}
         <Route
           element={
             <ProtectedRoute
@@ -133,19 +200,23 @@ export default function App() {
           }
         >
           <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route
-              path="/financeiro"
-              element={
-                <Suspense fallback={<LazyFallback />}>
-                  <FinanceiroPage />
-                </Suspense>
-              }
-            />
-            <Route path="/liderancas" element={<LiderancasPage />} />
             <Route path="/eleitores" element={<EleitoresPage />} />
             <Route path="/mapa" element={<MapaPage />} />
-            <Route path="/inteligencia" element={<InteligenciaPage />} />
+          </Route>
+        </Route>
+
+        {/* Campo / Pesquisas — admin, coordinator, researcher, field_agent.
+            Candidate e leader não acessam (entrevistas são trabalho de campo
+            operacional). */}
+        <Route
+          element={
+            <ProtectedRoute
+              requireCampaign
+              roles={['admin', 'coordinator', 'researcher', 'field_agent']}
+            />
+          }
+        >
+          <Route element={<AppLayout />}>
             <Route path="/campo" element={<CampoHubPage />} />
             <Route path="/campo/hoje" element={<CampoHojePage />} />
             <Route path="/campo/historico" element={<CampoHistoricoPage />} />
@@ -172,14 +243,17 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* GRUPO C — exclusivo do supporter (Migration 047 — Fase 2 hierarquia) */}
-        <Route element={<ProtectedRoute requireCampaign roles={['supporter']} />}>
+        {/* Minha Rede — supporter + leader (Migration 047 — Fase 2 hierarquia).
+            Leader também tem sub-árvore própria (pessoas que ele indicou). */}
+        <Route
+          element={<ProtectedRoute requireCampaign roles={['supporter', 'leader']} />}
+        >
           <Route element={<AppLayout />}>
             <Route path="/minha-rede" element={<MinhaRedePage />} />
           </Route>
         </Route>
 
-        {/* Vera_IA — estrategista (admin e candidato) */}
+        {/* Vera_IA — estrategista (admin e candidato apenas) */}
         <Route element={<ProtectedRoute requireCampaign roles={['admin', 'candidate']} />}>
           <Route element={<AppLayout />}>
             <Route path="/agentes/vera" element={<VeraIAPage />} />
@@ -188,11 +262,12 @@ export default function App() {
           </Route>
         </Route>
 
+        {/* Menções + Resposta Rápida — admin, candidate, coordinator, researcher */}
         <Route
           element={
             <ProtectedRoute
               requireCampaign
-              roles={['admin', 'coordinator', 'researcher']}
+              roles={['admin', 'candidate', 'coordinator', 'researcher']}
             />
           }
         >
@@ -206,13 +281,21 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* Perguntas regionais — gerenciamento só do admin da campanha */}
-        <Route element={<ProtectedRoute requireCampaign roles={['admin']} />}>
+        {/* Perguntas regionais — admin + coordinator (setup de pesquisa) */}
+        <Route
+          element={<ProtectedRoute requireCampaign roles={['admin', 'coordinator']} />}
+        >
           <Route element={<AppLayout />}>
             <Route
               path="/pesquisas/perguntas-regionais"
               element={<PerguntasRegionaisPage />}
             />
+          </Route>
+        </Route>
+
+        {/* Onboarding — só admin (setup inicial da campanha) */}
+        <Route element={<ProtectedRoute requireCampaign roles={['admin']} />}>
+          <Route element={<AppLayout />}>
             <Route path="/onboarding" element={<OnboardingPage />} />
           </Route>
         </Route>
