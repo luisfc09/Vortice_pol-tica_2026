@@ -35,10 +35,22 @@ export function useMySupporter() {
   const supporters = useCollection(collections.supporters);
 
   // Encontra o supporter cujo created_by bate com o user logado. Mesmo
-  // padrão de MinhaRede.tsx (linha 78) — consistência intencional.
+  // padrão de MinhaRede.tsx — mantido sincronizado.
+  //
+  // ⚠️ Pegadinha: `created_by` tem 2 semânticas que colidem — "este supporter
+  // É o user X" (accept-invite ou ensure()) E "este supporter foi cadastrado
+  // pelo user X" (cadastros manuais). Sem filtrar pelo mais antigo, o `find`
+  // pode retornar um supporter recém-cadastrado pelo user (não o próprio dele),
+  // o que faz a UI flipar de identidade após cada cadastro novo.
+  // Solução: pegar o MAIS ANTIGO — o supporter próprio é SEMPRE criado antes
+  // de qualquer outro que o user venha a cadastrar.
   const supporter = useMemo<Supporter | null>(() => {
     if (!session) return null;
-    return supporters.find((s) => s.created_by === session.id) ?? null;
+    const mine = supporters.filter((s) => s.created_by === session.id);
+    if (mine.length === 0) return null;
+    return mine.reduce((oldest, s) =>
+      +new Date(s.created_at) < +new Date(oldest.created_at) ? s : oldest,
+    );
   }, [supporters, session]);
 
   const ensure = useCallback(async (): Promise<Supporter> => {
