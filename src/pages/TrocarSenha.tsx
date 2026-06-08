@@ -55,6 +55,32 @@ export default function TrocarSenhaPage() {
         return;
       }
 
+      // ⚠️ Webview do WhatsApp (Hipótese 2 do diagnóstico) às vezes perde
+      // a sessão entre /convite/[code] → setSession → navigate('/trocar-senha').
+      // O Zustand mostra session OK (UI renderizada) mas o cliente Supabase
+      // perdeu o token internamente — updateUser falha com "Auth session
+      // missing".
+      //
+      // Defesa: verificar a sessão IN-CLIENT antes do updateUser e, se
+      // ausente, tentar re-login SILENCIOSO com a senha temp 123456 (sabemos
+      // que é o caso recém-criado pelo accept-invite). Se o re-login falhar
+      // aí sim mostra mensagem amigável e manda pro /login.
+      const { data: liveSession } = await supabase.auth.getSession();
+      if (!liveSession.session) {
+        const { error: reLoginErr } = await supabase.auth.signInWithPassword({
+          email: session.email,
+          password: '123456',
+        });
+        if (reLoginErr) {
+          toast.error(
+            'Sua sessão expirou. Faça login com a senha temporária 123456.',
+          );
+          navigate('/login', { replace: true });
+          return;
+        }
+        // Re-login OK — segue silenciosamente.
+      }
+
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
         toast.error(updateError.message);
