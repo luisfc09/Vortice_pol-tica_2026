@@ -30,25 +30,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
+import { AddressFields, type AddressValue } from '@/components/forms/AddressFields';
 import { supabase } from '@/lib/supabase';
 import { formatPhone } from '@/lib/utils';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 import { checkDuplicate, type DuplicateCheckResult } from '@/lib/supporterDedup';
-import {
-  SUPPORTER_ROLE_LABEL,
-  SUPPORTER_ROLE_OPTIONS,
-  type Supporter,
-  type SupporterRoleType,
-} from '@/types';
+import { type Supporter } from '@/types';
 
 interface AddSupporterSheetProps {
   open: boolean;
@@ -82,7 +71,12 @@ function formatCpf(raw: string): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
-/** Estado do formulário — sub-set dos campos de Supporter relevantes pro fluxo. */
+/** Estado do formulário — sub-set dos campos de Supporter relevantes pro fluxo.
+ *
+ * Nota sobre `role`: NÃO faz parte do FormState porque o usuário não escolhe
+ * — todo cadastro feito por esta tela vira `role='apoiador'` automaticamente
+ * (hardcoded no payload). Por isso o dropdown "Função na campanha" foi
+ * removido em 2026-06-08. */
 interface FormState {
   name: string;
   whatsapp: string;
@@ -90,9 +84,14 @@ interface FormState {
   cpf: string;
   email: string;
   phone: string;
-  role: SupporterRoleType;
   vote_potential: number | null;
   notes: string;
+  // Endereço — preenchido (parcial ou totalmente) via ViaCEP pelo AddressFields.
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  neighborhood: string | null;
 }
 
 const EMPTY: FormState = {
@@ -102,9 +101,13 @@ const EMPTY: FormState = {
   cpf: '',
   email: '',
   phone: '',
-  role: 'apoiador', // confirmado existir em SupporterRoleType
   vote_potential: null,
   notes: '',
+  cep: null,
+  logradouro: null,
+  numero: null,
+  complemento: null,
+  neighborhood: null,
 };
 
 export function AddSupporterSheet({
@@ -134,9 +137,13 @@ export function AddSupporterSheet({
         cpf: editing.cpf ?? '',
         email: editing.email ?? '',
         phone: editing.phone ?? '',
-        role: editing.role,
         vote_potential: editing.vote_potential,
         notes: editing.notes ?? '',
+        cep: editing.cep,
+        logradouro: editing.logradouro,
+        numero: editing.numero,
+        complemento: editing.complemento,
+        neighborhood: editing.neighborhood,
       });
     } else {
       setForm(EMPTY);
@@ -162,6 +169,25 @@ export function AddSupporterSheet({
 
   function handleMunicipalityChange(code: string) {
     setForm((f) => ({ ...f, municipality_code: code || null }));
+    if (dup) setDup(null);
+  }
+
+  /**
+   * Recebe o AddressValue completo do AddressFields (que já tem ViaCEP
+   * embutido). Faz merge com o restante do form. O AddressFields também
+   * pode atualizar `city` e `municipality_code` quando o ViaCEP devolve
+   * um IBGE de MG — preservamos esse comportamento.
+   */
+  function handleAddressChange(next: AddressValue) {
+    setForm((f) => ({
+      ...f,
+      cep: next.cep,
+      logradouro: next.logradouro,
+      numero: next.numero,
+      complemento: next.complemento,
+      neighborhood: next.neighborhood,
+      municipality_code: next.municipality_code,
+    }));
     if (dup) setDup(null);
   }
 
@@ -220,12 +246,23 @@ export function AddSupporterSheet({
         cpf: form.cpf.trim() || null,
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
-        role: form.role,
+        // Cadastro feito pela rede em /minha-rede SEMPRE é apoiador — o
+        // usuário não escolhe o cargo. Override também em modo edição
+        // (não há expectativa de mudar o role por esta tela).
+        role: 'apoiador' as const,
+        role_custom: null,
         vote_potential:
           form.vote_potential != null && form.vote_potential >= 0
             ? form.vote_potential
             : null,
         notes: form.notes.trim() || null,
+        // Endereço — strings vazias viram null (consistência com seleção
+        // opcional do banco; evita salvar " " ou "").
+        cep: form.cep?.trim() || null,
+        logradouro: form.logradouro?.trim() || null,
+        numero: form.numero?.trim() || null,
+        complemento: form.complemento?.trim() || null,
+        neighborhood: form.neighborhood?.trim() || null,
       };
 
       if (editing) {
@@ -324,6 +361,22 @@ export function AddSupporterSheet({
             />
           </div>
 
+          {/* Endereço estruturado (migration 014) — CEP preenche logradouro,
+              bairro e cidade automaticamente via ViaCEP. Reutiliza o mesmo
+              componente do SupporterFormSheet/Eleitores. */}
+          <AddressFields
+            value={{
+              cep: form.cep,
+              logradouro: form.logradouro,
+              numero: form.numero,
+              complemento: form.complemento,
+              neighborhood: form.neighborhood,
+              city: cityName,
+              municipality_code: form.municipality_code,
+            }}
+            onChange={handleAddressChange}
+          />
+
           {/* ----- Opcionais ----- */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -376,25 +429,6 @@ export function AddSupporterSheet({
                 placeholder="Ex.: 5"
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Função na campanha</Label>
-            <Select
-              value={form.role}
-              onValueChange={(v) => update('role', v as SupporterRoleType)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SUPPORTER_ROLE_OPTIONS.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {SUPPORTER_ROLE_LABEL[r]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-2">
