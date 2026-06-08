@@ -76,25 +76,25 @@ export default function MinhaRedePage() {
   const session = useEffectiveSession();
   const supporters = useCollection(collections.supporters);
 
-  // Identifica o supporter logado por created_by = session.id.
-  // (Ele é o "dono" do registro porque o accept-invite criou usando o user_id
-  // dele como created_by.)
-  //
-  // ⚠️ Pegadinha: `created_by` tem 2 semânticas que colidem — "este supporter
-  // É o user X" (criado pelo accept-invite) E "este supporter foi cadastrado
-  // pelo user X" (criado pela UI em /minha-rede ou /liderancas). Quando o
-  // user já cadastrou apoiadores, vários supporters batem no filtro.
-  // Solução: pegar o MAIS ANTIGO — invariante sólida porque o supporter
-  // próprio é SEMPRE criado antes (no accept-invite OU no ensure() do
-  // primeiro convite).
+  // Identifica o supporter logado por created_by = session.id E email match.
+  // Ver useMySupporter.ts pra explicação completa da pegadinha — em resumo:
+  // exigir email match cobre o caso de users provisionados (sem accept-invite)
+  // que cadastraram supporters antes (o "mais antigo" sozinho retornava esses
+  // cadastros como se fossem o próprio user).
   const me = useMemo<Supporter | null>(() => {
     if (!session?.id) return null;
-    const mine = supporters.filter((s) => s.created_by === session.id);
+    const sessionEmail = session.email?.toLowerCase().trim();
+    if (!sessionEmail) return null;
+    const mine = supporters.filter(
+      (s) =>
+        s.created_by === session.id &&
+        s.email?.toLowerCase().trim() === sessionEmail,
+    );
     if (mine.length === 0) return null;
     return mine.reduce((oldest, s) =>
       +new Date(s.created_at) < +new Date(oldest.created_at) ? s : oldest,
     );
-  }, [supporters, session?.id]);
+  }, [supporters, session?.id, session?.email]);
 
   const byId = useMemo(() => indexById(supporters), [supporters]);
 

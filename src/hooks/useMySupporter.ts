@@ -39,14 +39,29 @@ export function useMySupporter() {
   //
   // ⚠️ Pegadinha: `created_by` tem 2 semânticas que colidem — "este supporter
   // É o user X" (accept-invite ou ensure()) E "este supporter foi cadastrado
-  // pelo user X" (cadastros manuais). Sem filtrar pelo mais antigo, o `find`
-  // pode retornar um supporter recém-cadastrado pelo user (não o próprio dele),
-  // o que faz a UI flipar de identidade após cada cadastro novo.
-  // Solução: pegar o MAIS ANTIGO — o supporter próprio é SEMPRE criado antes
-  // de qualquer outro que o user venha a cadastrar.
+  // pelo user X" (cadastros manuais). Fix do "mais antigo" (commit a50ff31)
+  // resolve só pra users que vieram via accept-invite. Para users
+  // PROVISIONADOS (admin/coord/researcher sem invite), eles NUNCA tiveram
+  // seu próprio supporter criado automaticamente — então o "mais antigo"
+  // pega o primeiro supporter que ELES cadastraram (ex.: Wallison),
+  // e o link gerado fica em nome do Wallison em vez do user.
+  //
+  // Fix definitivo: identificar o "próprio supporter" exigindo TAMBÉM
+  // email match — o supporter cujo email === session.email É o próprio
+  // user (accept-invite/ensure setam email = auth.email; cadastros manuais
+  // setam email da liderança alvo).
+  //
+  // Se nenhum casar, ensure() cria um novo supporter pro user com email
+  // = session.email — daí pra frente o casamento funciona.
   const supporter = useMemo<Supporter | null>(() => {
     if (!session) return null;
-    const mine = supporters.filter((s) => s.created_by === session.id);
+    const sessionEmail = session.email?.toLowerCase().trim();
+    if (!sessionEmail) return null;
+    const mine = supporters.filter(
+      (s) =>
+        s.created_by === session.id &&
+        s.email?.toLowerCase().trim() === sessionEmail,
+    );
     if (mine.length === 0) return null;
     return mine.reduce((oldest, s) =>
       +new Date(s.created_at) < +new Date(oldest.created_at) ? s : oldest,
