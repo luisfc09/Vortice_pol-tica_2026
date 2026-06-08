@@ -83,6 +83,10 @@ export function ConvidarLiderancaFab() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         supporter={target}
+        // Convite genérico: a mensagem referencia o nome do candidato
+        // (recipient não conhece o admin/coord, mas reconhece o candidato).
+        // session.campaign já está garantida não-null pelo gate acima.
+        campaignName={session.campaign.candidate_name}
       />
     </>
   );

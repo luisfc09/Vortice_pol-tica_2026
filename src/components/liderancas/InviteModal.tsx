@@ -15,6 +15,17 @@ interface InviteModalProps {
     name: string;
     invite_code: string;
   } | null;
+  /**
+   * Quando preenchido, a mensagem do convite referencia a CAMPANHA (ex.:
+   * "rede de apoiadores de João Silva") em vez do indicador. Usado pelo
+   * botão flutuante "Convidar Liderança" — convite genérico onde o
+   * recipient não conhece o admin/coord que está enviando, mas reconhece
+   * o nome do candidato.
+   *
+   * Quando undefined, mantém a mensagem antiga ("Olá, [nome]!") usada
+   * pelo botão "Convidar" no card de cada liderança individual.
+   */
+  campaignName?: string;
 }
 
 /**
@@ -33,7 +44,7 @@ interface InviteModalProps {
  * consumida o backend grava supporters.invite_used_at. Por isso o card de
  * Lideranças esconde o botão "Convidar" para códigos já usados (opção A).
  */
-export function InviteModal({ open, onClose, supporter }: InviteModalProps) {
+export function InviteModal({ open, onClose, supporter, campaignName }: InviteModalProps) {
   // URL completa do convite. window.location.origin funciona em dev (vite),
   // staging (Railway preview) e prod sem precisar de variável de ambiente.
   const inviteUrl = useMemo(() => {
@@ -43,9 +54,23 @@ export function InviteModal({ open, onClose, supporter }: InviteModalProps) {
     return `${window.location.origin}/convite/${supporter.invite_code}`;
   }, [supporter?.invite_code]);
 
-  // Mensagem padrão usada no WhatsApp, SMS e corpo do e-mail. Personaliza
-  // pelo nome da liderança quando disponível (fallback genérico se não tiver).
+  // Mensagem padrão usada no WhatsApp, SMS e corpo do e-mail.
+  //
+  // Dois modos:
+  //  • Genérico (campaignName presente, vindo do FAB "Convidar Liderança"):
+  //    referencia o CANDIDATO porque o recipient não conhece o admin/coord
+  //    que está enviando, mas reconhece o nome do candidato.
+  //  • Individual (campaignName undefined, vindo do botão "Convidar" no card):
+  //    saúda o destinatário pelo primeiro nome — o card é da liderança que
+  //    vai ser convidada, então temos o nome dela.
   const message = useMemo(() => {
+    if (campaignName) {
+      return (
+        `Você foi convidado(a) para fazer parte da rede de apoiadores de ${campaignName}.\n` +
+        `Clique no link abaixo para criar seu acesso (leva menos de 1 minuto):\n\n` +
+        `${inviteUrl}`
+      );
+    }
     const name = supporter?.name?.split(' ')[0] ?? '';
     const saudacao = name ? `Olá, ${name}!` : 'Olá!';
     return (
@@ -54,7 +79,7 @@ export function InviteModal({ open, onClose, supporter }: InviteModalProps) {
       `Clique no link abaixo para criar seu acesso (leva menos de 1 minuto):\n\n` +
       `${inviteUrl}`
     );
-  }, [supporter?.name, inviteUrl]);
+  }, [campaignName, supporter?.name, inviteUrl]);
 
   async function copyToClipboard(text: string, successLabel: string) {
     try {
@@ -80,9 +105,14 @@ export function InviteModal({ open, onClose, supporter }: InviteModalProps) {
   }
 
   function openEmail() {
-    const subject = supporter?.name
-      ? `Convite para a rede de apoiadores — ${supporter.name}`
-      : 'Convite para a rede de apoiadores';
+    // No modo genérico (FAB), o "alvo" é a campanha — usa o nome do candidato
+    // como suffix do subject. No modo individual, o subject usa o nome da
+    // liderança alvo do convite.
+    const subject = campaignName
+      ? `Convite para a rede de apoiadores — ${campaignName}`
+      : supporter?.name
+        ? `Convite para a rede de apoiadores — ${supporter.name}`
+        : 'Convite para a rede de apoiadores';
     const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
     window.location.href = url;
   }
@@ -101,9 +131,11 @@ export function InviteModal({ open, onClose, supporter }: InviteModalProps) {
                 Convidar liderança
               </DialogPrimitive.Title>
               <DialogPrimitive.Description className="mt-0.5 text-sm text-muted-foreground">
-                {supporter?.name
-                  ? `Compartilhe o link com ${supporter.name} via:`
-                  : 'Compartilhe o link via:'}
+                {campaignName
+                  ? `Compartilhe o link da campanha de ${campaignName} via:`
+                  : supporter?.name
+                    ? `Compartilhe o link com ${supporter.name} via:`
+                    : 'Compartilhe o link via:'}
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close
