@@ -50,6 +50,7 @@ import {
   indexById,
 } from '@/lib/hierarchy';
 import { AddSupporterSheet } from '@/components/minha-rede/AddSupporterSheet';
+import { RankingRede } from '@/components/minha-rede/RankingRede';
 import { InviteModal } from '@/components/liderancas/InviteModal';
 import {
   NIVEL_INFLUENCIA_LABEL,
@@ -198,6 +199,13 @@ export default function MinhaRedePage() {
           accent="text-sky-400"
         />
       </div>
+
+      {/* Ranking da Rede — Top 5 da campanha + linha do usuário ------ */}
+      <RankingRede
+        me={me}
+        supporters={supporters}
+        onInvite={() => setInviteOpen(true)}
+      />
 
       {/* Card de compartilhar convite ------------------------------- */}
       <div className="rounded-xl border border-vortex-border bg-vortex-surface/60 p-5 backdrop-blur">
