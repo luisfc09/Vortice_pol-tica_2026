@@ -47,8 +47,14 @@ export function ProtectedRoute({
     return <Navigate to="/renovar" replace />;
   }
 
+  // "Home" de fallback do role — usado em todos os redirects de rota negada.
+  // Sem isso, supporter (que NÃO pode acessar /dashboard) entra em loop
+  // infinito: rota bloqueada → /dashboard → bloqueado de novo → ...
+  // Mantém /dashboard como default pros demais roles.
+  const fallbackHome = session.role === 'supporter' ? '/minha-rede' : '/dashboard';
+
   if (requireSuperAdmin && !session.is_super_admin) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={fallbackHome} replace />;
   }
 
   if (requireCampaign && !session.campaign) {
@@ -62,7 +68,7 @@ export function ProtectedRoute({
 
   if (roles && roles.length > 0) {
     if (!session.role || !roles.includes(session.role)) {
-      return <Navigate to="/dashboard" replace />;
+      return <Navigate to={fallbackHome} replace />;
     }
   }
 

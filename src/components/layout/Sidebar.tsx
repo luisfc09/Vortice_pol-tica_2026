@@ -35,9 +35,35 @@ interface NavItem {
   module?: string;
 }
 
+// Whitelist de "todos menos supporter" — espelha as rotas do GRUPO A em App.tsx.
+// Quando o item NÃO tem `roles` configurado, é aberto a todos os roles, o que
+// vazaria pro supporter. Usado nos itens "genéricos" do menu (Dashboard,
+// Financeiro, Lideranças, Mapa, Pesquisas) que existem pra todo mundo da
+// campanha menos supporter (ele vê só Minha Rede + Agenda).
+const ALL_ROLES_EXCEPT_SUPPORTER: UserRole[] = [
+  'admin',
+  'candidate',
+  'coordinator',
+  'researcher',
+  'leader',
+  'field_agent',
+];
+
 const ITEMS: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: ChartNoAxesCombined, requiresCampaign: true },
-  { to: '/financeiro', label: 'Financeiro', icon: DollarSign, requiresCampaign: true },
+  {
+    to: '/dashboard',
+    label: 'Dashboard',
+    icon: ChartNoAxesCombined,
+    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    requiresCampaign: true,
+  },
+  {
+    to: '/financeiro',
+    label: 'Financeiro',
+    icon: DollarSign,
+    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    requiresCampaign: true,
+  },
   {
     to: '/inteligencia',
     label: 'Inteligência Eleitoral',
@@ -53,7 +79,13 @@ const ITEMS: NavItem[] = [
     roles: ['admin', 'candidate'],
     requiresCampaign: true,
   },
-  { to: '/liderancas', label: 'Lideranças', icon: Users, requiresCampaign: true },
+  {
+    to: '/liderancas',
+    label: 'Lideranças',
+    icon: Users,
+    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    requiresCampaign: true,
+  },
   {
     // Migration 047 — visão restrita do supporter da própria pirâmide
     to: '/minha-rede',
@@ -65,7 +97,13 @@ const ITEMS: NavItem[] = [
   // Item /eleitores foi REMOVIDO daqui — a gestão de eleitores agora vive
   // dentro do Mapa Eleitoral (aba "Eleitores", com pontos no mapa). A rota
   // /eleitores continua existindo para não quebrar bookmarks/links antigos.
-  { to: '/mapa', label: 'Mapa Eleitoral', icon: MapPin, requiresCampaign: true },
+  {
+    to: '/mapa',
+    label: 'Mapa Eleitoral',
+    icon: MapPin,
+    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    requiresCampaign: true,
+  },
   {
     to: '/mencoes',
     label: 'Menções',
@@ -74,7 +112,15 @@ const ITEMS: NavItem[] = [
     requiresCampaign: true,
     module: 'mencoes', // Intermediário e Avançado
   },
-  { to: '/campo', label: 'Pesquisas', icon: ClipboardList, requiresCampaign: true },
+  {
+    to: '/campo',
+    label: 'Pesquisas',
+    icon: ClipboardList,
+    roles: ALL_ROLES_EXCEPT_SUPPORTER,
+    requiresCampaign: true,
+  },
+  // Agenda — aberta a TODOS (inclui supporter, que vê em read-only via
+  // `canManage` em Agenda.tsx).
   { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
   {
     to: '/usuarios',

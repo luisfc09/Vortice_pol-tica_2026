@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { useBrandSync } from '@/hooks/useBrand';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import LoginPage from '@/pages/Login';
 import ConvitePage from '@/pages/Convite';
 import MinhaRedePage from '@/pages/MinhaRede';
@@ -56,6 +57,21 @@ function LazyFallback() {
   );
 }
 
+/**
+ * Resolve a "home" do user baseado no role.
+ * - supporter → /minha-rede (única rota que ele acessa de fato como dono)
+ * - todos os outros (admin, candidate, coordinator, researcher, leader,
+ *   field_agent) → /dashboard
+ *
+ * Renderizado apenas dentro do <ProtectedRoute requireCampaign>, então
+ * session.role sempre existe quando este componente roda.
+ */
+function HomeRedirect() {
+  const session = useEffectiveSession();
+  const target = session?.role === 'supporter' ? '/minha-rede' : '/dashboard';
+  return <Navigate to={target} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -72,10 +88,51 @@ export default function App() {
           <Route path="/renovar" element={<RenovarPage />} />
         </Route>
 
-        {/* Rotas da campanha — exigem membership ativo */}
+        {/* ------------------------------------------------------------------
+            Rotas da campanha — exigem membership ativo.
+            Divididas em 3 grupos por nível de acesso:
+
+            GRUPO A — todas as rotas EXCETO supporter (bloqueio explícito).
+              Roles permitidos: admin, candidate, coordinator, researcher,
+              leader, field_agent (legado). Supporter NÃO acessa nenhuma
+              dessas — qualquer tentativa via URL redireciona pra /minha-rede.
+
+            GRUPO B — aberto a TODOS os roles da campanha (inclui supporter).
+              Hoje: /agenda apenas (supporter vê em read-only, sem editar).
+
+            GRUPO C — exclusivo do supporter (/minha-rede).
+              Admin/coord/etc não precisam — eles veem a árvore completa em
+              /liderancas → aba Rede.
+
+            HomeRedirect resolve "/" dinamicamente (supporter → /minha-rede,
+            outros → /dashboard).
+            ------------------------------------------------------------------ */}
+
+        {/* GRUPO B + HomeRedirect — abertos a todos os roles da campanha */}
         <Route element={<ProtectedRoute requireCampaign />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<HomeRedirect />} />
+            <Route path="/agenda" element={<AgendaPage />} />
+          </Route>
+        </Route>
+
+        {/* GRUPO A — bloqueado para supporter */}
+        <Route
+          element={
+            <ProtectedRoute
+              requireCampaign
+              roles={[
+                'admin',
+                'candidate',
+                'coordinator',
+                'researcher',
+                'leader',
+                'field_agent',
+              ]}
+            />
+          }
+        >
+          <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route
               path="/financeiro"
@@ -112,8 +169,12 @@ export default function App() {
               element={<CampoQuestionarioPage />}
             />
             <Route path="/campo/faq" element={<CampoFaqPage />} />
-            <Route path="/agenda" element={<AgendaPage />} />
-            {/* Migration 047 — visão restrita do supporter (Fase 2 hierarquia) */}
+          </Route>
+        </Route>
+
+        {/* GRUPO C — exclusivo do supporter (Migration 047 — Fase 2 hierarquia) */}
+        <Route element={<ProtectedRoute requireCampaign roles={['supporter']} />}>
+          <Route element={<AppLayout />}>
             <Route path="/minha-rede" element={<MinhaRedePage />} />
           </Route>
         </Route>
