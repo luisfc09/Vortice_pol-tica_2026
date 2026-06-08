@@ -37,6 +37,7 @@ import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SupporterFormSheet } from '@/components/supporters/SupporterFormSheet';
 import { SupporterTree } from '@/components/liderancas/SupporterTree';
 import { InviteModal } from '@/components/liderancas/InviteModal';
+import { ConvidarLiderancaFab } from '@/components/liderancas/ConvidarLiderancaFab';
 import { OpenInMapsButton } from '@/components/maps/OpenInMapsButton';
 import {
   Select,
@@ -830,6 +831,12 @@ export default function LiderancasPage() {
             : null
         }
       />
+
+      {/* FAB "Convidar Liderança" — link genérico da campanha (usa o
+          invite_code do supporter do próprio admin/candidato/coord; auto-cria
+          se ainda não existir). Visível só pra esses 3 roles. Renderizado
+          ACIMA do CarlosDrawer (que ocupa bottom-5 right-5). */}
+      <ConvidarLiderancaFab />
     </div>
   );
 }
