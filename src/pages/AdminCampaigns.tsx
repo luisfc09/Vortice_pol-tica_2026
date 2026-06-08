@@ -15,6 +15,7 @@ import {
   Eye,
   RefreshCcw,
   Zap,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/data/EmptyState';
 import { SearchBar } from '@/components/data/SearchBar';
 import { FilterPill } from '@/components/data/FilterPill';
+import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { CampaignProvisionSheet } from '@/components/admin/CampaignProvisionSheet';
 import { supabase } from '@/lib/supabase';
 import { useViewAsStore } from '@/stores/viewAs';
@@ -64,6 +66,7 @@ interface ExpiringRow {
 export default function AdminCampaignsPage() {
   const navigate = useNavigate();
   const enterViewAs = useViewAsStore((s) => s.enter);
+  const exitViewAs = useViewAsStore((s) => s.exit);
   const viewAsId = useViewAsStore((s) => s.campaign?.id ?? null);
 
   const [rows, setRows] = useState<CampaignOverview[]>([]);
@@ -73,6 +76,10 @@ export default function AdminCampaignsPage() {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [runningExpire, setRunningExpire] = useState(false);
+  // Soft-delete via RPC `soft_delete_campaign`. O alvo guarda id + label só
+  // pra UX (modal mostra "Apagar campanha X?"). RPC preserva dados (recuperável
+  // pela "Zona de Perigo" na página de detalhe, que tem botão Restaurar).
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [runningReminders, setRunningReminders] = useState(false);
 
   // Entra no modo "ver como cliente": busca a campanha completa pelo id,
@@ -176,6 +183,29 @@ export default function AdminCampaignsPage() {
       return;
     }
     toast.success(`Status atualizado para ${CAMPAIGN_STATUS_LABEL[status]}.`);
+    void load();
+  }
+
+  /**
+   * Soft delete via RPC `soft_delete_campaign` — preserva dados, esconde
+   * a campanha das listas e tira acesso de todos os usuários. Reversível
+   * pela página de detalhe (botão "Restaurar"). Sem motivo (passa null
+   * pra `p_reason`): o fluxo com motivo continua disponível em
+   * `/admin/campaigns/[id]` na "Zona de Perigo" pra quem quiser auditar.
+   * Se a campanha apagada era a do view-as, sai do modo automaticamente
+   * pra evitar snapshot órfão.
+   */
+  async function doSoftDelete(id: string) {
+    const { error } = await supabase.rpc('soft_delete_campaign', {
+      p_campaign_id: id,
+      p_reason: null,
+    });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (viewAsId === id) exitViewAs();
+    toast.success('Campanha excluída. Dados preservados e recuperáveis.');
     void load();
   }
 
@@ -418,6 +448,23 @@ export default function AdminCampaignsPage() {
                       Cancelar
                     </Button>
                   ) : null}
+                  {/* Apagar (soft delete) — separado do Cancelar porque cancela
+                      é mudança de status (campanha visível, sem acesso); apagar
+                      é remover da lista. Ambos reversíveis. */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-300 hover:text-red-200"
+                    onClick={() =>
+                      setDeleteTarget({
+                        id: r.id,
+                        label: `${r.candidate_name} (${r.party} ${r.party_number})`,
+                      })
+                    }
+                    title="Apagar campanha (soft delete — dados preservados)"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Apagar
+                  </Button>
                 </div>
               </li>
             );
@@ -429,6 +476,24 @@ export default function AdminCampaignsPage() {
         open={provisionOpen}
         onOpenChange={setProvisionOpen}
         onCreated={load}
+      />
+
+      {/* Modal de confirmação do soft delete. Versão "rápida" — sem campo de
+          motivo (o fluxo com motivo continua disponível em /admin/campaigns/[id]
+          na Zona de Perigo, pra quem quiser auditar). */}
+      <ConfirmDelete
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Apagar campanha?"
+        description={
+          deleteTarget
+            ? `Apagar "${deleteTarget.label}" remove o acesso de todos os usuários e a esconde das listas. Os dados ficam preservados e podem ser restaurados pela página de detalhe.`
+            : ''
+        }
+        confirmLabel="Apagar"
+        onConfirm={() => {
+          if (deleteTarget) void doSoftDelete(deleteTarget.id);
+        }}
       />
     </div>
   );
