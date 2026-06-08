@@ -72,10 +72,14 @@ export function ConvidarLiderancaButton() {
   return (
     <>
       <Button
-        variant="outline"
         onClick={handleClick}
         disabled={loading}
         aria-label="Convidar nova liderança via link público"
+        // Lilás (#A78BFA) da paleta Vórtice — distingue visualmente do
+        // verde-lima do "Nova liderança" (ação primária de cadastro
+        // manual) e marca esta como ação alternativa de captação por
+        // link. Texto dark (#0A0F1E = vortex-bg) garante contraste AA.
+        className="bg-vortex-violet text-vortex-bg hover:bg-vortex-violet/90"
       >
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
