@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
+import { SearchBar } from '@/components/data/SearchBar';
 import { ProvisionSheet } from '@/components/team/ProvisionSheet';
 import { PendingUsersSection } from '@/components/team/PendingUsersSection';
 import { AvatarUpload } from '@/components/team/AvatarUpload';
@@ -19,7 +20,27 @@ import { collections, isMockMode, useCollection } from '@/lib/data';
 import { SEED_TEAMMATE_PROFILES } from '@/data/seeds';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
+import { normText, onlyDigits } from '@/lib/csv-import';
 import { ROLE_LABEL, type CampaignUser, type UserRole } from '@/types';
+
+/**
+ * Roles que aparecem no dropdown de filtro. Ordem foi pensada pra mostrar
+ * os papéis mais comuns primeiro (admin, candidate, coord) e os de campo
+ * mais ao fim. 'field_agent' é legado mas continua listado pra que users
+ * antigos consigam ser filtrados — quando não houver mais nenhum, dá pra
+ * remover daqui.
+ */
+const FILTER_ROLES: readonly UserRole[] = [
+  'admin',
+  'candidate',
+  'coordinator',
+  'researcher',
+  'supporter',
+  'leader',
+  'field_agent',
+];
+
+type RoleFilter = 'all' | UserRole;
 
 interface ProfileLite {
   full_name: string;
@@ -40,7 +61,38 @@ export default function UsuariosPage() {
 
   const callerIsSuperAdmin = !!session?.is_super_admin;
 
+  // Filtros visuais (não afetam o que o useCollection traz — só renderização).
+  const [query, setQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+
   const userIds = useMemo(() => members.map((m) => m.user_id), [members]);
+
+  // Lista filtrada — recomputada apenas quando members, profiles, query ou
+  // roleFilter mudam. Busca em (full_name + phone) usando normText (NFD +
+  // lowercase) pra nome e onlyDigits pra telefone (assim "31998682724"
+  // casa com "(31) 99868-2724" digitado com máscara).
+  const filtered = useMemo(() => {
+    const q = normText(query);
+    const qDigits = onlyDigits(query);
+    return members.filter((m) => {
+      if (roleFilter !== 'all' && m.role !== roleFilter) return false;
+      if (!q && !qDigits) return true;
+      // Resolve nome/phone usando o mesmo fallback chain de profileFor
+      // (profiles → seed → "Membro XXXX"). Não chamamos profileFor pra
+      // evitar dependência circular do useMemo na função; inline a parte
+      // relevante.
+      const p = profiles[m.user_id];
+      const fullName = p?.full_name ?? '';
+      const phone = p?.phone ?? '';
+      // Match no nome (case-insensitive, sem acento)
+      if (q && normText(fullName).includes(q)) return true;
+      // Match no telefone (só dígitos pra ignorar máscara)
+      if (qDigits && onlyDigits(phone).includes(qDigits)) return true;
+      return false;
+    });
+  }, [members, profiles, query, roleFilter]);
+
+  const hasActiveFilter = query.trim() !== '' || roleFilter !== 'all';
 
   // Carrega os profiles dos membros do banco. Em mock mode, usa SEED.
   useEffect(() => {
@@ -212,13 +264,50 @@ export default function UsuariosPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          {members.length} {members.length === 1 ? 'usuário' : 'usuários'} ·{' '}
-          {session?.campaign?.candidate_name ?? '—'}
+          {hasActiveFilter ? (
+            <>
+              <span className="text-foreground">{filtered.length}</span> de {members.length}{' '}
+              {members.length === 1 ? 'usuário' : 'usuários'} ·{' '}
+              {session?.campaign?.candidate_name ?? '—'}
+            </>
+          ) : (
+            <>
+              {members.length} {members.length === 1 ? 'usuário' : 'usuários'} ·{' '}
+              {session?.campaign?.candidate_name ?? '—'}
+            </>
+          )}
         </p>
         <Button onClick={() => setProvisionOpen(true)}>
           <UserPlus className="h-4 w-4" /> Provisionar usuário
         </Button>
       </div>
+
+      {/* Barra de filtros — busca em nome/telefone + dropdown de papel.
+          Só renderiza quando há mais de 1 usuário (não faz sentido filtrar
+          uma lista de 1 — economiza espaço vertical no estado inicial). */}
+      {members.length > 1 ? (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <SearchBar
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar por nome ou telefone..."
+            className="flex-1"
+          />
+          <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as RoleFilter)}>
+            <SelectTrigger className="h-9 w-full sm:w-52">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {FILTER_ROLES.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {ROLE_LABEL[r]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       {members.length === 0 ? (
         <EmptyState
@@ -231,9 +320,15 @@ export default function UsuariosPage() {
             </Button>
           }
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          title="Nenhum usuário encontrado"
+          description="Ajuste a busca ou troque o filtro de função pra ver mais resultados."
+          icon={<Plus className="h-5 w-5" />}
+        />
       ) : (
         <ul className="space-y-2">
-          {members.map((m) => {
+          {filtered.map((m) => {
             const p = profileFor(m.user_id);
             const isSelf = m.user_id === session?.id;
             return (
