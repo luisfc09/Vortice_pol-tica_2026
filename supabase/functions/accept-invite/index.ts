@@ -17,9 +17,12 @@
 //     5. INSERT em campaign_users: role='supporter', is_active=true
 //        (aprovação automática — convite é a aprovação implícita feita por
 //        quem gerou o link).
-//     6. UPDATE supporters do indicador → invite_used_at = now()  (queima).
-//     7. Faz sign-in com a senha temp e devolve {access_token, refresh_token,
+//     6. Faz sign-in com a senha temp e devolve {access_token, refresh_token,
 //        user, supporter_id, must_change_password:true}.
+//
+//     ⚠️ NÃO queima mais o invite_code — desde a migration-049 o link é
+//        reutilizável (a mesma URL aceita N cadastros). A coluna
+//        supporters.invite_used_at virou inerte e fica null pra sempre.
 //
 // Sem JWT do caller (público). Toda a lógica usa service-role.
 //
@@ -199,17 +202,9 @@ Deno.serve(async (req: Request) => {
     // pedir aprovação manual ao admin.
   }
 
-  // ----- 6) queima o convite (invite_used_at = now()) -----
-  const { error: burnErr } = await admin
-    .from('supporters')
-    .update({ invite_used_at: new Date().toISOString() })
-    .eq('id', invite.referrer_id)
-    .is('invite_used_at', null);  // double-check anti-race
-  if (burnErr) {
-    console.warn('[accept-invite] queimar convite falhou:', burnErr.message);
-  }
-
-  // ----- 7) sign-in com a senha temp pra devolver session -----
+  // ----- 6) sign-in com a senha temp pra devolver session -----
+  // (passo "queima do convite" foi REMOVIDO na migration-049 — link agora
+  // é reutilizável, mesma URL aceita N cadastros sem expirar.)
   const anon = createClient(url, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });

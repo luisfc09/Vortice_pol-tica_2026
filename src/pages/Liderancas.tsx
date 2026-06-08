@@ -139,8 +139,9 @@ export default function LiderancasPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Supporter | null>(null);
   // Convite: liderança alvo do InviteModal (WhatsApp/SMS/E-mail/Copiar link).
-  // Migration 047 — quando invite_used_at está preenchido, o botão "Convidar"
-  // do card é escondido (opção A), então só caem aqui códigos válidos.
+  // Migration 049 — link reutilizável: qualquer supporter com invite_code
+  // válido pode abrir o modal (não há mais estado "consumido"). O botão no
+  // card já filtra por s.invite_code.
   const [inviteTarget, setInviteTarget] = useState<Supporter | null>(null);
   // Migration 046 — H5: alternância entre lista (cards) e rede (árvore).
   const [viewMode, setViewMode] = useState<'lista' | 'rede'>('lista');
@@ -755,10 +756,11 @@ export default function LiderancasPage() {
                     cep: s.cep,
                   }}
                 />
-                {/* Migration 047 — opção A: esconde o botão "Convidar" quando o
-                    invite_code já foi consumido (invite_used_at preenchido).
-                    Também esconde quando o código não existe (defensivo). */}
-                {s.invite_code && !s.invite_used_at ? (
+                {/* Migration 049 — link reutilizável: o botão "Convidar"
+                    aparece sempre que houver invite_code (não há mais
+                    "consumido"). Só esconde no caso defensivo de code
+                    ausente (registros legados anteriores à migration 046). */}
+                {s.invite_code ? (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -779,18 +781,6 @@ export default function LiderancasPage() {
                   </Button>
                 ) : null}
               </div>
-
-              {/* Selo discreto "convite usado" — substitui o antigo bloco do
-                  código copiável quando invite_used_at está preenchido. Mantém
-                  a info no card sem poluir as ações. */}
-              {s.invite_used_at ? (
-                <div
-                  className="mt-2 text-[11px] text-amber-300/80"
-                  title={`Usado em ${new Date(s.invite_used_at).toLocaleString('pt-BR')}`}
-                >
-                  · convite usado
-                </div>
-              ) : null}
             </div>
           ))}
         </div>

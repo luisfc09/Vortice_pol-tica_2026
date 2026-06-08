@@ -205,17 +205,11 @@ export default function MinhaRedePage() {
           <Share2 className="h-4 w-4 text-vortex-lime" />
           <h3 className="font-display text-lg">Convide alguém pra sua rede</h3>
         </div>
-        {me.invite_used_at ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
-            ⚠ Seu convite já foi usado (consumido em{' '}
-            {new Date(me.invite_used_at).toLocaleString('pt-BR')}). Solicite ao administrador da campanha
-            que gere um novo código para você.
-          </div>
-        ) : me.invite_code ? (
+{me.invite_code ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Envie este link para uma pessoa convidá-la a entrar na campanha. <strong>Atenção:</strong>{' '}
-              ele pode ser usado por uma única pessoa.
+              Envie este link para qualquer pessoa entrar na sua rede. Pode reutilizar
+              o mesmo link quantas vezes quiser — não expira.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="flex flex-1 items-center gap-2 rounded-lg border border-vortex-border bg-vortex-bg/40 px-3 py-2">
@@ -290,12 +284,7 @@ export default function MinhaRedePage() {
               size="sm"
               variant="outline"
               onClick={() => setInviteOpen(true)}
-              disabled={!me.invite_code || !!me.invite_used_at}
-              title={
-                me.invite_used_at
-                  ? 'Seu convite já foi consumido. Solicite ao admin um novo.'
-                  : undefined
-              }
+              disabled={!me.invite_code}
             >
               <Link2 className="h-4 w-4" />
               Convidar por link
