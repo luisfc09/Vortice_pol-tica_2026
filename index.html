@@ -17,6 +17,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0A0F1E" />
     <title>Vórtice — Gestão de Campanha 2026</title>
+
+    <!-- ====================================================================
+         Open Graph + Twitter Card
+         Controla o preview quando o link é compartilhado em WhatsApp,
+         Telegram, Slack, Twitter, etc. Sem essas tags, o scrapper desses
+         apps cai no favicon (que é pequeno e quadrado) e renderiza corte
+         feio (vide screenshot do WhatsApp em 2026-06-08).
+
+         og:image precisa ter URL ABSOLUTA — caminhos relativos não são
+         seguidos por alguns crawlers (especialmente o do WhatsApp). A URL
+         abaixo aponta pro deploy de produção do Railway; se mudar o
+         hostname, ATUALIZAR aqui também.
+
+         Usamos `vortice-symbol.png` (quadrado, marca limpa) — funciona
+         bem em mensageiros que renderizam thumbnail quadrado. Caso queira
+         layout horizontal pra Twitter/Facebook, gerar uma versão 1200x630
+         e trocar pra `twitter:card = summary_large_image`.
+         ==================================================================== -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Vórtice" />
+    <meta property="og:title" content="Vórtice — Gestão de Campanha 2026" />
+    <meta
+      property="og:description"
+      content="Plataforma de inteligência política para campanhas eleitorais 2026."
+    />
+    <meta
+      property="og:image"
+      content="https://vorticepol-tica2026-production.up.railway.app/brand/vortice-symbol.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="202" />
+    <meta property="og:image:height" content="227" />
+    <meta property="og:image:alt" content="Logo Vórtice" />
+    <meta property="og:locale" content="pt_BR" />
+
+    <!-- Twitter usa cards próprios. summary = preview quadrado (combina com
+         a marca); summary_large_image seria pra imagem 1200x630 horizontal. -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Vórtice — Gestão de Campanha 2026" />
+    <meta
+      name="twitter:description"
+      content="Plataforma de inteligência política para campanhas eleitorais 2026."
+    />
+    <meta
+      name="twitter:image"
+      content="https://vorticepol-tica2026-production.up.railway.app/brand/vortice-symbol.png"
+    />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
