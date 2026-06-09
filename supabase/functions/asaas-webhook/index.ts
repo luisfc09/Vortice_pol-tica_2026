@@ -109,30 +109,60 @@ Deno.serve(async (req: Request) => {
   };
 
   // -------------------------------------------------------------------------
-  // Validação do webhook secret
+  // Validação do webhook secret (FAIL-CLOSED desde a auditoria de 2026-06-09)
   // -------------------------------------------------------------------------
+  // Endurecido conforme item 🟡 #1 do relatório de auditoria:
+  //   • Se webhook_secret NÃO está cadastrado em platform_integrations →
+  //     rejeita 401 (antes aceitava com warning — vetor de spoofing).
+  //   • Se a query de validação FALHA (DB down, etc) → rejeita 500
+  //     (antes ignorava o erro e seguia processando).
+  //   • Comportamento "fail-closed": melhor recusar pagamento legítimo
+  //     (Asaas reenviará) do que aceitar pagamento forjado.
+  //
+  // Para configurar webhook_secret: Asaas → Webhooks → copia o token →
+  // platform_integrations.secrets.webhook_secret no Supabase Dashboard.
   try {
-    const { data: cfg } = await admin
+    const { data: cfg, error: cfgErr } = await admin
       .from('platform_integrations')
       .select('is_enabled, secrets')
       .eq('key', 'asaas')
       .maybeSingle();
+
+    if (cfgErr) {
+      // Fail-closed: erro na query de validação → rejeita.
+      log.error = `falha ao buscar webhook_secret: ${cfgErr.message}`;
+      await saveLog(admin, log);
+      console.error(`${TAG} falha ao validar secret — rejeitando: ${cfgErr.message}`);
+      return json({ error: 'secret validation failed' }, 500);
+    }
+
     const expected = (cfg?.secrets as Record<string, string> | null)?.webhook_secret;
 
-    if (expected) {
-      if (token !== expected) {
-        // Tentativa inválida — loga e REJEITA (não processa).
-        log.error = 'webhook secret inválido';
-        await saveLog(admin, log);
-        console.warn(`${TAG} secret inválido — rejeitando`);
-        return json({ error: 'unauthorized' }, 401);
-      }
-    } else {
-      // Sem secret configurado: aceita mas avisa.
-      console.warn(`${TAG} sem webhook_secret configurado — aceitando sem validar`);
+    if (!expected) {
+      // Fail-closed: sem secret cadastrado → rejeita. Configurar em
+      // platform_integrations.secrets.webhook_secret pra ativar o webhook.
+      log.error = 'webhook_secret não configurado em platform_integrations';
+      await saveLog(admin, log);
+      console.error(`${TAG} sem webhook_secret cadastrado — rejeitando`);
+      return json(
+        { error: 'webhook secret não configurado para esta plataforma' },
+        401,
+      );
     }
+
+    if (token !== expected) {
+      log.error = 'webhook secret inválido';
+      await saveLog(admin, log);
+      console.warn(`${TAG} secret inválido — rejeitando`);
+      return json({ error: 'unauthorized' }, 401);
+    }
+    // Secret confere — segue processamento normal.
   } catch (e) {
-    console.warn(`${TAG} falha ao validar secret (seguindo): ${(e as Error).message}`);
+    // Fail-closed: qualquer exceção inesperada → rejeita pra segurança.
+    log.error = `exceção na validação do secret: ${(e as Error).message}`;
+    await saveLog(admin, log).catch(() => undefined);
+    console.error(`${TAG} exceção na validação — rejeitando: ${(e as Error).message}`);
+    return json({ error: 'secret validation error' }, 500);
   }
 
   // -------------------------------------------------------------------------
