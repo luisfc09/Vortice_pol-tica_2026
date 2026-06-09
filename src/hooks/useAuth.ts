@@ -177,7 +177,13 @@ export function useAuth() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/login`,
+        // Redirect dedicado pra OAuth (commit fa54fe5 criou /auth/callback).
+        // Antes apontava pra /login, que funcionava mas dava 1 redirect extra
+        // (o LoginPage detectava sessão e mandava pro dashboard). Agora
+        // /auth/callback resolve a home certa por role e navega direto.
+        // ⚠️ Importante: este URL precisa estar autorizado em
+        // Supabase Dashboard → Authentication → URL Configuration → Redirect URLs.
+        redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: { access_type: 'offline', prompt: 'select_account' },
       },
     });
