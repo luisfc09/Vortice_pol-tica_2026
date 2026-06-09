@@ -8,6 +8,7 @@ import { useBrandSync } from '@/hooks/useBrand';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { resolveHomeRoute } from '@/lib/homeRoute';
 import LoginPage from '@/pages/Login';
+import AuthCallback from '@/pages/AuthCallback';
 import ConvitePage from '@/pages/Convite';
 import MinhaRedePage from '@/pages/MinhaRede';
 import TrocarSenhaPage from '@/pages/TrocarSenha';
@@ -80,6 +81,10 @@ export default function App() {
         {/* Migration 047 — convite descartável. Rota pública: qualquer um
             com o link pode aceitar e criar conta. Vem ANTES do ProtectedRoute. */}
         <Route path="/convite/:code" element={<ConvitePage />} />
+        {/* OAuth/Magic Link callback. Pública porque a sessão ainda não está
+            populada no Zustand quando o usuário cai aqui — depois da hidratação,
+            o componente redireciona pra home certa por role. */}
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/trocar-senha" element={<TrocarSenhaPage />} />
