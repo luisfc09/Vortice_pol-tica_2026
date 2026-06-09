@@ -124,11 +124,15 @@ vortice/
 │  │  ├─ integrations/       # IntegrationCard, IntegrationDrawer, AiFeatureMatrix
 │  │  ├─ billing/ admin/     # planos, cards de campanha
 │  │  ├─ voters/ supporters/ # form sheets + VotersPanel + ReferrerCombobox (hierarquia)
-│  │  ├─ liderancas/         # SupporterTree (rede em árvore) + InviteModal (compartilhar convite)
+│  │  ├─ liderancas/         # SupporterTree (rede em árvore), InviteModal (compartilhar
+│  │  │                      # convite), ConvidarLiderancaButton (botão toolbar lilás)
+│  │  ├─ minha-rede/         # AddSupporterSheet (cadastro manual de apoiador via dedup),
+│  │  │                      # RankingRede (gamificação Top 5 + posição do user)
 │  ├─ pages/Convite.tsx      # rota pública /convite/[code] — auto-cadastro Fase 2
-│  ├─ pages/MinhaRede.tsx    # rota /minha-rede — visão restrita pro role 'supporter'
+│  ├─ pages/MinhaRede.tsx    # rota /minha-rede — visão restrita pro supporter+leader
 │  │  ├─ events/             # Agenda (form + calendário)
-│  │  ├─ team/               # ProvisionSheet, AvatarUpload, pendentes
+│  │  ├─ team/               # ProvisionSheet, EditUserSheet (editar+reenviar link),
+│  │  │                      # AvatarUpload, PendingUsersSection
 │  │  ├─ brand/ forms/       # BrandLogo, AddressFields
 │  │  ├─ financeiro/         # módulo Financeiro: SemaforoIndicator, FinanceConfig,
 │  │  │                      # FinanceCityTable, FinanceVisaoGeral, FinanceRevenueList,
@@ -137,14 +141,17 @@ vortice/
 │  ├─ lib/                   # regras puras + infra (ver §8, §11, §12)
 │  │                         # destaques: financeScope, financeImporter (xlsx),
 │  │                         #            hierarchy (rede de Lideranças),
+│  │                         #            supporterDedup (dedup whatsapp/phone/name+city),
+│  │                         #            homeRoute (resolve home por role — single source),
 │  │                         #            whatsappLink/socialUrl em utils.ts
 │  ├─ hooks/                 # useAuth, useEffectiveSession, useBrand, useGeolocation,
+│  │                         # useMySupporter (resolve supporter próprio do user logado),
 │  │                         # useFinanceiro, useAlertas, useIntelligence, ...
 │  ├─ stores/                # auth.ts, viewAs.ts (zustand)
 │  ├─ data/                  # catálogos estáticos (municípios, regiões, FAQ, integrações, seeds)
 │  └─ types/index.ts         # TODOS os tipos/enums do domínio
 ├─ supabase/
-│  ├─ migration-0XX-*.sql    # migrations (002 → 045) — ver §9
+│  ├─ migration-0XX-*.sql    # migrations (002 → 049) — ver §9
 │  ├─ bootstrap*.sql         # scripts de primeiro admin / super admin
 │  ├─ schema.sql seed-faq.sql
 │  └─ functions/             # Edge Functions Deno — ver §10
@@ -264,6 +271,35 @@ Como o super admin tem **leitura global** no RLS, o frontend reforça o escopo:
   ```
 - **Importante:** o view-as é client-side. Funções SQL como `current_campaign_id()` **não** o respeitam. Por isso, recursos que precisam operar a campanha escolhida pelo super admin recebem `campaign_id` explícito e autorizam por `is_super_admin()` (ver `provision-user` §10 e `list_integrations_safe(p_campaign_id)` `migration-040`).
 
+### 6.5 Matriz de permissões por role (commit `3a1b0b7`)
+
+Implementada via `<ProtectedRoute roles={[...]}>` em `App.tsx` (gate de rota) + `roles` em cada `NavItem` do `Sidebar.tsx` (gate de UI). Fonte única do "home" de cada role em `src/lib/homeRoute.ts` — usada por `ProtectedRoute` (fallback de role negado), `HomeRedirect` (`/` raiz), `TrocarSenha` (pós troca de senha) e `AguardandoAtivacao` (guard defensivo).
+
+| Rota                       | admin | candidate | coord | researcher | supporter | leader | field_agent |
+|----------------------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `/dashboard`               | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `/inteligencia`            | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `/financeiro`              | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `/liderancas`              | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| `/eleitores`, `/mapa`      | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| `/campo/*`                 | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `/agentes/vera`            | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `/mencoes/*`               | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `/pesquisas/perguntas-*`   | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `/onboarding`              | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `/usuarios`, `/integracoes`, `/campanha/branding` | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `/minha-rede`              | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `/agenda`                  | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/admin/*`                 | super_admin only |||||||
+
+**Home por role** (`resolveHomeRoute` em `src/lib/homeRoute.ts`):
+
+- `supporter` → `/minha-rede` (única rota dele de fato)
+- `leader` → `/agenda` (leader NÃO pode acessar `/dashboard`)
+- demais (admin, candidate, coord, researcher, field_agent) → `/dashboard`
+
+**Por que isso importa pra evitar loop infinito**: quando `ProtectedRoute` nega acesso por role, ele redireciona pro `fallbackHome` do user. Sem o resolver por role, supporter/leader entrariam em loop (rota bloqueada → `/dashboard` bloqueado → loop). Manter `homeRoute.ts` como single source.
+
 ---
 
 ## 7. Autenticação e sessão
@@ -374,9 +410,11 @@ Uso típico nas páginas: `const voters = useCollection(collections.voters)` e
 | 045 | **supporters-novos-campos** | 4 colunas opcionais em `supporters`: `vote_potential int`, `whatsapp text`, `social_platform text` (CHECK), `social_handle text` |
 | 046 | **supporters-hierarquia-fase1** | Hierarquia em pirâmide: `referrer_id uuid` (auto-FK, ON DELETE SET NULL) + `invite_code text UNIQUE NOT NULL` (default `upper(substr(md5(gen_random_uuid()::text),1,8))`) + trigger `supporters_check_referrer()` que valida non-self e same-campaign. Índice parcial `idx_supporters_referrer`. |
 | 047 | **supporters-hierarquia-fase2** | Convite descartável: `supporters.invite_used_at timestamptz` (null = ainda ativo; preenchido = consumido) + RPC pública `get_invite_info(p_code text)` `SECURITY DEFINER STABLE` que devolve só campos não-sensíveis (referrer_name, candidate_name, party, plan) e bloqueia code inválido/usado/inativo. GRANT EXECUTE para `anon` e `authenticated`. |
+| 048 | **alert-novo-apoiador-e-notes** | (a) Novo valor `'novo_apoiador_cadastrado'` no enum `alert_type` — usado pelo detector que avisa admin/coord quando supporter/leader cadastra apoiador via `/minha-rede`. (b) Coluna `supporters.notes text` (nullable) — campo livre de observações usado pelo `AddSupporterSheet`. Rodar em 2 blocos por causa da pegadinha do enum (§14.4). |
+| 049 | **invite-reusavel** | Recria `get_invite_info(p_code)` removendo o filtro `invite_used_at IS NULL` — link de convite agora é REUTILIZÁVEL (mesma URL aceita N cadastros sem expirar). UPDATE zerando `invite_used_at` dos códigos previamente consumidos. Coluna `invite_used_at` mantida no banco mas inerte (`accept-invite` parou de escrever nela). Idempotente, 1 bloco só. |
 
 > Todas as DDLs estão em `supabase/migration-0XX-*.sql`. A partir da 038 todas
-> são versionadas no repo junto com a documentação. Migrations 042 a 047 foram
+> são versionadas no repo junto com a documentação. Migrations 042 a 049 foram
 > entregues nesta linha de trabalho (módulo Financeiro + rename Vera_IA +
 > campos extras de captação + hierarquia de Lideranças Fase 1 + auto-cadastro
 > via convite Fase 2).
@@ -394,7 +432,8 @@ client **service-role** para operações privilegiadas.
 | **provision-user** | Cria membro da campanha (auth.user + senha temp `123456` + `campaign_users`). Recebe `campaign_id` e valida que o caller é admin/coordenador **daquela** campanha **ou** super admin. E-mail já existente → mensagem clara. | caller (autoriza) + service-role (cria) | `SUPABASE_*`, `APP_LOGIN_URL` |
 | **provision-campaign** | Cria nova campanha (cliente) + admin + integração Asaas. | super admin | `SUPABASE_*`, Asaas |
 | **agent-chat** | Backbone dos agentes Vera/Carlos. Monta contexto real (Vera) ou contexto de tela (Carlos), escolhe LLM e chama o provedor. Multi-turn. | caller autoriza membership/super admin; service-role lê dados/segredos | `SUPABASE_*` |
-| **accept-invite** | Auto-cadastro Fase 2 da hierarquia. Recebe `{ code, name, email, phone, city }`. Valida code via `get_invite_info`, cria `auth.users` + `profiles` + `supporters` + `campaign_users` (is_active=false), queima o convite (`invite_used_at=now()`) e devolve session tokens pra auto-login. Rollback do `auth.user` se algum INSERT falhar. | **público** (sem JWT); service-role | `SUPABASE_*` |
+| **accept-invite** | Auto-cadastro Fase 2 da hierarquia. Recebe `{ code, name, email, phone, city }`. Valida code via `get_invite_info`, cria `auth.users` + `profiles` + `supporters` + `campaign_users` (**is_active=true** desde commit `78d282c` — aprovação automática) e devolve session tokens pra auto-login. **NÃO queima mais** o `invite_used_at` desde a migration-049 (link reusable). Rollback do `auth.user` se algum INSERT falhar. | **público** (sem JWT); service-role | `SUPABASE_*` |
+| **regenerate-access-link** | Reseta senha temporária dum usuário existente pra `'123456'` + `must_change_password=true`, devolve `{user_email, temporary_password, login_url}` pro admin reenviar via canal externo (WhatsApp). Guard: caller NÃO pode regenerar a própria senha (geraria logout). Autorização: super_admin OU admin da campanha do target (coordinator excluído por design). Usado pelo `EditUserSheet` em /usuarios. | caller (autoriza) + service-role (updateUserById) | `SUPABASE_*`, `APP_LOGIN_URL` |
 | **mention-respond** | Resposta Rápida: `analyze` (analisa ataque) / `generate` (3 respostas). Seleciona provedor via `ai_feature_config`/`integrations`. | caller (RLS) | `SUPABASE_URL/ANON` |
 | **intelligence-analyze** | Roda a análise de Inteligência Eleitoral (IA sobre entrevistas) e grava em `campaign_intelligence`. | caller (RLS) | `SUPABASE_*` |
 | **interview-analyze** | Analisa uma entrevista de campo com IA. | caller (RLS) | `SUPABASE_*` |
@@ -607,15 +646,50 @@ Permite que pessoas se cadastrem por conta própria via link público vinculado 
      invite_code pra convidar mais gente
 ```
 
+#### Aprovação automática + link reutilizável (commits `78d282c` + `03ad4f9`)
+
+Evolução da Fase 2 — duas mudanças importantes do fluxo de convite:
+
+1. **Aprovação automática** (`accept-invite` agora seta `is_active=true` no INSERT em `campaign_users`). Quem gerou o link é a aprovação implícita — não faz sentido pedir admin pra confirmar. Resultado: supporter convidado cai DIRETO em `/minha-rede` após trocar a senha, sem passar por `/aguardando-ativacao`. **Mudança no provision-user permanece intacta** — admin/coord criados manualmente ainda exigem ativação por toggle em `/usuarios`.
+
+2. **Link reutilizável** (migration-049). O `invite_code` deixou de ser descartável. Mesma URL aceita N cadastros indefinidamente. Coluna `supporters.invite_used_at` permanece no schema (não dropamos pra evitar risco) mas virou inerte: `accept-invite` não escreve mais nela. UI atualizada: botão "Convidar" sempre visível, mensagem em `/minha-rede` diz "pode reutilizar quantas vezes quiser — não expira".
+
+#### Convite genérico — `ConvidarLiderancaButton` no toolbar (commit `2e7f23d`)
+
+Botão lilás (`bg-vortex-violet`) no toolbar de `/liderancas` — entre Exportar CSV e Nova liderança. Posição visual destacada (par do verde-lima do "Nova liderança"). Visível só pra `admin / candidate / coordinator`. Click:
+
+1. `useMySupporter().ensure()` resolve o supporter "próprio" do user logado
+2. Se não existe (caso do admin/coord provisionado), cria silenciosamente com `role='outro'`, `role_custom='Equipe da campanha'`, `referrer_id=null`
+3. Abre `InviteModal` com `campaignName={candidate_name}` — mensagem refere o candidato, não o admin que gerou (recipient não conhece o admin mas reconhece o candidato)
+
+⚠️ **Pegadinha "supporter próprio ambíguo"** (commits `a50ff31` + `80f2b5b`): `useMySupporter` originalmente fazia `find(s => s.created_by === session.id)`. Mas `created_by` tem 2 semânticas que colidem — "este supporter É o user X" e "este supporter foi cadastrado pelo user X". Fix final: filtrar TAMBÉM por `email match` (`s.email === session.email`) + pegar o **mais antigo** dos matches. Cobre Rodrigo (accept-invite) E Sanjai (provisionado). Sem isso, admin que cadastrou supporter pela UI gerava link em nome dele.
+
 #### Pendências futuras (hierarquia)
 
 Não bloqueantes — funcionalidade central Fase 1 + Fase 2 está em produção.
 
-- **Notificação ao indicador** quando alguém usa o convite dele. Pode ser realtime via `postgres_changes` ou um detector novo no `alertDetector.ts` tipo `convite_usado` que dispara quando `invite_used_at` muda de null pra preenchido.
-- **Botão "Regenerar convite"** no card de Lideranças quando `invite_used_at IS NOT NULL`. RPC nova `regenerate_invite_code(supporter_id)` que faz UPDATE setando `invite_code` novo + `invite_used_at = NULL`. Precisa policy (admin/coord da campanha OU o próprio supporter dono).
-- **Edge function `approve-supporter-invite`** para aprovar rapidamente o cadastro vindo via `/convite` — hoje admin usa o fluxo genérico `approve_user` (migration-012) na aba "Aguardando ativação" do `/usuarios`. Atalho dedicado pode mostrar contexto extra (quem indicou, etc).
-- **Tabela `invites` separada** se quisermos vários convites simultâneos por liderança (hoje é 1 por supporter). Schema: `id, supporter_id FK, code UNIQUE, used_by user_id, used_at, expires_at`. Migração não-trivial — só fazer se a demanda do produto pedir.
+- **Coluna estrutural `supporters.auth_user_id`** (em vez do duplo guard `created_by + email`). Marker explícito de "este supporter É o user X" — separa de `created_by` semanticamente. Migration nova + backfill + ajustes em accept-invite/ensure/find.
+- **Notificação ao indicador** quando alguém usa o convite dele. Hoje já temos `novo_apoiador_cadastrado` (alerta pro admin); poderia ter `convite_aceito` pro indicador via realtime.
+- **Tabela `invites` separada** se quisermos vários convites com tracking individual (hoje 1 code por supporter, reusável). Schema: `id, supporter_id FK, code UNIQUE, used_by user_id, used_at, expires_at`. Migração não-trivial — só fazer se a demanda do produto pedir.
 - **Recursive RLS** pra supporter ver SÓ a própria sub-árvore via SQL (hoje frontend filtra de tudo da campanha). Útil em campanhas com 10k+ lideranças onde trafegar tudo via realtime ficaria caro. Implementação: policy via WITH RECURSIVE.
+
+### 12.5.5 Minha Rede — `/minha-rede` (supporter + leader)
+
+Painel restrito do supporter/leader pra ver e crescer a própria sub-árvore. Acesso: `roles: ['supporter', 'leader']` (App.tsx GRUPO C).
+
+**Layout vertical**:
+1. **Header** — nome + nível (Bronze/Prata/Ouro/Diamante)
+2. **4 cards de métricas** — Indicados diretos, Rede total, Profundidade, Nível
+3. **`RankingRede`** (commit `cc37e6c`) — Top 5 da campanha por indicações + linha do user (com separador tracejado se está fora do Top 5). Mensagens dinâmicas: "Faltam X pra alcançar o #N", "Você lidera 🏆", "Você está no Top 5 🎉", "Convide alguém pra aparecer". Desempate por pip_score; `useMemo` cacheia `byParent`.
+4. **Card "Convide alguém"** — input read-only com URL completa + 2 botões: **Cadastrar apoiador** (abre `AddSupporterSheet`) + **Convidar por link** (abre `InviteModal` que reusa o do Lideranças)
+5. **Ancestrais** — path "Quem te trouxe" (raiz → você)
+6. **Pessoas que você indicou** — lista de filhos diretos com Pencil pra editar (sem botão excluir — só admin)
+
+**`AddSupporterSheet`** (commit `c7f6b3b` + ajustes `2b58611`): cadastro manual de apoiador pela rede. Campos obrigatórios: nome, WhatsApp, município. Endereço completo via `AddressFields` reutilizado (CEP autopreenche logradouro/bairro via ViaCEP). Campos opcionais: CPF, e-mail, telefone alternativo, potencial de votos, observações. **Sem dropdown de "Função"** — role hardcoded como `'apoiador'` no payload (decisão do produto). **Validação de duplicidade** (`src/lib/supporterDedup.ts`) ao clicar Salvar, em 3 camadas com prioridade: (1) WhatsApp exato, (2) Telefone exato, (3) Nome + município. Match → card amber bloqueia salvamento e mostra quem cadastrou + quando. Modo edição funciona no mesmo componente.
+
+**Detector de alerta** (migration-048): `novo_apoiador_cadastrado` em `alertDetector.ts` dispara quando supporter/leader cadastra apoiador via `/minha-rede`. Filtra por `members.role IN ('supporter','leader')` AND `+new Date(s.created_at) < 24h`. Dedup por `supporter.id`. Admin vê na Central de Alertas como info.
+
+**Identificação do `me`** (mesma pegadinha do useMySupporter): `created_by === session.id AND email === session.email` + pega o mais antigo. Sem isso, admin que entrasse em `/minha-rede` veria a perspectiva do PRIMEIRO supporter que ele tivesse cadastrado.
 
 ### 12.6 Eleitores — `/eleitores`
 - `pages/Eleitores.tsx` + `components/voters/VoterFormSheet.tsx`.
@@ -652,7 +726,10 @@ Não bloqueantes — funcionalidade central Fase 1 + Fase 2 está em produção.
 - `pages/Agenda.tsx` + `components/events/{AgendaCalendar,EventFormSheet}.tsx` (Lista/Mês/Semana, `date-fns`). Tabela `events`.
 
 ### 12.11 Usuários — `/usuarios` (admin/coordenador)
-- `pages/Usuarios.tsx` + `components/team/{ProvisionSheet,AvatarUpload,PendingUsersSection}.tsx`.
+- `pages/Usuarios.tsx` + `components/team/{ProvisionSheet,AvatarUpload,PendingUsersSection,EditUserSheet}.tsx`.
+- **Busca + filtro** (commit `70bf074`): SearchBar (nome+telefone, `normText`+`onlyDigits` pra ignorar máscara) + dropdown por função (8 opções: Todos + 7 roles). Aparece só quando `members.length > 1`. Contador dinâmico: `"X de Y usuários · Campanha"` quando há filtro ativo.
+- **Editar usuário + reenviar link** (commit `52ddd29`): botão Pencil em cada linha abre `EditUserSheet` com avatar (reusa `AvatarUpload`), e-mail read-only, nome editável e telefone editável. Botão **"Reenviar link de acesso"** chama edge function `regenerate-access-link` (ver §10) que reseta senha pra `123456` + `must_change_password=true` e devolve `{user_email, temp_password, login_url}` num card violeta com 3 botões copiar. Guard frontend + backend: caller NÃO pode regenerar a própria senha (geraria logout). Permissão de reenvio: super_admin OU admin (coordinator excluído por design — coord não regenera senha alheia).
+- ⚠️ **"Duplicatas visuais"** que parecem bug NÃO são — `campaign_users` tem `UNIQUE (campaign_id, user_id)`, então o banco bloqueia duplicação de membro. Quando aparecem 2 nomes iguais com mesmo telefone (ex.: 2 Wallisons), são DUAS contas distintas em `auth.users` (emails diferentes). Cenário típico: pessoa cadastrou-se via `/convite` com email pessoal e depois admin provisionou também com email corporativo. Resolução manual: desativar/apagar a conta duplicada via toggle/lixeira na própria UI.
 - Provisionamento via Edge `provision-user` (envia `campaign_id` da sessão efetiva). Aprovar pendentes (`list_pending_users`/`approve_user`). Promover/rebaixar super admin.
 
 ### 12.12 Integrações — `/integracoes` (admin/coordenador) — ver §11
@@ -712,6 +789,9 @@ supabase functions deploy <nome> --project-ref iemajqwnlkmrubikhqas
 - **CHECK constraints com nomes auto-gerados pelo Postgres** podem ser difíceis de "achar e dropar" idempotentemente. Pattern: ler `pg_constraint` por padrão `LIKE 'X%'` ou nomear explicitamente com `CONSTRAINT name CHECK (...)`. Vide migration-044 que faz `DROP CONSTRAINT IF EXISTS supporters_social_platform_check`.
 - **Janela de swap do Railway pode causar tela branca momentânea após push.** Durante ~5–15s o `index.html` cacheado no browser/CDN ainda referencia chunks JS antigos que já não existem no novo deploy → 404 → React crasha no boot → cards/listas somem. Refresh do usuário resolve, e o app volta sozinho quando o swap completa. Aconteceu na release do `InviteModal` (commit `1ea54b5`). Mitigação futura possível: service worker com `stale-while-revalidate`, OU `vite.config.build.rollupOptions.output.manualChunks` separando vendor de app (vendor muda menos, reduz pressão no cache). **Não confundir com bug real** — antes de investigar, espere 30s e dê F5; se persistir, aí é bug.
 - **Storage buckets também precisam ser versionados E aplicados na instância correta.** Buckets vivem em `storage.buckets` (schema `storage`, não `public`) — então quando a migration que cria o bucket roda numa branch/preview que depois é descartada, o bucket some junto. O código frontend continua compilando (TypeScript não tem como saber se um bucket existe no Storage), mas falha em runtime com **"Bucket not found"** no `supabase.storage.from('X').upload(...)`. **Checklist obrigatório**: depois de criar/rodar qualquer migration com `INSERT INTO storage.buckets`, validar imediatamente em Dashboard → Storage → Buckets que o bucket apareceu na instância correta. Aconteceu 2× neste projeto em 2026-06-08: `avatars` (migration-013) e `brand-assets` (migration-008) precisaram ser re-rodadas porque sumiram (provavelmente aplicadas em branch que foi dropada). Fix idempotente: re-rodar a migration; `INSERT ... ON CONFLICT DO UPDATE` + `DROP POLICY IF EXISTS` antes do `CREATE POLICY` garantem 0 efeito colateral.
+- **Webview do WhatsApp (Android/iOS) perde a sessão Supabase entre rotas.** Quando o user abre `/convite/[code]` num link compartilhado via WhatsApp, o app abre dentro do próprio Webview. O `accept-invite` retorna tokens, `supabase.auth.setSession({access_token, refresh_token})` resolve com OK, e o app navega pra `/trocar-senha`. Mas a Webview tem comportamento flaky com `localStorage` durante transições de página — o cliente supabase-js às vezes perde o token internamente. Resultado: `supabase.auth.updateUser({password})` falha com **"Auth session missing!"** mesmo com a UI mostrando o user logado. **Fix preventivo aplicado** em `TrocarSenha.tsx` (commit `658abac`): antes do `updateUser`, fazer `getSession()` e, se null, tentar `signInWithPassword(email, '123456')` SILENCIOSO (sabemos que é o caso recém-criado). Se o re-login falhar, mostrar toast amigável + redirect `/login`. Cobre webview, expiração de token e race conditions de `setSession`.
+- **`supporters.created_by` tem 2 semânticas que colidem.** Significa "este supporter É o user X" (quando criado pelo `accept-invite` ou `useMySupporter.ensure()`) E "este supporter foi cadastrado pelo user X" (quando admin cadastra outro supporter pela UI). O `find(s => s.created_by === session.id)` pega o primeiro match, que pode ser um supporter que o admin cadastrou (NÃO o próprio supporter do admin). Sintoma: link gerado pelo FAB "Convidar Liderança" vinha em nome do supporter errado. **Fix em 2 fases**: (1) commit `a50ff31` — pegar o mais antigo dos matches (resolve só pra users que vieram via accept-invite); (2) commit `80f2b5b` — adicionar **email match** `s.email === session.email` (cobre admin/coord provisionado que cadastrou supporters antes de usar o FAB pela primeira vez). Solução estrutural futura (roadmap §12.5): adicionar coluna `supporters.auth_user_id uuid` explícita, separada de `created_by`.
+- **Botão "Apagar campanha" próximo demais de "Cancelar/Suspender" — risco real de soft-delete acidental.** Em `/admin/campaigns`, o `[🗑 Apagar]` adicionado no commit `4209a85` está na mesma linha do row, ao lado de Cancelar/Suspender. O modal de confirmação é só 1 click. Aconteceu acidente em 2026-06-08: a campanha "Deputado Heleno do hospital" foi apagada por engano e levou 30 min pra ser restaurada (`SELECT public.restore_campaign(uuid)` em produção precisa rodar pelo frontend com user logado; via SQL Editor o `auth.uid()` é null e a RPC rejeita — fallback é `UPDATE campaigns SET deleted_at = NULL WHERE id = ...` direto). **Mitigações futuras**: (a) confirmação por nome (estilo GitHub repo delete); (b) mover o botão Apagar pra menu de "..."; (c) audit log de delete em tabela separada pra rastrear "quem apagou".
 - **Railway às vezes não dispara redeploy automático no push** — fica em fila ou pula commits empty/identicos. Quando o bundle de produção continuar com hash antigo após `git push`, force com `git commit --allow-empty -m "chore: trigger redeploy" && git push`. Ou Settings → Deployments → "Deploy" no dashboard.
 - **Múltiplos clones do mesmo repo na máquina podem confundir.** O Railway está conectado a UM clone específico via `git remote`. Para evitar pushar "do clone errado", confirme `git remote -v` antes. Pesquisa rápida: `find ~ -maxdepth 4 -name .git -type d | xargs -I {} bash -c 'cd {}/.. && git remote get-url origin 2>/dev/null'`.
 - **view-as é client-side** — funções SQL não o respeitam; passe `campaign_id` explícito quando o super admin precisar operar outra campanha (ver `provision-user`, `list_integrations_safe`).
