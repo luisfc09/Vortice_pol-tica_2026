@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import {
   ClipboardCheck,
   BookOpenText,
+  Globe2,
   History,
   MapPin,
   Sunrise,
@@ -112,6 +113,14 @@ export default function CampoHubPage() {
             description="Configure o Bloco 6 — perguntas próprias desta campanha no fim da entrevista."
             icon={<SlidersHorizontal className="h-7 w-7 text-primary" />}
             badge={regionalQuestions.length}
+          />
+        ) : null}
+        {isAdmin ? (
+          <HubAction
+            to="/pesquisas/publicas"
+            title="Pesquisas Públicas"
+            description="Gere um link para o eleitor responder sozinho pelo WhatsApp, sem entrevistador."
+            icon={<Globe2 className="h-7 w-7 text-primary" />}
           />
         ) : null}
       </div>

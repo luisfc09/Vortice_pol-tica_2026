@@ -293,6 +293,104 @@ export interface InterviewCustomAnswer {
   created_at: string;
 }
 
+// ----------------------------------------------------------------------------
+// Pesquisas públicas — eleitor responde direto pelo link /p/:token
+// (migration 050). Reaproveita campaign_questions via tabela de junção.
+// ----------------------------------------------------------------------------
+export interface PublicSurvey {
+  id: string;
+  campaign_id: string;
+  title: string;
+  description: string | null;
+  share_token: string;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  ask_name: boolean;
+  ask_phone: boolean;
+  ask_location: boolean;
+  allow_multiple_per_ip: boolean;
+  response_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PublicSurveyQuestionLink {
+  id: string;
+  survey_id: string;
+  question_id: string;
+  position: number;
+  is_required: boolean;
+}
+
+// Formato retornado pela RPC get_public_survey_by_token — enxuto de propósito
+// (não expõe campaign_id nem contagens). O `type` vem do enum CampaignQuestion.
+export interface PublicSurveyQuestion {
+  id: string;                         // id da linha em public_survey_questions
+  label: string;                      // texto da pergunta (campaign_questions.text)
+  type: CampaignQuestionType;
+  options: string[] | null;           // pra choice types
+  is_required: boolean;
+  position: number;
+}
+
+// O que a rota pública /p/:token recebe (retorno de get_public_survey_by_token
+// quando o token é válido).
+export interface PublicSurveyPublicView {
+  id: string;
+  campaign_id: string;
+  title: string;
+  description: string | null;
+  ask_name: boolean;
+  ask_phone: boolean;
+  ask_location: boolean;
+  questions: PublicSurveyQuestion[];
+}
+
+// Resposta armazenada. answers indexado por question_id (linha em
+// public_survey_questions), valor depende do tipo (string | string[] | number).
+export interface PublicSurveyResponse {
+  id: string;
+  survey_id: string;
+  campaign_id: string;
+  respondent_name: string | null;
+  respondent_phone: string | null;
+  respondent_email: string | null;
+  municipality_code: string | null;
+  neighborhood: string | null;
+  answers: Record<string, string | string[] | number | boolean | null>;
+  ip_hash: string | null;
+  user_agent: string | null;
+  submitted_at: string;
+}
+
+// Payload do POST /functions/v1/public-survey-submit (formato do body).
+export interface PublicSurveySubmitPayload {
+  token: string;
+  answers: Record<string, string | string[] | number | boolean | null>;
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  municipality_code?: string | null;
+  neighborhood?: string | null;
+}
+
+// Erros conhecidos que a edge function devolve — pro form traduzir em pt-BR.
+export type PublicSurveySubmitError =
+  | 'not_found'
+  | 'inactive'
+  | 'not_started'
+  | 'ended'
+  | 'duplicate_ip'
+  | 'invalid_json'
+  | 'token_missing'
+  | 'invalid_answers'
+  | 'rpc_failed'
+  | 'server_misconfigured'
+  | 'salt_not_configured'
+  | 'unknown';
+
 export interface CampaignOverview {
   id: string;
   candidate_name: string;

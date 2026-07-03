@@ -23,6 +23,10 @@ import RespostaRapidaPage from '@/pages/RespostaRapida';
 import RespostaRapidaHistoricoPage from '@/pages/RespostaRapidaHistorico';
 import CampoHubPage from '@/pages/Campo';
 import PerguntasRegionaisPage from '@/pages/PerguntasRegionaisPage';
+import PesquisasPublicasPage from '@/pages/PesquisasPublicasPage';
+import PesquisaPublicaDetalhePage from '@/pages/PesquisaPublicaDetalhePage';
+import PublicSurveyPage from '@/pages/PublicSurveyPage';
+import PublicSurveyThankYou from '@/pages/PublicSurveyThankYou';
 import OnboardingPage from '@/pages/Onboarding';
 import CampoEntrevistaPage from '@/pages/CampoEntrevista';
 import CampoEntrevistaDetalhePage from '@/pages/CampoEntrevistaDetalhe';
@@ -85,6 +89,13 @@ export default function App() {
             populada no Zustand quando o usuário cai aqui — depois da hidratação,
             o componente redireciona pra home certa por role. */}
         <Route path="/auth/callback" element={<AuthCallback />} />
+
+        {/* Pesquisa pública (migration 050). Rotas TOTALMENTE públicas — o
+            eleitor não tem login. Ficam FORA do ProtectedRoute pra não
+            redirecionar pra /login. O form chama a edge function
+            public-survey-submit; a leitura usa RPC get_public_survey_by_token. */}
+        <Route path="/p/:token" element={<PublicSurveyPage />} />
+        <Route path="/p/:token/obrigado" element={<PublicSurveyThankYou />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/trocar-senha" element={<TrocarSenhaPage />} />
@@ -289,6 +300,21 @@ export default function App() {
             <Route
               path="/pesquisas/perguntas-regionais"
               element={<PerguntasRegionaisPage />}
+            />
+          </Route>
+        </Route>
+
+        {/* Pesquisas públicas — admin + candidate (bate com RLS manage da
+            migration 050). O eleitor responde numa rota separada /p/:token
+            (pública, definida acima, fora do ProtectedRoute). */}
+        <Route
+          element={<ProtectedRoute requireCampaign roles={['admin', 'candidate']} />}
+        >
+          <Route element={<AppLayout />}>
+            <Route path="/pesquisas/publicas" element={<PesquisasPublicasPage />} />
+            <Route
+              path="/pesquisas/publicas/:id"
+              element={<PesquisaPublicaDetalhePage />}
             />
           </Route>
         </Route>
