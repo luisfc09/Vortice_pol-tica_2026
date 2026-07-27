@@ -120,7 +120,23 @@ export default function ConvitePage() {
           },
         });
         if (error) {
-          toast.error(error.message || 'Falha ao processar convite.');
+          // supabase-js coloca só "Edge Function returned a non-2xx status code"
+          // em error.message. A mensagem real (ex: "E-mail já cadastrado...")
+          // vem no corpo da resposta, acessível via error.context (o Response).
+          // Lemos pra mostrar o texto amigável em vez do erro técnico.
+          let msg = 'Falha ao processar convite.';
+          const ctx = (error as { context?: Response }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            try {
+              const body = (await ctx.json()) as { error?: string };
+              if (body?.error) msg = body.error;
+            } catch {
+              /* corpo não-JSON: mantém a mensagem padrão */
+            }
+          } else if (error.message && !/non-2xx/i.test(error.message)) {
+            msg = error.message;
+          }
+          toast.error(msg);
           return;
         }
         const resp = data as {

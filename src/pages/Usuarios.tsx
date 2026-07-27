@@ -418,7 +418,20 @@ export default function UsuariosPage() {
                           Super Admin
                         </Badge>
                       ) : null}
-                      {!m.is_active ? <Badge variant="destructive">Desativado</Badge> : null}
+                      {/* Sinal de status da conta: bolinha verde (Ativo) /
+                          vermelha (Desativado), sempre visível. */}
+                      <Badge
+                        variant={m.is_active ? 'success' : 'destructive'}
+                        className="gap-1.5"
+                      >
+                        <span
+                          className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                            m.is_active ? 'bg-emerald-400' : 'bg-red-400'
+                          }`}
+                          aria-hidden
+                        />
+                        {m.is_active ? 'Ativo' : 'Desativado'}
+                      </Badge>
                     </div>
                     <p
                       className="truncate text-xs text-muted-foreground"
