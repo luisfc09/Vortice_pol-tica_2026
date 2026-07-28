@@ -293,7 +293,7 @@ export interface VisitCluster {
 export interface VisitsBreakdown {
   markers: VisitMarker[]; // pontos individuais
   clusters: VisitCluster[]; // grupos com > 3 no mesmo bairro
-  neighborhoodsWithoutGps: string[]; // entrevistas sem lat/lng
+  neighborhoodsWithoutGps: string[]; // pesquisas sem lat/lng
 }
 
 export function buildVisitsBreakdown(interviews: FieldInterview[]): VisitsBreakdown {

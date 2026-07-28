@@ -53,7 +53,7 @@ export function TodayVisitsMap({ interviews, period, onChangePeriod }: Props) {
             Visitas de campo
           </p>
           <p className="font-display text-xl tracking-wide text-foreground">
-            {filtered.length} entrevista{filtered.length === 1 ? '' : 's'} ·{' '}
+            {filtered.length} pesquisa{filtered.length === 1 ? '' : 's'} ·{' '}
             {PERIOD_LABEL[period]}
           </p>
         </div>
@@ -177,7 +177,7 @@ function EmptyMap({
         <MapPinOff className="mb-2 h-6 w-6 text-muted-foreground" />
         <p className="text-sm text-foreground">Sem visitas registradas</p>
         <p className="text-xs text-muted-foreground">
-          Nenhuma entrevista no período {PERIOD_LABEL[period].toLowerCase()}.
+          Nenhuma pesquisa no período {PERIOD_LABEL[period].toLowerCase()}.
         </p>
       </div>
     );
@@ -186,7 +186,7 @@ function EmptyMap({
     <div className="rounded-lg border border-vortex-border bg-vortex-bg/40 p-4">
       <div className="mb-2 flex items-center gap-2 text-sm text-foreground">
         <MapPinOff className="h-4 w-4 text-amber-400" />
-        Entrevistas sem GPS — bairros visitados
+        Pesquisas sem GPS — bairros visitados
       </div>
       <div className="flex flex-wrap gap-2">
         {neighborhoodsWithoutGps.map((h) => (

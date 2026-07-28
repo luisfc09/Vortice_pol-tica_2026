@@ -73,7 +73,7 @@ export function TodayTeamRanking({ rows }: Props) {
 
       {rows.length === 0 ? (
         <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-          Ainda sem entrevistas hoje. Cabos eleitorais aparecem aqui assim que registrarem.
+          Ainda sem pesquisas hoje. Cabos eleitorais aparecem aqui assim que registrarem.
         </p>
       ) : (
         <ul className="divide-y divide-vortex-border">
@@ -119,7 +119,7 @@ export function TodayTeamRanking({ rows }: Props) {
                     {row.count}
                   </p>
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    entrevistas
+                    pesquisas
                   </p>
                 </div>
               </li>

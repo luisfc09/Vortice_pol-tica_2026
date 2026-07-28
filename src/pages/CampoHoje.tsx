@@ -43,7 +43,7 @@ export default function CampoHojePage() {
           </h2>
           <p className="text-sm text-muted-foreground">
             Visão em tempo real do que aconteceu em campo hoje · {sentiment.total}{' '}
-            entrevista{sentiment.total === 1 ? '' : 's'} registrada
+            pesquisa{sentiment.total === 1 ? '' : 's'} registrada
             {sentiment.total === 1 ? '' : 's'}
           </p>
         </div>

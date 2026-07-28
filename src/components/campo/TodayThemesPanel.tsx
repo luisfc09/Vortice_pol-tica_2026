@@ -28,7 +28,7 @@ export function TodayThemesPanel({ themes }: Props) {
 
         {themes.length === 0 ? (
           <p className="rounded-lg border border-dashed border-vortex-border bg-vortex-bg/40 p-6 text-center text-sm text-muted-foreground">
-            Sem temas marcados nas entrevistas de hoje.
+            Sem temas marcados nas pesquisas de hoje.
           </p>
         ) : (
           <ul className="space-y-3">

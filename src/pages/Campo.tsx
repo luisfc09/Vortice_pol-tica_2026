@@ -39,14 +39,14 @@ export default function CampoHubPage() {
       const result = await flushInterviewQueue();
       if (result.succeeded > 0) {
         toast.success(
-          `${result.succeeded} entrevista${result.succeeded > 1 ? 's' : ''} sincronizada${
+          `${result.succeeded} pesquisa${result.succeeded > 1 ? 's' : ''} sincronizada${
             result.succeeded > 1 ? 's' : ''
           }.`,
         );
       }
       if (result.failed > 0) {
         toast.error(
-          `${result.failed} entrevista${result.failed > 1 ? 's' : ''} falhou: ${
+          `${result.failed} pesquisa${result.failed > 1 ? 's' : ''} falhou: ${
             result.errors[0]
           }`,
           {
@@ -58,7 +58,7 @@ export default function CampoHubPage() {
               label: 'Descartar fila',
               onClick: () => {
                 const removed = discardInterviewQueue();
-                toast.message(`${removed} entrevista(s) descartada(s).`);
+                toast.message(`${removed} pesquisa(s) descartada(s).`);
               },
             },
           },
@@ -84,7 +84,7 @@ export default function CampoHubPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <HubAction
           to="/campo/entrevista"
-          title="Nova entrevista"
+          title="Nova pesquisa"
           description="Registre o contato com GPS, intenção de voto e observações."
           icon={<ClipboardCheck className="h-7 w-7 text-primary" />}
         />
@@ -96,8 +96,8 @@ export default function CampoHubPage() {
         />
         <HubAction
           to="/campo/historico"
-          title="Minhas entrevistas"
-          description="Reabra entrevistas anteriores para corrigir ou complementar."
+          title="Minhas pesquisas"
+          description="Reabra pesquisas anteriores para corrigir ou complementar."
           icon={<History className="h-7 w-7 text-primary" />}
         />
         <HubAction
@@ -110,7 +110,7 @@ export default function CampoHubPage() {
           <HubAction
             to="/pesquisas/perguntas-regionais"
             title="Perguntas Regionais"
-            description="Configure o Bloco 6 — perguntas próprias desta campanha no fim da entrevista."
+            description="Configure o Bloco 6 — perguntas próprias desta campanha no fim da pesquisa."
             icon={<SlidersHorizontal className="h-7 w-7 text-primary" />}
             badge={regionalQuestions.length}
           />
@@ -131,7 +131,7 @@ export default function CampoHubPage() {
           <div className="text-muted-foreground">
             <p className="text-foreground">Dica</p>
             <p>
-              Mantenha o GPS ligado. As entrevistas são salvas localmente e sincronizam
+              Mantenha o GPS ligado. As pesquisas são salvas localmente e sincronizam
               automaticamente quando você reconectar.
             </p>
           </div>

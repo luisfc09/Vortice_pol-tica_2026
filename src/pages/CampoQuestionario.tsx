@@ -47,7 +47,7 @@ export default function CampoQuestionarioPage() {
     return interviews.find((i) => i.id === params.id) ?? null;
   }, [interviews, params.id]);
 
-  // Estado do questionário. Hidrata da entrevista quando ela aparece.
+  // Estado do questionário. Hidrata da pesquisa quando ela aparece.
   const [state, setState] = useState<QuestionarioState>(EMPTY_QUESTIONARIO);
   const [block, setBlock] = useState(0);
   const startedAtRef = useRef<number>(performance.now());
@@ -61,7 +61,7 @@ export default function CampoQuestionarioPage() {
   const [customErrorIds, setCustomErrorIds] = useState<string[]>([]);
   const stepTitles = hasQuestions ? [...BLOCK_TITLES, 'Campanha'] : [...BLOCK_TITLES];
 
-  // Quando a entrevista chega via realtime/hidratação, preenche o estado
+  // Quando a pesquisa chega via realtime/hidratação, preenche o estado
   // com o que já estiver salvo (suporta retomar de onde parou).
   useEffect(() => {
     if (!interview) return;
@@ -97,7 +97,7 @@ export default function CampoQuestionarioPage() {
     setState((s) => ({ ...s, ...next }));
   }
 
-  // Pré-carrega respostas regionais já salvas (suporta re-edição da entrevista).
+  // Pré-carrega respostas regionais já salvas (suporta re-edição da pesquisa).
   useEffect(() => {
     let active = true;
     async function loadExisting() {
@@ -251,7 +251,7 @@ export default function CampoQuestionarioPage() {
       });
 
       // Respostas regionais (Bloco 6) — APÓS o save principal e não-bloqueante:
-      // se falhar, a entrevista continua salva; só avisa pra reeditar depois.
+      // se falhar, a pesquisa continua salva; só avisa pra reeditar depois.
       if (hasQuestions) {
         const campaignId = session?.campaign?.id ?? null;
         if (campaignId) {
@@ -260,7 +260,7 @@ export default function CampoQuestionarioPage() {
           } catch (e) {
             console.error('salvarRespostasRegionais falhou:', e);
             toast.warning(
-              'Entrevista salva. Algumas respostas regionais não foram salvas — tente novamente editando a entrevista.',
+              'Pesquisa salva. Algumas respostas regionais não foram salvas — tente novamente editando a pesquisa.',
             );
           }
         }
@@ -276,7 +276,7 @@ export default function CampoQuestionarioPage() {
         // Salva o resultado da IA na linha existente.
         collections.interviews.update(interview.id, { ai_analysis: result });
       }
-      toast.success('Entrevista completa salva.');
+      toast.success('Pesquisa completa salva.');
       // Mostra a tela de análise por alguns segundos antes de redirecionar.
       // Se não houve IA, vai direto pra /campo.
       if (!result) {
@@ -301,7 +301,7 @@ export default function CampoQuestionarioPage() {
           </Link>
         </Button>
         <EmptyState
-          title="Entrevista não encontrada"
+          title="Pesquisa não encontrada"
           description="O registro pode ter sido removido ou ainda não sincronizou."
         />
       </div>
@@ -447,7 +447,7 @@ export default function CampoQuestionarioPage() {
             ) : (
               <>
                 <Save className="h-4 w-4" />
-                Salvar entrevista completa
+                Salvar pesquisa completa
               </>
             )}
           </Button>

@@ -26,7 +26,7 @@ export default function CampoHistoricoPage() {
   const session = useAuthStore((s) => s.session);
   const interviews = useCollection(collections.interviews);
 
-  // Lista as entrevistas do próprio agente, mais recentes primeiro.
+  // Lista as pesquisas do próprio agente, mais recentes primeiro.
   // Admin/coord veem todas as da campanha.
   const visible = useMemo(() => {
     if (!session) return [];
@@ -53,18 +53,18 @@ export default function CampoHistoricoPage() {
 
       <div>
         <h2 className="font-display text-3xl tracking-wide text-foreground">
-          Minhas entrevistas
+          Minhas pesquisas
         </h2>
         <p className="text-sm text-muted-foreground">
-          {visible.length} entrevista{visible.length === 1 ? '' : 's'} no histórico.
+          {visible.length} pesquisa{visible.length === 1 ? '' : 's'} no histórico.
           Clique em Editar para corrigir qualquer campo.
         </p>
       </div>
 
       {visible.length === 0 ? (
         <EmptyState
-          title="Nenhuma entrevista ainda"
-          description="Suas entrevistas vão aparecer aqui assim que você registrar a primeira."
+          title="Nenhuma pesquisa ainda"
+          description="Suas pesquisas vão aparecer aqui assim que você registrar a primeira."
           icon={<ClipboardList className="h-5 w-5" />}
           action={
             <Button asChild>
@@ -149,7 +149,7 @@ export default function CampoHistoricoPage() {
                     size="sm"
                     variant="outline"
                     onClick={() => exportInterviewAsPdf(i)}
-                    title="Baixar PDF desta entrevista"
+                    title="Baixar PDF desta pesquisa"
                   >
                     <FileText className="h-3.5 w-3.5" />
                     PDF

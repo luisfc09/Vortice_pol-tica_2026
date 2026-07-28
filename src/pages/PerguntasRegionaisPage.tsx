@@ -153,7 +153,7 @@ export default function PerguntasRegionaisPage() {
           {session?.campaign?.party ? ` · ${session.campaign.party}` : ''}
         </p>
         <p className="mt-2 max-w-prose text-sm text-muted-foreground">
-          Essas perguntas aparecem como bloco final de cada entrevista de campo desta campanha.
+          Essas perguntas aparecem como bloco final de cada pesquisa de campo desta campanha.
           As perguntas padrão não são afetadas.
         </p>
       </div>
@@ -172,7 +172,7 @@ export default function PerguntasRegionaisPage() {
       ) : questions.length === 0 ? (
         <EmptyState
           title="Nenhuma pergunta regional cadastrada."
-          description="Clique em + Nova pergunta para começar. Elas aparecem no final da entrevista de campo."
+          description="Clique em + Nova pergunta para começar. Elas aparecem no final da pesquisa de campo."
         />
       ) : (
         <div className="space-y-3">

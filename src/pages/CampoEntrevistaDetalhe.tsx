@@ -115,7 +115,7 @@ export default function CampoEntrevistaDetalhePage() {
           </Link>
         </Button>
         <EmptyState
-          title="Entrevista não encontrada"
+          title="Pesquisa não encontrada"
           description="O registro pode ter sido removido ou ainda não sincronizou neste dispositivo."
         />
       </div>
@@ -180,7 +180,7 @@ export default function CampoEntrevistaDetalhePage() {
         {/* Cabeçalho */}
         <header className="print-avoid-break border-b border-vortex-border pb-4">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            Entrevista de campo · {format(createdAt, "dd 'de' MMMM 'de' yyyy, HH:mm", { locale: ptBR })}
+            Pesquisa de campo · {format(createdAt, "dd 'de' MMMM 'de' yyyy, HH:mm", { locale: ptBR })}
           </p>
           <h1 className="font-display text-3xl tracking-wide text-foreground">
             {i.voter_name}
@@ -236,7 +236,7 @@ export default function CampoEntrevistaDetalhePage() {
         </Section>
 
         {/* Bloco rápido */}
-        <Section title="Resposta inicial" subtitle="Fluxo rápido da entrevista">
+        <Section title="Resposta inicial" subtitle="Fluxo rápido da pesquisa">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Intenção de voto" value={VOTE_INTENTION_LABEL[i.vote_intention]} />
             <Field label="Receptividade" value={`${i.receptivity_score}/5`} />
@@ -404,7 +404,7 @@ export default function CampoEntrevistaDetalhePage() {
           </>
         ) : (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100/90 print:hidden">
-            <strong className="text-amber-200">Esta entrevista ainda é básica.</strong>{' '}
+            <strong className="text-amber-200">Esta pesquisa ainda é básica.</strong>{' '}
             Os blocos sociodemográficos, de cenário, governo etc. ainda não foram
             respondidos. Use o botão{' '}
             <Link
@@ -461,7 +461,7 @@ export default function CampoEntrevistaDetalhePage() {
 
         {/* Rodapé do PDF */}
         <footer className="mt-6 border-t border-vortex-border pt-3 text-[11px] text-muted-foreground">
-          Vórtice · entrevista #{i.id.slice(0, 8)} · exportado em{' '}
+          Vórtice · pesquisa #{i.id.slice(0, 8)} · exportado em{' '}
           {format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
         </footer>
       </div>

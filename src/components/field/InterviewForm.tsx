@@ -44,7 +44,7 @@ interface InterviewFormProps {
   editing?: FieldInterview | null;
   onSaved?: () => void;
   // Renderiza o segundo botão "Salvar e aprofundar". Chamado depois
-  // que a entrevista é inserida no banco com status='draft' e devolveu
+  // que a pesquisa é inserida no banco com status='draft' e devolveu
   // o id real. Só aparece quando não estiver em modo edição.
   onDeepen?: (interviewId: string) => void;
 }
@@ -62,7 +62,7 @@ export function InterviewForm({
   const [form, setForm] = useState<FieldInterviewInput>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
 
-  // Quando entra em modo edição (ou troca de entrevista), carrega os campos.
+  // Quando entra em modo edição (ou troca de pesquisa), carrega os campos.
   useEffect(() => {
     if (editing) {
       setForm({
@@ -130,7 +130,7 @@ export function InterviewForm({
     return true;
   }
 
-  // "Salvar e aprofundar": insere a entrevista no banco com status='draft',
+  // "Salvar e aprofundar": insere a pesquisa no banco com status='draft',
   // recupera o id real e passa pra quem orquestra a navegação (CampoEntrevista).
   // Bypassa a fila offline porque o questionário aprofundado precisa de
   // conexão (vai atualizar a linha existente e chamar IA).
@@ -162,7 +162,7 @@ export function InterviewForm({
       onDeepen?.(id);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Falha ao salvar entrevista.',
+        err instanceof Error ? err.message : 'Falha ao salvar pesquisa.',
       );
     } finally {
       setSubmitting(false);
@@ -178,7 +178,7 @@ export function InterviewForm({
     try {
       if (editing) {
         // Edição grava direto na coleção — não passa pela fila offline pois
-        // a entrevista já está persistida.
+        // a pesquisa já está persistida.
         collections.interviews.update(editing.id, {
           voter_name: form.voter_name,
           voter_phone: form.voter_phone || null,
@@ -192,7 +192,7 @@ export function InterviewForm({
           lat: form.lat,
           lng: form.lng,
         });
-        toast.success('Entrevista atualizada.');
+        toast.success('Pesquisa atualizada.');
         onSaved?.();
         return;
       }
@@ -201,8 +201,8 @@ export function InterviewForm({
       enqueueInterview(form, session.campaign.id, session.id);
       toast.success(
         online
-          ? 'Entrevista salva — será sincronizada em segundo plano.'
-          : 'Entrevista salva offline. Será enviada ao reconectar.',
+          ? 'Pesquisa salva — será sincronizada em segundo plano.'
+          : 'Pesquisa salva offline. Será enviada ao reconectar.',
       );
       setForm({
         ...EMPTY,
@@ -369,7 +369,7 @@ export function InterviewForm({
       {editing ? (
         <Button type="submit" size="lg" className="w-full" disabled={submitting}>
           <Save className="h-4 w-4" />
-          {submitting ? 'Salvando…' : 'Atualizar entrevista'}
+          {submitting ? 'Salvando…' : 'Atualizar pesquisa'}
         </Button>
       ) : onDeepen ? (
         // Dois botões lado a lado. "Salvar rápido" mantém o comportamento
@@ -401,7 +401,7 @@ export function InterviewForm({
       ) : (
         <Button type="submit" size="lg" className="w-full" disabled={submitting}>
           <Save className="h-4 w-4" />
-          {submitting ? 'Salvando…' : 'Salvar entrevista'}
+          {submitting ? 'Salvando…' : 'Salvar pesquisa'}
         </Button>
       )}
     </form>

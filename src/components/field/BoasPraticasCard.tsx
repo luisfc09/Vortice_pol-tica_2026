@@ -42,7 +42,7 @@ export function BoasPraticasCard() {
       <div className="mb-2 flex items-center gap-2 pr-6">
         <Clock className="h-4 w-4 text-amber-300" />
         <p className="font-semibold text-amber-100">
-          Boas práticas de entrevista eleitoral
+          Boas práticas de pesquisa eleitoral
         </p>
       </div>
 

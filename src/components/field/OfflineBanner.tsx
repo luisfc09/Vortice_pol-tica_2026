@@ -42,7 +42,7 @@ export function OfflineBanner({ onSyncRequest, syncing }: OfflineBannerProps) {
         <span className="text-muted-foreground">
           {pending === 0
             ? 'Tudo sincronizado.'
-            : `${pending} entrevista${pending > 1 ? 's' : ''} aguardando envio.`}
+            : `${pending} pesquisa${pending > 1 ? 's' : ''} aguardando envio.`}
         </span>
       </div>
       {online && pending > 0 ? (

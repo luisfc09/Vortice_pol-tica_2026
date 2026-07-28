@@ -1,4 +1,4 @@
-// Helpers de exportação de entrevistas. Sem dependências de terceiros —
+// Helpers de exportação de pesquisas. Sem dependências de terceiros —
 // PDF acontece via window.print() de um HTML próprio (iframe oculto), JSON é
 // um Blob direto.
 
@@ -47,7 +47,7 @@ function slugify(text: string): string {
 
 export function exportInterviewAsJson(i: FieldInterview): void {
   const stamp = new Date(i.created_at).toISOString().slice(0, 10);
-  const filename = `entrevista-${stamp}-${slugify(i.voter_name)}.json`;
+  const filename = `pesquisa-${stamp}-${slugify(i.voter_name)}.json`;
   download(filename, JSON.stringify(i, null, 2), 'application/json');
 }
 
@@ -56,7 +56,7 @@ export function printInterview(): void {
 }
 
 // ---------------------------------------------------------------------------
-// PDF — monta um HTML autossuficiente da entrevista e imprime via iframe
+// PDF — monta um HTML autossuficiente da pesquisa e imprime via iframe
 // oculto. O navegador oferece "Salvar como PDF". Mesmo resultado no histórico
 // e na tela de detalhe (fonte única de rótulos = enums de @/types).
 // ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ function buildInterviewHtml(i: FieldInterview): string {
   const parts: string[] = [];
 
   parts.push(`<header>
-    <p class="eyebrow">Entrevista de campo · ${esc(createdAt)}</p>
+    <p class="eyebrow">Pesquisa de campo · ${esc(createdAt)}</p>
     <h1>${esc(i.voter_name)}</h1>
     <div class="tags">${tags}</div>
   </header>`);
@@ -130,7 +130,7 @@ function buildInterviewHtml(i: FieldInterview): string {
   );
 
   parts.push(
-    section('Resposta inicial', 'Fluxo rápido da entrevista', [
+    section('Resposta inicial', 'Fluxo rápido da pesquisa', [
       row('Intenção de voto', VOTE_INTENTION_LABEL[i.vote_intention]),
       row('Receptividade', `${i.receptivity_score}/5`),
       row('Decidiu o voto?', i.vote_decided ? 'Sim' : 'Não'),
@@ -204,11 +204,11 @@ function buildInterviewHtml(i: FieldInterview): string {
   }
 
   parts.push(
-    `<footer>Vórtice · entrevista #${esc(i.id.slice(0, 8))} · exportado em ${esc(exportedAt)}</footer>`,
+    `<footer>Vórtice · pesquisa #${esc(i.id.slice(0, 8))} · exportado em ${esc(exportedAt)}</footer>`,
   );
 
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-  <title>Entrevista — ${esc(i.voter_name)}</title>
+  <title>Pesquisa — ${esc(i.voter_name)}</title>
   <style>
     @page { margin: 18mm 16mm; }
     * { box-sizing: border-box; }

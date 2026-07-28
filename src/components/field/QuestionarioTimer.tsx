@@ -70,7 +70,7 @@ export function QuestionarioTimer({ startedAt, onWarn }: Props) {
         'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-sm transition-colors',
         tone,
       )}
-      title="Institutos recomendam máximo 8 minutos por entrevista"
+      title="Institutos recomendam máximo 8 minutos por pesquisa"
     >
       <Clock className="h-3.5 w-3.5" />
       {format(elapsed)}

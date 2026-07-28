@@ -35,13 +35,13 @@ export function TodaySentimentPanel({ data }: Props) {
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Sentimento das entrevistas
+            Sentimento das pesquisas
           </p>
           <p className="font-display text-xl tracking-wide text-foreground">
             Distribuição de hoje
           </p>
           <p className="text-xs text-muted-foreground">
-            {data.total} entrevistas hoje · {data.yesterdayTotal} ontem
+            {data.total} pesquisas hoje · {data.yesterdayTotal} ontem
           </p>
         </div>
         <Badge variant={trendColor} className="gap-1 self-start">
@@ -52,7 +52,7 @@ export function TodaySentimentPanel({ data }: Props) {
 
       {data.total === 0 ? (
         <p className="rounded-lg border border-dashed border-vortex-border bg-vortex-bg/40 p-6 text-center text-sm text-muted-foreground">
-          Nenhuma entrevista registrada hoje. Inicie em <strong>Campo &rarr; Nova entrevista</strong>.
+          Nenhuma pesquisa registrada hoje. Inicie em <strong>Campo &rarr; Nova pesquisa</strong>.
         </p>
       ) : (
         <div className="space-y-3">

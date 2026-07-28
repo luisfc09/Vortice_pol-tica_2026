@@ -102,7 +102,7 @@ export function QuestionForm({ open, onOpenChange, initial, saving, onSave }: Pr
             {initial ? 'Editar pergunta regional' : 'Nova pergunta regional'}
           </SheetTitle>
           <SheetDescription>
-            Aparece como bloco final em cada entrevista de campo desta campanha.
+            Aparece como bloco final em cada pesquisa de campo desta campanha.
           </SheetDescription>
         </SheetHeader>
 
@@ -174,7 +174,7 @@ export function QuestionForm({ open, onOpenChange, initial, saving, onSave }: Pr
               selected={isRequired}
               onSelect={() => setIsRequired(true)}
               title="Sim — entrevistador não pode pular"
-              description="A entrevista não avança sem responder."
+              description="A pesquisa não avança sem responder."
             />
             <RadioOption
               selected={!isRequired}

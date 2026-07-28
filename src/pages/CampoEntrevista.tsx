@@ -38,14 +38,14 @@ export default function CampoEntrevistaPage() {
       const result = await flushInterviewQueue();
       if (result.succeeded > 0) {
         toast.success(
-          `${result.succeeded} entrevista${result.succeeded > 1 ? 's' : ''} sincronizada${
+          `${result.succeeded} pesquisa${result.succeeded > 1 ? 's' : ''} sincronizada${
             result.succeeded > 1 ? 's' : ''
           }.`,
         );
       }
       if (result.failed > 0) {
         toast.error(
-          `${result.failed} entrevista${result.failed > 1 ? 's' : ''} falhou: ${
+          `${result.failed} pesquisa${result.failed > 1 ? 's' : ''} falhou: ${
             result.errors[0]
           }`,
           {
@@ -57,7 +57,7 @@ export default function CampoEntrevistaPage() {
               label: 'Descartar fila',
               onClick: () => {
                 const removed = discardInterviewQueue();
-                toast.message(`${removed} entrevista(s) descartada(s).`);
+                toast.message(`${removed} pesquisa(s) descartada(s).`);
               },
             },
           },
@@ -82,7 +82,7 @@ export default function CampoEntrevistaPage() {
           </Link>
         </Button>
         <EmptyState
-          title="Entrevista não encontrada"
+          title="Pesquisa não encontrada"
           description="O registro pode ter sido removido ou ainda não sincronizou neste dispositivo."
         />
       </div>
@@ -102,7 +102,7 @@ export default function CampoEntrevistaPage() {
         <>
           <div>
             <p className="text-xs uppercase tracking-widest text-muted-foreground">
-              Editando entrevista (dados básicos)
+              Editando pesquisa (dados básicos)
             </p>
             <h2 className="font-display text-2xl tracking-wide text-foreground">
               {editing.voter_name}
@@ -111,14 +111,14 @@ export default function CampoEntrevistaPage() {
 
           {/* Banner contextual: aponta pro questionário aprofundado ou pra
               página de detalhe. Mantém a navegação clara entre as duas
-              partes da entrevista. */}
+              partes da pesquisa. */}
           <div className="flex flex-col gap-2 rounded-lg border border-vortex-border bg-vortex-surface/40 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-2 text-foreground/90">
               {isInterviewDeepened(editing) ? (
                 <>
                   <Sparkles className="mt-0.5 h-4 w-4 text-emerald-300" />
                   <span>
-                    Esta entrevista <strong>tem questionário aprofundado</strong>.
+                    Esta pesquisa <strong>tem questionário aprofundado</strong>.
                     Aqui você edita só os dados básicos.
                   </span>
                 </>
@@ -126,7 +126,7 @@ export default function CampoEntrevistaPage() {
                 <>
                   <ListChecks className="mt-0.5 h-4 w-4 text-amber-300" />
                   <span>
-                    Esta entrevista é <strong>básica</strong>. Você pode
+                    Esta pesquisa é <strong>básica</strong>. Você pode
                     aprofundar (perfil, cenário, governo) a qualquer momento.
                   </span>
                 </>
@@ -168,7 +168,7 @@ export default function CampoEntrevistaPage() {
           editing
             ? undefined
             : (id) => {
-                toast.success('Entrevista salva. Vamos aprofundar.');
+                toast.success('Pesquisa salva. Vamos aprofundar.');
                 navigate(`/campo/entrevista/${id}/questionario`);
               }
         }
