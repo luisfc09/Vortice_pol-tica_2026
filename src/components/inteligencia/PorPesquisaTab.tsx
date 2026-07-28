@@ -217,7 +217,7 @@ export function PorPesquisaTab() {
                     </SelectContent>
                   </Select>
                 </div>
-                <CrossTable cross={cross} />
+                <CrossTable cross={cross} type={crossQuestion?.type ?? 'single_choice'} />
               </div>
             </div>
           ) : null}
@@ -421,42 +421,60 @@ function Bar({
   );
 }
 
-function CrossTable({ cross }: { cross: ReturnType<typeof crossTabOf> }) {
+function CrossTable({
+  cross,
+  type,
+}: {
+  cross: ReturnType<typeof crossTabOf>;
+  type: CampaignQuestionType;
+}) {
   if (cross.rows.length === 0) {
     return <p className="text-sm text-muted-foreground">Sem dados pra cruzar.</p>;
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] border-collapse text-sm">
+      {/* max-w evita a tabela esticar/espalhar em tela larga */}
+      <table className="w-full min-w-[520px] max-w-3xl border-collapse text-sm">
         <thead>
           <tr className="border-b border-vortex-border text-left text-xs uppercase tracking-widest text-muted-foreground">
-            <th className="py-2 pr-3 font-medium">Grupo</th>
+            <th className="py-2 pr-4 font-medium">Grupo</th>
             {cross.columns.map((c) => (
-              <th key={c} className="px-2 py-2 text-center font-medium">
+              <th key={c} className="px-3 py-2 text-left font-medium">
                 {c}
               </th>
             ))}
-            <th className="py-2 pl-2 text-right font-medium">n</th>
+            <th className="py-2 pl-3 text-right font-medium">n</th>
           </tr>
         </thead>
         <tbody>
           {cross.rows.map((row) => (
             <tr key={row.group} className="border-b border-vortex-border/40">
-              <td className="py-2 pr-3 text-foreground">{row.group}</td>
-              {row.cells.map((cell) => (
-                <td key={cell.label} className="px-2 py-2 text-center">
-                  <span
-                    className={
-                      cell.pct >= 50
-                        ? 'font-medium text-foreground'
-                        : 'text-muted-foreground'
-                    }
-                  >
-                    {cell.pct}%
-                  </span>
+              <td className="whitespace-nowrap py-2 pr-4 text-foreground">{row.group}</td>
+              {row.cells.map((cell, i) => (
+                <td key={cell.label} className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-vortex-bg/60">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${cell.pct}%`,
+                          backgroundColor: barColor(type, cell.label, i),
+                        }}
+                      />
+                    </div>
+                    <span
+                      className={
+                        cell.pct >= 50
+                          ? 'font-medium text-foreground'
+                          : 'text-muted-foreground'
+                      }
+                    >
+                      {cell.pct}%
+                    </span>
+                  </div>
                 </td>
               ))}
-              <td className="py-2 pl-2 text-right font-mono text-xs text-muted-foreground">
+              <td className="py-2 pl-3 text-right font-mono text-xs text-muted-foreground">
                 {row.total}
               </td>
             </tr>
