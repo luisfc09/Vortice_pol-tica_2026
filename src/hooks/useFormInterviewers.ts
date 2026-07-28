@@ -9,8 +9,10 @@ import { supabase, USE_MOCKS } from '@/lib/supabase';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import type { UserRole } from '@/types';
 
-// Papéis que conseguem aplicar pesquisa presencial (têm acesso ao módulo campo).
-const FIELD_ROLES: UserRole[] = ['admin', 'coordinator', 'researcher', 'field_agent'];
+// Papéis que APLICAM pesquisa em campo. Admin/coordenador gerenciam (não batem
+// porta), então não aparecem na lista de autorizáveis. field_agent =
+// "Entrevistador", researcher = "Pesquisador".
+const FIELD_ROLES: UserRole[] = ['researcher', 'field_agent'];
 
 export interface AssignableMember {
   user_id: string;
@@ -108,5 +110,41 @@ export function useFormInterviewers(formId: string | undefined) {
     [formId, session?.id, load],
   );
 
-  return { members, loading, busy, toggle, reload: load };
+  // Marca todos os elegíveis que ainda não estão autorizados (bulk insert).
+  const markAll = useCallback(async () => {
+    if (!formId) return;
+    const toAdd = members.filter((m) => !m.assigned);
+    if (toAdd.length === 0) return;
+    setBusy(true);
+    try {
+      const rows = toAdd.map((m) => ({
+        form_id: formId,
+        user_id: m.user_id,
+        assigned_by: session?.id ?? null,
+      }));
+      const { error } = await supabase.from('survey_form_assignments').insert(rows);
+      if (error) throw new Error(error.message);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }, [formId, members, session?.id, load]);
+
+  // Remove todas as autorizações deste formulário.
+  const clearAll = useCallback(async () => {
+    if (!formId) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase
+        .from('survey_form_assignments')
+        .delete()
+        .eq('form_id', formId);
+      if (error) throw new Error(error.message);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }, [formId, load]);
+
+  return { members, loading, busy, toggle, markAll, clearAll, reload: load };
 }

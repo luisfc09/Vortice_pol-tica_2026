@@ -59,9 +59,22 @@ export default function FormularioBuilderPage() {
     loading: interviewersLoading,
     busy: assignBusy,
     toggle: toggleInterviewer,
+    markAll: markAllInterviewers,
+    clearAll: clearAllInterviewers,
     reload: reloadInterviewers,
   } = useFormInterviewers(id);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [interviewerSearch, setInterviewerSearch] = useState('');
+
+  const assignedCount = useMemo(
+    () => interviewers.filter((m) => m.assigned).length,
+    [interviewers],
+  );
+  const filteredInterviewers = useMemo(() => {
+    const q = interviewerSearch.trim().toLowerCase();
+    if (!q) return interviewers;
+    return interviewers.filter((m) => m.full_name.toLowerCase().includes(q));
+  }, [interviewers, interviewerSearch]);
 
   const [busy, setBusy] = useState(false);
   const [editingHeader, setEditingHeader] = useState(false);
@@ -497,35 +510,72 @@ export default function FormularioBuilderPage() {
             <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : interviewers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nenhum membro com acesso a campo nesta campanha. Provisione entrevistadores em
-              Usuários (papéis: Pesquisador, Coordenador, Agente de campo).
+              Nenhum Pesquisador ou Entrevistador nesta campanha ainda. Use “Convidar
+              entrevistador” acima pra criar o primeiro.
             </p>
           ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Marque quem pode aplicar este formulário em campo.
-              </p>
-              {interviewers.map((m) => (
-                <label
-                  key={m.user_id}
-                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-md border p-2.5 text-sm ${
-                    m.assigned ? 'border-primary/40 bg-primary/5' : 'border-border/40'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Checkbox
-                      checked={m.assigned}
-                      disabled={assignBusy}
-                      onCheckedChange={() => void toggleInterviewer(m)}
-                    />
-                    <span className="text-foreground">{m.full_name}</span>
-                    {!m.is_active ? (
-                      <span className="text-xs text-muted-foreground">(inativo)</span>
-                    ) : null}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{ROLE_LABEL[m.role]}</span>
-                </label>
-              ))}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {assignedCount} de {interviewers.length} autorizado
+                  {assignedCount === 1 ? '' : 's'}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void markAllInterviewers()}
+                    disabled={assignBusy || assignedCount === interviewers.length}
+                  >
+                    Marcar todos
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void clearAllInterviewers()}
+                    disabled={assignBusy || assignedCount === 0}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+
+              <Input
+                value={interviewerSearch}
+                onChange={(e) => setInterviewerSearch(e.target.value)}
+                placeholder="Buscar por nome…"
+                className="h-9"
+              />
+
+              {filteredInterviewers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum nome encontrado.</p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredInterviewers.map((m) => (
+                    <label
+                      key={m.user_id}
+                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-md border p-2.5 text-sm ${
+                        m.assigned ? 'border-primary/40 bg-primary/5' : 'border-border/40'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Checkbox
+                          checked={m.assigned}
+                          disabled={assignBusy}
+                          onCheckedChange={() => void toggleInterviewer(m)}
+                        />
+                        <span className="text-foreground">{m.full_name}</span>
+                        {!m.is_active ? (
+                          <span className="text-xs text-muted-foreground">(inativo)</span>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {ROLE_LABEL[m.role]}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
