@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import {
   ClipboardCheck,
   BookOpenText,
+  FileStack,
   Globe2,
   History,
   MapPin,
@@ -106,6 +107,14 @@ export default function CampoHubPage() {
           description="Respostas prontas com dados de apoio para qualquer tema."
           icon={<BookOpenText className="h-7 w-7 text-primary" />}
         />
+        {isAdmin ? (
+          <HubAction
+            to="/pesquisas/formularios"
+            title="Formulários de Pesquisa"
+            description="Monte formulários (demografia + perguntas) pra aplicar em campo ou publicar por link."
+            icon={<FileStack className="h-7 w-7 text-primary" />}
+          />
+        ) : null}
         {isAdmin ? (
           <HubAction
             to="/pesquisas/perguntas-regionais"

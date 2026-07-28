@@ -25,6 +25,8 @@ import CampoHubPage from '@/pages/Campo';
 import PerguntasRegionaisPage from '@/pages/PerguntasRegionaisPage';
 import PesquisasPublicasPage from '@/pages/PesquisasPublicasPage';
 import PesquisaPublicaDetalhePage from '@/pages/PesquisaPublicaDetalhePage';
+import FormulariosPage from '@/pages/FormulariosPage';
+import FormularioBuilderPage from '@/pages/FormularioBuilderPage';
 import PublicSurveyPage from '@/pages/PublicSurveyPage';
 import PublicSurveyThankYou from '@/pages/PublicSurveyThankYou';
 import OnboardingPage from '@/pages/Onboarding';
@@ -315,6 +317,22 @@ export default function App() {
             <Route
               path="/pesquisas/publicas/:id"
               element={<PesquisaPublicaDetalhePage />}
+            />
+          </Route>
+        </Route>
+
+        {/* Formulários de Pesquisa (migration 052) — módulo novo unificado.
+            Admin/candidate montam o formulário (demografia + perguntas), depois
+            autorizam entrevistadores e/ou publicam link. Bate com a RLS
+            survey_forms_manage. */}
+        <Route
+          element={<ProtectedRoute requireCampaign roles={['admin', 'candidate']} />}
+        >
+          <Route element={<AppLayout />}>
+            <Route path="/pesquisas/formularios" element={<FormulariosPage />} />
+            <Route
+              path="/pesquisas/formularios/:id"
+              element={<FormularioBuilderPage />}
             />
           </Route>
         </Route>

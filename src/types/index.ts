@@ -391,6 +391,84 @@ export type PublicSurveySubmitError =
   | 'salt_not_configured'
   | 'unknown';
 
+// ----------------------------------------------------------------------------
+// Formulários de Pesquisa (migration 052) — módulo novo unificado.
+// Um formulário nomeado, criado pelo admin, com demografia fixa (nome/faixa/
+// sexo/religião) + perguntas próprias. Aplicável por entrevistador (presencial)
+// e/ou publicável como link (público). Reusa os 5 tipos de CampaignQuestionType.
+// ----------------------------------------------------------------------------
+export interface SurveyForm {
+  id: string;
+  campaign_id: string;
+  name: string;
+  description: string | null;
+  // Demografia opcional (nome/faixa/sexo/religião são fixos, sempre coletados):
+  collect_phone: boolean;
+  collect_municipality: boolean;
+  collect_neighborhood: boolean;
+  // Publicação como link público:
+  is_public: boolean;
+  share_token: string;
+  public_starts_at: string | null;
+  public_ends_at: string | null;
+  allow_multiple_per_ip: boolean;
+  is_active: boolean;
+  response_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SurveyFormQuestion {
+  id: string;
+  form_id: string;
+  text: string;
+  type: CampaignQuestionType; // mesmos 5 tipos do banco compartilhado
+  options: string[] | null;
+  is_required: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SurveyFormAssignment {
+  id: string;
+  form_id: string;
+  user_id: string;
+  assigned_by: string | null;
+  created_at: string;
+}
+
+export type SurveyChannel = 'presencial' | 'publico';
+
+export const SURVEY_CHANNEL_LABEL: Record<SurveyChannel, string> = {
+  presencial: 'Presencial',
+  publico: 'Link público',
+};
+
+// Uma resposta no repositório único (presencial + público). answers indexado
+// por survey_form_questions.id.
+export interface SurveyResponse {
+  id: string;
+  form_id: string;
+  campaign_id: string;
+  channel: SurveyChannel;
+  interviewer_id: string | null;
+  respondent_name: string | null;
+  age_range: AgeRange | null;
+  gender: Gender | null;
+  religion: Religion | null;
+  respondent_phone: string | null;
+  municipality_code: string | null;
+  neighborhood: string | null;
+  answers: Record<string, string | string[] | number | boolean | null>;
+  lat: number | null;
+  lng: number | null;
+  ip_hash: string | null;
+  user_agent: string | null;
+  submitted_at: string;
+}
+
 export interface CampaignOverview {
   id: string;
   candidate_name: string;

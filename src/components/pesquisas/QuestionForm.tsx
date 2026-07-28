@@ -13,13 +13,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioOption } from '@/components/billing/PlanCards';
-import {
-  CAMPAIGN_QUESTION_TYPE_LABEL,
-  type CampaignQuestion,
-  type CampaignQuestionType,
-} from '@/types';
+import { CAMPAIGN_QUESTION_TYPE_LABEL, type CampaignQuestionType } from '@/types';
 
 export interface QuestionFormValues {
+  text: string;
+  type: CampaignQuestionType;
+  options: string[] | null;
+  is_required: boolean;
+}
+
+// Shape mínimo que o form lê ao editar. CampaignQuestion e SurveyFormQuestion
+// ambos satisfazem — permite reusar este editor nos dois módulos.
+export interface QuestionFormInitial {
   text: string;
   type: CampaignQuestionType;
   options: string[] | null;
@@ -48,12 +53,24 @@ const needsOptions = (t: CampaignQuestionType) =>
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initial: CampaignQuestion | null;
+  initial: QuestionFormInitial | null;
   saving: boolean;
   onSave: (values: QuestionFormValues) => void;
+  /** Título do Sheet (default: contexto de perguntas regionais). */
+  title?: string;
+  /** Descrição sob o título. */
+  description?: string;
 }
 
-export function QuestionForm({ open, onOpenChange, initial, saving, onSave }: Props) {
+export function QuestionForm({
+  open,
+  onOpenChange,
+  initial,
+  saving,
+  onSave,
+  title,
+  description,
+}: Props) {
   const [text, setText] = useState('');
   const [type, setType] = useState<CampaignQuestionType>('yes_no');
   const [options, setOptions] = useState<string[]>(['', '']);
@@ -99,10 +116,10 @@ export function QuestionForm({ open, onOpenChange, initial, saving, onSave }: Pr
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader className="mb-5">
           <SheetTitle>
-            {initial ? 'Editar pergunta regional' : 'Nova pergunta regional'}
+            {title ?? (initial ? 'Editar pergunta regional' : 'Nova pergunta regional')}
           </SheetTitle>
           <SheetDescription>
-            Aparece como bloco final em cada pesquisa de campo desta campanha.
+            {description ?? 'Aparece como bloco final em cada pesquisa de campo desta campanha.'}
           </SheetDescription>
         </SheetHeader>
 
