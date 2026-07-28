@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileStack, FolderPlus, Users } from 'lucide-react';
+import { ArrowLeft, FileStack, FolderPlus, Inbox, Pencil, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -165,40 +165,51 @@ export default function FormulariosPage() {
 
 function FormCard({ form }: { form: SurveyForm }) {
   return (
-    <Link to={`/pesquisas/formularios/${form.id}`}>
-      <Card className="h-full transition-colors hover:border-primary/40">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-2">
-            <CardTitle className="flex items-center gap-2 text-base leading-tight">
-              <FileStack className="h-4 w-4 shrink-0 text-primary" />
-              {form.name}
-            </CardTitle>
-            <div className="flex shrink-0 gap-1">
-              {form.is_public ? (
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
-                  Link ativo
-                </span>
-              ) : null}
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  form.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                {form.is_active ? 'Ativo' : 'Pausado'}
+    <Card className="flex h-full flex-col">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base leading-tight">
+            <FileStack className="h-4 w-4 shrink-0 text-primary" />
+            {form.name}
+          </CardTitle>
+          <div className="flex shrink-0 gap-1">
+            {form.is_public ? (
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+                Link ativo
               </span>
-            </div>
+            ) : null}
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                form.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {form.is_active ? 'Ativo' : 'Pausado'}
+            </span>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          {form.description ? <p className="line-clamp-2">{form.description}</p> : null}
-          <p className="flex items-center gap-1.5 text-foreground">
-            <Users className="h-3.5 w-3.5" />
-            <span className="font-medium">{form.response_count}</span> resposta
-            {form.response_count === 1 ? '' : 's'} coletada
-            {form.response_count === 1 ? '' : 's'}
-          </p>
-        </CardContent>
-      </Card>
-    </Link>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-3 text-sm text-muted-foreground">
+        {form.description ? <p className="line-clamp-2">{form.description}</p> : null}
+        <p className="flex items-center gap-1.5 text-foreground">
+          <Users className="h-3.5 w-3.5" />
+          <span className="font-medium">{form.response_count}</span> resposta
+          {form.response_count === 1 ? '' : 's'} coletada
+          {form.response_count === 1 ? '' : 's'}
+        </p>
+        {/* Ações diretas: resultados em 1 clique + editar o formulário */}
+        <div className="mt-auto flex gap-2 pt-1">
+          <Button asChild className="flex-1">
+            <Link to={`/pesquisas/formularios/${form.id}/respostas`}>
+              <Inbox className="h-4 w-4" /> Ver respostas ({form.response_count})
+            </Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link to={`/pesquisas/formularios/${form.id}`}>
+              <Pencil className="h-4 w-4" /> Editar
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
