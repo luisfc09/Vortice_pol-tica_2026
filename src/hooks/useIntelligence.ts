@@ -13,7 +13,8 @@ import {
   type SampleSummary,
 } from '@/lib/intelligenceJob';
 import { SEED_INTELLIGENCE } from '@/data/seeds-intelligence';
-import type { CampaignIntelligence, FieldInterview } from '@/types';
+import { surveyResponsesToInterviews } from '@/lib/surveyResponseAdapter';
+import type { CampaignIntelligence, FieldInterview, SurveyResponse } from '@/types';
 
 export interface UseIntelligenceResult {
   stats: ComputedStats;
@@ -31,16 +32,48 @@ export function useIntelligence(): UseIntelligenceResult {
   const session = useAuthStore((s) => s.session);
   const interviews = useCollection(collections.interviews);
 
+  // Fase 5B: respostas dos Formulários de Pesquisa (survey_responses) entram
+  // na Inteligência via adaptador. Só demografia (faixa/sexo/religião); sem
+  // intenção de voto (excluída por design). Carregado à parte do store legado.
+  const [surveyRows, setSurveyRows] = useState<SurveyResponse[]>([]);
+  useEffect(() => {
+    let active = true;
+    async function loadSurvey() {
+      if (!session?.campaign || USE_MOCKS) {
+        setSurveyRows([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('survey_responses')
+        .select('*')
+        .eq('campaign_id', session.campaign.id)
+        .limit(5000);
+      if (!active) return;
+      if (error) {
+        console.warn('useIntelligence(survey_responses):', error.message);
+        setSurveyRows([]);
+        return;
+      }
+      setSurveyRows((data ?? []) as SurveyResponse[]);
+    }
+    void loadSurvey();
+    return () => {
+      active = false;
+    };
+  }, [session?.campaign?.id]);
+
   // Restringe a entrevistas da campanha atual + apenas as "completas" pra
-  // que análise represente a base real de pesquisa.
+  // que análise represente a base real de pesquisa. Mescla as respostas dos
+  // formulários novos (adaptadas) — enriquecem só as distribuições demográficas.
   const dataset = useMemo<FieldInterview[]>(() => {
     if (!session?.campaign) return [];
-    return interviews.filter(
+    const legacy = interviews.filter(
       (i) =>
         i.campaign_id === session.campaign!.id &&
         i.status !== 'draft', // 'basic' e 'complete' contam
     );
-  }, [interviews, session?.campaign]);
+    return [...legacy, ...surveyResponsesToInterviews(surveyRows)];
+  }, [interviews, session?.campaign, surveyRows]);
 
   const stats = useMemo(() => calculateStats(dataset), [dataset]);
   const sample = useMemo(() => summarizeSample(dataset), [dataset]);
