@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileStack, FolderPlus, Inbox, Pencil, Users } from 'lucide-react';
+import { ArrowLeft, FileStack, FolderPlus, Inbox, Pencil, Share2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -168,6 +168,28 @@ export default function FormulariosPage() {
 }
 
 function FormCard({ form }: { form: SurveyForm }) {
+  const publicUrl = `${window.location.origin}/f/${form.share_token}`;
+
+  async function share() {
+    const text = `Ajude nossa campanha respondendo essa pesquisa rápida: ${publicUrl}`;
+    // Web Share API (celular mostra a folha nativa com WhatsApp, copiar etc).
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: form.name, text, url: publicUrl });
+        return;
+      } catch {
+        /* usuário cancelou — segue pro fallback */
+      }
+    }
+    // Fallback (desktop): copia o link.
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success('Link copiado!');
+    } catch {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    }
+  }
+
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="pb-2">
@@ -200,13 +222,18 @@ function FormCard({ form }: { form: SurveyForm }) {
           {form.response_count === 1 ? '' : 's'} coletada
           {form.response_count === 1 ? '' : 's'}
         </p>
-        {/* Ações diretas: resultados em 1 clique + editar o formulário */}
-        <div className="mt-auto flex gap-2 pt-1">
-          <Button asChild className="flex-1">
+        {/* Ações diretas: resultados + compartilhar (se publicado) + editar */}
+        <div className="mt-auto flex flex-wrap gap-2 pt-1">
+          <Button asChild className="min-w-0 flex-1">
             <Link to={`/pesquisas/formularios/${form.id}/respostas`}>
               <Inbox className="h-4 w-4" /> Ver respostas ({form.response_count})
             </Link>
           </Button>
+          {form.is_public ? (
+            <Button variant="secondary" onClick={() => void share()}>
+              <Share2 className="h-4 w-4" /> Compartilhar
+            </Button>
+          ) : null}
           <Button asChild variant="secondary">
             <Link to={`/pesquisas/formularios/${form.id}`}>
               <Pencil className="h-4 w-4" /> Editar
