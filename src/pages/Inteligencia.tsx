@@ -9,6 +9,7 @@ import { InsightsIA } from '@/components/inteligencia/InsightsIA';
 import { AgendaRecomendada } from '@/components/inteligencia/AgendaRecomendada';
 import { SegmentosCard } from '@/components/inteligencia/SegmentosCard';
 import { CustomQuestionsAnalytics } from '@/components/inteligencia/CustomQuestionsAnalytics';
+import { PorPesquisaTab } from '@/components/inteligencia/PorPesquisaTab';
 import { useIntelligence } from '@/hooks/useIntelligence';
 import { reliabilityOf, RELIABILITY_LABEL } from '@/types';
 
@@ -30,6 +31,7 @@ export default function InteligenciaPage() {
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
+          <TabsTrigger value="por-pesquisa">Por Pesquisa</TabsTrigger>
           <TabsTrigger value="segments">Segmentos</TabsTrigger>
           <TabsTrigger value="territories">Territórios</TabsTrigger>
           <TabsTrigger value="themes">Temas</TabsTrigger>
@@ -54,6 +56,10 @@ export default function InteligenciaPage() {
             limit={4}
           />
           <AgendaRecomendada actions={intelligence.recommended_actions} />
+        </TabsContent>
+
+        <TabsContent value="por-pesquisa" className="space-y-4">
+          <PorPesquisaTab />
         </TabsContent>
 
         <TabsContent value="segments" className="space-y-4">
