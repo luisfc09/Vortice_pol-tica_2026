@@ -5,7 +5,8 @@
 // ============================================================================
 
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Users } from 'lucide-react';
+import { BarChart3, Sparkles, TrendingUp, TriangleAlert, Users } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import {
   Select,
   SelectContent,
@@ -26,7 +27,10 @@ import {
   type DistItem,
   type QuestionAgg,
 } from '@/lib/surveyFormStats';
+import { computeTrends, type Trend, type TrendTone } from '@/lib/surveyTrends';
 import { CAMPAIGN_QUESTION_TYPE_LABEL, type CampaignQuestionType } from '@/types';
+
+const CHOICE_COLORS = ['#A78BFA', '#22C55E', '#F59E0B', '#38BDF8', '#FB923C', '#EF4444', '#84CC16'];
 
 const SCALE_COLORS: Record<string, string> = {
   '5': '#22C55E',
@@ -63,6 +67,10 @@ export function PorPesquisaTab() {
   const demo = useMemo(() => demographicsOf(responses), [responses]);
   const aggs = useMemo(
     () => orderedQuestions.map((q) => aggregateQuestion(q, responses)),
+    [orderedQuestions, responses],
+  );
+  const trends = useMemo(
+    () => computeTrends(orderedQuestions, responses),
     [orderedQuestions, responses],
   );
 
@@ -136,6 +144,20 @@ export function PorPesquisaTab() {
             <StatTile label="Presencial" value={sample.presencial} />
             <StatTile label="Link público" value={sample.publico} />
           </div>
+
+          {/* Tendências */}
+          {trends.length > 0 ? (
+            <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+              <h3 className="mb-3 flex items-center gap-2 font-display text-lg tracking-wide text-foreground">
+                <TrendingUp className="h-5 w-5 text-primary" /> Tendências
+              </h3>
+              <div className="grid gap-2 md:grid-cols-2">
+                {trends.map((t, i) => (
+                  <TrendCard key={i} trend={t} />
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* Demografia */}
           <div className="grid gap-3 md:grid-cols-3">
@@ -260,19 +282,112 @@ function QuestionCard({ a }: { a: QuestionAgg }) {
             </li>
           ))}
         </ol>
+      ) : type === 'yes_no' || type === 'single_choice' ? (
+        <div className="grid gap-4 sm:grid-cols-[150px_1fr] sm:items-center">
+          <Donut data={distribution} type={type} />
+          <div className="space-y-2">
+            {distribution.map((d, i) => (
+              <Bar
+                key={d.label}
+                label={d.label}
+                count={d.count}
+                pct={d.pct}
+                color={barColor(type, d.label, i)}
+              />
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="space-y-2">
-          {distribution.map((d) => (
+          {distribution.map((d, i) => (
             <Bar
               key={d.label}
               label={d.label}
               count={d.count}
               pct={d.pct}
-              color={colorFor(type, d.label)}
+              color={barColor(type, d.label, i)}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function barColor(type: CampaignQuestionType, label: string, idx: number): string {
+  if (type === 'yes_no') return colorFor(type, label);
+  if (type === 'scale_1_5') return SCALE_COLORS[label] ?? '#A78BFA';
+  return CHOICE_COLORS[idx % CHOICE_COLORS.length];
+}
+
+function Donut({ data, type }: { data: DistItem[]; type: CampaignQuestionType }) {
+  const chartData = data.filter((d) => d.count > 0);
+  if (chartData.length === 0) {
+    return <p className="text-sm text-muted-foreground">Sem dados.</p>;
+  }
+  return (
+    <div className="h-36">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={chartData}
+            dataKey="count"
+            nameKey="label"
+            cx="50%"
+            cy="50%"
+            innerRadius={36}
+            outerRadius={62}
+            paddingAngle={1}
+          >
+            {chartData.map((d, idx) => (
+              <Cell
+                key={d.label}
+                fill={barColor(type, d.label, idx)}
+                stroke="#0A0F1E"
+                strokeWidth={1}
+              />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value, _name, props) => [
+              `${value} (${(props.payload as DistItem).pct}%)`,
+              (props.payload as DistItem).label,
+            ]}
+            contentStyle={{
+              backgroundColor: '#0F172A',
+              border: '1px solid #334155',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+const TREND_STYLE: Record<TrendTone, string> = {
+  positive: 'border-emerald-500/30 bg-emerald-500/5',
+  negative: 'border-red-500/30 bg-red-500/5',
+  warning: 'border-amber-500/30 bg-amber-500/5',
+  neutral: 'border-vortex-border bg-vortex-surface/60',
+};
+
+function TrendCard({ trend }: { trend: Trend }) {
+  const Icon =
+    trend.tone === 'warning' ? TriangleAlert : trend.tone === 'neutral' ? Sparkles : TrendingUp;
+  const iconColor =
+    trend.tone === 'positive'
+      ? 'text-emerald-400'
+      : trend.tone === 'negative'
+        ? 'text-red-400'
+        : trend.tone === 'warning'
+          ? 'text-amber-400'
+          : 'text-primary';
+  return (
+    <div className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${TREND_STYLE[trend.tone]}`}>
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
+      <span className="text-foreground/90">{trend.text}</span>
     </div>
   );
 }
