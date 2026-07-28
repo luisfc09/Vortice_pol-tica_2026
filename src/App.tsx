@@ -152,12 +152,13 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* Dashboard + Inteligência — 5 roles (sem supporter, sem leader) */}
+        {/* Dashboard + Inteligência — sem supporter/leader/field_agent.
+            field_agent (Entrevistador) só vê a aplicação de pesquisa. */}
         <Route
           element={
             <ProtectedRoute
               requireCampaign
-              roles={['admin', 'candidate', 'coordinator', 'researcher', 'field_agent']}
+              roles={['admin', 'candidate', 'coordinator', 'researcher']}
             />
           }
         >
@@ -210,14 +211,7 @@ export default function App() {
           element={
             <ProtectedRoute
               requireCampaign
-              roles={[
-                'admin',
-                'candidate',
-                'coordinator',
-                'researcher',
-                'leader',
-                'field_agent',
-              ]}
+              roles={['admin', 'candidate', 'coordinator', 'researcher', 'leader']}
             />
           }
         >

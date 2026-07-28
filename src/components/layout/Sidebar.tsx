@@ -45,8 +45,9 @@ const ITEMS: NavItem[] = [
     to: '/dashboard',
     label: 'Dashboard',
     icon: ChartNoAxesCombined,
-    // Sem supporter (vai pra /minha-rede) nem leader (vai pra /agenda).
-    roles: ['admin', 'candidate', 'coordinator', 'researcher', 'field_agent'],
+    // Sem supporter/leader (têm home própria) nem field_agent (Entrevistador,
+    // só vê aplicação de pesquisa).
+    roles: ['admin', 'candidate', 'coordinator', 'researcher'],
     requiresCampaign: true,
   },
   {
@@ -61,8 +62,8 @@ const ITEMS: NavItem[] = [
     to: '/inteligencia',
     label: 'Inteligência Eleitoral',
     icon: ChartColumnIncreasing,
-    // Inclui field_agent (lê insights pra atuar em campo). Sem leader.
-    roles: ['admin', 'candidate', 'coordinator', 'researcher', 'field_agent'],
+    // Sem leader nem field_agent (Entrevistador só aplica pesquisa).
+    roles: ['admin', 'candidate', 'coordinator', 'researcher'],
     requiresCampaign: true,
     module: 'inteligencia', // só plano Avançado (top)
   },
@@ -98,15 +99,8 @@ const ITEMS: NavItem[] = [
     to: '/mapa',
     label: 'Mapa Eleitoral',
     icon: MapPin,
-    // 6 roles (todos menos supporter).
-    roles: [
-      'admin',
-      'candidate',
-      'coordinator',
-      'researcher',
-      'leader',
-      'field_agent',
-    ],
+    // Todos menos supporter e field_agent (Entrevistador só aplica pesquisa).
+    roles: ['admin', 'candidate', 'coordinator', 'researcher', 'leader'],
     requiresCampaign: true,
   },
   {
@@ -126,9 +120,15 @@ const ITEMS: NavItem[] = [
     roles: ['admin', 'coordinator', 'researcher', 'field_agent'],
     requiresCampaign: true,
   },
-  // Agenda — aberta a TODOS (inclui supporter, que vê em read-only via
-  // `canManage` em Agenda.tsx).
-  { to: '/agenda', label: 'Agenda', icon: Calendar, requiresCampaign: true },
+  // Agenda — aberta a todos MENOS field_agent (Entrevistador só vê a
+  // aplicação de pesquisa). Supporter vê em read-only via canManage.
+  {
+    to: '/agenda',
+    label: 'Agenda',
+    icon: Calendar,
+    roles: ['admin', 'candidate', 'coordinator', 'researcher', 'supporter', 'leader'],
+    requiresCampaign: true,
+  },
   {
     to: '/usuarios',
     label: 'Usuários',

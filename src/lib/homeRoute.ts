@@ -15,10 +15,10 @@
 //     já tem campanha
 //
 // Regra atual:
-//   • supporter → /minha-rede  (não pode acessar /dashboard)
-//   • leader    → /agenda      (não pode acessar /dashboard)
-//   • demais    → /dashboard   (admin, candidate, coordinator, researcher,
-//                                field_agent — todos têm acesso)
+//   • supporter   → /minha-rede    (não pode acessar /dashboard)
+//   • leader      → /agenda        (não pode acessar /dashboard)
+//   • field_agent → /campo/aplicar (Entrevistador — só aplica pesquisa)
+//   • demais      → /dashboard     (admin, candidate, coordinator, researcher)
 // ============================================================================
 
 import type { UserRole } from '@/types';
@@ -26,5 +26,7 @@ import type { UserRole } from '@/types';
 export function resolveHomeRoute(role: UserRole | null | undefined): string {
   if (role === 'supporter') return '/minha-rede';
   if (role === 'leader') return '/agenda';
+  // field_agent é o perfil "Entrevistador": só vê/aplica pesquisas designadas.
+  if (role === 'field_agent') return '/campo/aplicar';
   return '/dashboard';
 }

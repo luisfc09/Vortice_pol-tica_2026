@@ -37,6 +37,7 @@ import {
   QuestionForm,
   type QuestionFormValues,
 } from '@/components/pesquisas/QuestionForm';
+import { InviteInterviewerSheet } from '@/components/pesquisas/InviteInterviewerSheet';
 import { useSurveyFormDetail } from '@/hooks/useSurveyForms';
 import { useFormInterviewers } from '@/hooks/useFormInterviewers';
 import { supabase } from '@/lib/supabase';
@@ -58,7 +59,9 @@ export default function FormularioBuilderPage() {
     loading: interviewersLoading,
     busy: assignBusy,
     toggle: toggleInterviewer,
+    reload: reloadInterviewers,
   } = useFormInterviewers(id);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [editingHeader, setEditingHeader] = useState(false);
@@ -480,9 +483,14 @@ export default function FormularioBuilderPage() {
       {/* 4. Entrevistadores autorizados */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <UserCheck className="h-4 w-4" /> Entrevistadores autorizados
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <UserCheck className="h-4 w-4" /> Entrevistadores autorizados
+            </CardTitle>
+            <Button size="sm" onClick={() => setInviteOpen(true)}>
+              <Plus className="h-4 w-4" /> Convidar entrevistador
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {interviewersLoading ? (
@@ -615,6 +623,14 @@ export default function FormularioBuilderPage() {
         onSave={saveQuestion}
         title={editingQuestion ? 'Editar pergunta' : 'Nova pergunta do formulário'}
         description="Aparece na pesquisa aplicada pelo entrevistador e/ou no link público."
+      />
+
+      <InviteInterviewerSheet
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        formId={form.id}
+        campaignId={form.campaign_id}
+        onInvited={() => void reloadInterviewers()}
       />
     </div>
   );

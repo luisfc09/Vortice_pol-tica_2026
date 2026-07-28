@@ -1360,7 +1360,7 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   researcher: 'Pesquisador',
   supporter: 'Apoiador',
   leader: 'Liderança',
-  field_agent: 'Agente de campo (legado)',
+  field_agent: 'Entrevistador',
 };
 
 // Lista canônica de papéis oferecidos em formulários e selects da UI.
@@ -1383,7 +1383,7 @@ export const ROLE_DESCRIPTION: Record<UserRole, string> = {
   researcher: 'Leitura + análise de menções e dados.',
   supporter: 'Apoiador estruturado com login.',
   leader: 'Liderança local que registra cadastros em campo.',
-  field_agent: 'Papel legado — migrar para Liderança.',
+  field_agent: 'Aplica apenas as pesquisas designadas a ele. Vê só a aplicação.',
 };
 
 export const FAQ_CATEGORY_LABEL: Record<FaqCategory, string> = {
