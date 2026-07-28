@@ -9,7 +9,7 @@
 // ============================================================================
 
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowDown,
@@ -51,6 +51,7 @@ const FIXED_DEMOGRAPHICS = [
 
 export default function FormularioBuilderPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { form, questions, loading, reload } = useSurveyFormDetail(id);
   const {
     members: interviewers,
@@ -209,6 +210,25 @@ export default function FormularioBuilderPage() {
       `Ajude nossa campanha respondendo essa pesquisa rápida: ${publicUrl}`,
     );
     window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener');
+  }
+
+  async function deleteForm() {
+    if (!form) return;
+    // Cascata: apagar o formulário leva perguntas, autorizações E respostas.
+    const msg =
+      form.response_count > 0
+        ? `Excluir o formulário "${form.name}"? As ${form.response_count} resposta(s) coletada(s), as perguntas e as autorizações serão APAGADAS. Essa ação NÃO tem volta.`
+        : `Excluir o formulário "${form.name}"? Essa ação NÃO tem volta.`;
+    if (!window.confirm(msg)) return;
+    setBusy(true);
+    const { error } = await supabase.from('survey_forms').delete().eq('id', form.id);
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Formulário excluído.');
+    navigate('/pesquisas/formularios', { replace: true });
   }
 
   async function removeQuestion(q: SurveyFormQuestion) {
@@ -560,6 +580,27 @@ export default function FormularioBuilderPage() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Zona de perigo */}
+      <Card className="border-destructive/30">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <div className="text-sm">
+            <p className="font-medium text-foreground">Excluir formulário</p>
+            <p className="text-muted-foreground">
+              Apaga o formulário, as perguntas, as autorizações e todas as respostas
+              coletadas. Sem volta.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => void deleteForm()}
+            disabled={busy}
+          >
+            <Trash2 className="h-4 w-4" /> Excluir formulário
+          </Button>
         </CardContent>
       </Card>
 
