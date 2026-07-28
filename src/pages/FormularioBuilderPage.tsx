@@ -16,10 +16,10 @@ import {
   ArrowUp,
   Check,
   CheckCircle2,
-  Circle,
   Copy,
   ExternalLink,
   Globe2,
+  Inbox,
   MessageSquare,
   Pencil,
   Plus,
@@ -310,7 +310,12 @@ export default function FormularioBuilderPage() {
                   {form.is_active ? 'Ativo' : 'Pausado'}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                <Button asChild variant="default" size="sm">
+                  <Link to={`/pesquisas/formularios/${form.id}/respostas`}>
+                    <Inbox className="h-3.5 w-3.5" /> Ver respostas ({form.response_count})
+                  </Link>
+                </Button>
                 <Button variant="ghost" size="sm" onClick={startEditHeader}>
                   <Pencil className="h-3.5 w-3.5" /> Editar
                 </Button>
@@ -555,15 +560,6 @@ export default function FormularioBuilderPage() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Próxima fase */}
-      <Card className="border-dashed">
-        <CardContent className="py-4 text-sm text-muted-foreground">
-          <p className="flex items-center gap-2">
-            <Circle className="h-3.5 w-3.5" /> Repositório de respostas + exportar (em breve)
-          </p>
         </CardContent>
       </Card>
 

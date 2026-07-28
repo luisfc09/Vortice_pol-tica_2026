@@ -27,6 +27,7 @@ import PesquisasPublicasPage from '@/pages/PesquisasPublicasPage';
 import PesquisaPublicaDetalhePage from '@/pages/PesquisaPublicaDetalhePage';
 import FormulariosPage from '@/pages/FormulariosPage';
 import FormularioBuilderPage from '@/pages/FormularioBuilderPage';
+import FormularioRespostasPage from '@/pages/FormularioRespostasPage';
 import AplicarPesquisaPage from '@/pages/AplicarPesquisaPage';
 import AplicarPesquisaFillPage from '@/pages/AplicarPesquisaFillPage';
 import PublicFormPage from '@/pages/PublicFormPage';
@@ -344,6 +345,10 @@ export default function App() {
             <Route
               path="/pesquisas/formularios/:id"
               element={<FormularioBuilderPage />}
+            />
+            <Route
+              path="/pesquisas/formularios/:id/respostas"
+              element={<FormularioRespostasPage />}
             />
           </Route>
         </Route>
