@@ -439,6 +439,27 @@ export interface SurveyFormAssignment {
   created_at: string;
 }
 
+// View pública (retorno de get_survey_form_by_token) — enxuta de propósito.
+export interface SurveyFormPublicQuestion {
+  id: string;
+  text: string;
+  type: CampaignQuestionType;
+  options: string[] | null;
+  is_required: boolean;
+  position: number;
+}
+
+export interface SurveyFormPublicView {
+  id: string;
+  campaign_id: string;
+  name: string;
+  description: string | null;
+  collect_phone: boolean;
+  collect_municipality: boolean;
+  collect_neighborhood: boolean;
+  questions: SurveyFormPublicQuestion[];
+}
+
 export type SurveyChannel = 'presencial' | 'publico';
 
 export const SURVEY_CHANNEL_LABEL: Record<SurveyChannel, string> = {

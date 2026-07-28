@@ -14,8 +14,13 @@ import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
+  Check,
   CheckCircle2,
   Circle,
+  Copy,
+  ExternalLink,
+  Globe2,
+  MessageSquare,
   Pencil,
   Plus,
   Trash2,
@@ -61,6 +66,9 @@ export default function FormularioBuilderPage() {
 
   const [questionSheetOpen, setQuestionSheetOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<SurveyFormQuestion | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const publicUrl = form ? `${window.location.origin}/f/${form.share_token}` : '';
 
   const orderedQuestions = useMemo(
     () => [...questions].sort((a, b) => a.position - b.position),
@@ -170,6 +178,37 @@ export default function FormularioBuilderPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function togglePublic() {
+    if (!form) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from('survey_forms')
+      .update({ is_public: !form.is_public })
+      .eq('id', form.id);
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(form.is_public ? 'Link despublicado.' : 'Link publicado!');
+    await reload();
+  }
+
+  async function copyLink() {
+    if (!publicUrl) return;
+    await navigator.clipboard.writeText(publicUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  function shareOnWhatsApp() {
+    if (!form) return;
+    const text = encodeURIComponent(
+      `Ajude nossa campanha respondendo essa pesquisa rápida: ${publicUrl}`,
+    );
+    window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener');
   }
 
   async function removeQuestion(q: SurveyFormQuestion) {
@@ -459,12 +498,69 @@ export default function FormularioBuilderPage() {
         </CardContent>
       </Card>
 
-      {/* Próximas fases */}
+      {/* 5. Publicar como link público */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Globe2 className="h-4 w-4" /> Link público (eleitor responde sozinho)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {form.is_public ? (
+            <>
+              <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-sm">
+                <span className="flex items-center gap-1.5 text-primary">
+                  <CheckCircle2 className="h-4 w-4" /> Link ativo
+                </span>
+              </div>
+              <div className="space-y-2">
+                <Label>Link</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Input value={publicUrl} readOnly className="min-w-0 flex-1 font-mono text-xs" />
+                  <Button variant="secondary" size="sm" onClick={() => void copyLink()}>
+                    {copied ? (
+                      <>
+                        <Check className="h-4 w-4" /> Copiado
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4" /> Copiar
+                      </>
+                    )}
+                  </Button>
+                  <Button asChild variant="ghost" size="sm">
+                    <a href={publicUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" /> Abrir
+                    </a>
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={shareOnWhatsApp}>
+                  <MessageSquare className="h-4 w-4" /> Enviar via WhatsApp
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void togglePublic()} disabled={busy}>
+                  Despublicar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Publique pra gerar um link que o eleitor abre no celular e responde sozinho, sem
+                entrevistador. As respostas caem no mesmo repositório deste formulário.
+              </p>
+              <Button onClick={() => void togglePublic()} disabled={busy}>
+                <Globe2 className="h-4 w-4" /> Publicar link
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Próxima fase */}
       <Card className="border-dashed">
-        <CardContent className="space-y-2 py-4 text-sm text-muted-foreground">
-          <p className="flex items-center gap-2">
-            <Circle className="h-3.5 w-3.5" /> Publicar como link público para o eleitor (em breve)
-          </p>
+        <CardContent className="py-4 text-sm text-muted-foreground">
           <p className="flex items-center gap-2">
             <Circle className="h-3.5 w-3.5" /> Repositório de respostas + exportar (em breve)
           </p>

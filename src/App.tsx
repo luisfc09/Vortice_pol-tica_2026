@@ -29,6 +29,7 @@ import FormulariosPage from '@/pages/FormulariosPage';
 import FormularioBuilderPage from '@/pages/FormularioBuilderPage';
 import AplicarPesquisaPage from '@/pages/AplicarPesquisaPage';
 import AplicarPesquisaFillPage from '@/pages/AplicarPesquisaFillPage';
+import PublicFormPage from '@/pages/PublicFormPage';
 import PublicSurveyPage from '@/pages/PublicSurveyPage';
 import PublicSurveyThankYou from '@/pages/PublicSurveyThankYou';
 import OnboardingPage from '@/pages/Onboarding';
@@ -100,6 +101,11 @@ export default function App() {
             public-survey-submit; a leitura usa RPC get_public_survey_by_token. */}
         <Route path="/p/:token" element={<PublicSurveyPage />} />
         <Route path="/p/:token/obrigado" element={<PublicSurveyThankYou />} />
+
+        {/* Formulário de Pesquisa publicado (migration 053) — rota pública do
+            eleitor, FORA do ProtectedRoute. Reusa a tela de agradecimento. */}
+        <Route path="/f/:token" element={<PublicFormPage />} />
+        <Route path="/f/:token/obrigado" element={<PublicSurveyThankYou />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/trocar-senha" element={<TrocarSenhaPage />} />

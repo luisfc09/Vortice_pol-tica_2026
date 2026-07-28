@@ -20,7 +20,6 @@ import {
   type AgeRange,
   type Gender,
   type Religion,
-  type SurveyForm,
   type SurveyFormQuestion,
 } from '@/types';
 
@@ -38,9 +37,21 @@ export interface FillPayload {
   answers: AnswersState;
 }
 
+// Shapes leves — servem tanto pro SurveyForm completo (presencial) quanto pra
+// view pública (get_survey_form_by_token).
+export interface FillFormConfig {
+  collect_phone: boolean;
+  collect_municipality: boolean;
+  collect_neighborhood: boolean;
+}
+export type FillQuestion = Pick<
+  SurveyFormQuestion,
+  'id' | 'text' | 'type' | 'options' | 'is_required' | 'position'
+>;
+
 interface Props {
-  form: SurveyForm;
-  questions: SurveyFormQuestion[];
+  form: FillFormConfig;
+  questions: FillQuestion[];
   submitting: boolean;
   onSubmit: (payload: FillPayload) => void;
 }
@@ -233,7 +244,7 @@ function QuestionField({
   onChange,
 }: {
   index: number;
-  question: SurveyFormQuestion;
+  question: FillQuestion;
   value: Answer;
   onChange: (v: Answer) => void;
 }) {
