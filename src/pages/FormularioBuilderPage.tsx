@@ -646,9 +646,24 @@ function DemographicToggle({
   onToggle: () => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm">
-      <Checkbox checked={checked} onCheckedChange={onToggle} />
-      {label}
-    </label>
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border/40 px-3 py-2 text-sm">
+      <span className="text-foreground">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={`${checked ? 'Desativar' : 'Ativar'} ${label}`}
+        onClick={onToggle}
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+          checked ? 'bg-primary' : 'bg-muted'
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-4' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+    </div>
   );
 }

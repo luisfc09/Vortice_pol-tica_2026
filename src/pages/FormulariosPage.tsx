@@ -53,6 +53,10 @@ export default function FormulariosPage() {
           name: name.trim(),
           description: description.trim() || null,
           is_active: true,
+          // Opcionais começam DESLIGADOS (opt-in) — o admin liga se quiser.
+          collect_phone: false,
+          collect_municipality: false,
+          collect_neighborhood: false,
           created_by: session?.id ?? null,
         })
         .select('id')
