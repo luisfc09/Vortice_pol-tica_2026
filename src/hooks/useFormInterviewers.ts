@@ -9,10 +9,10 @@ import { supabase, USE_MOCKS } from '@/lib/supabase';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import type { UserRole } from '@/types';
 
-// Papéis que APLICAM pesquisa em campo. Admin/coordenador gerenciam (não batem
-// porta), então não aparecem na lista de autorizáveis. field_agent =
-// "Entrevistador", researcher = "Pesquisador".
-const FIELD_ROLES: UserRole[] = ['researcher', 'field_agent'];
+// Papéis que podem ser autorizados a aplicar pesquisa em campo. Inclui
+// admin/coordenador (podem aplicar também), pesquisador e entrevistador
+// (field_agent). Supporter/leader/candidate ficam de fora.
+const FIELD_ROLES: UserRole[] = ['admin', 'coordinator', 'researcher', 'field_agent'];
 
 export interface AssignableMember {
   user_id: string;

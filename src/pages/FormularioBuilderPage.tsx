@@ -510,8 +510,8 @@ export default function FormularioBuilderPage() {
             <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : interviewers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nenhum Pesquisador ou Entrevistador nesta campanha ainda. Use “Convidar
-              entrevistador” acima pra criar o primeiro.
+              Nenhum membro elegível nesta campanha ainda. Use “Convidar entrevistador” acima
+              pra criar o primeiro.
             </p>
           ) : (
             <div className="space-y-3">
