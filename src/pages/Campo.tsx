@@ -1,12 +1,5 @@
 import { Link } from 'react-router-dom';
-import {
-  ClipboardList,
-  BookOpenText,
-  FileStack,
-  History,
-  MapPin,
-  Sunrise,
-} from 'lucide-react';
+import { ClipboardList, FileStack, MapPin, Sunrise } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
 import { useState } from 'react';
@@ -87,18 +80,6 @@ export default function CampoHubPage() {
           title="Campo Hoje"
           description="Visão em tempo real: mapa, sentimento, temas e ranking da equipe."
           icon={<Sunrise className="h-7 w-7 text-primary" />}
-        />
-        <HubAction
-          to="/campo/historico"
-          title="Minhas pesquisas"
-          description="Reabra pesquisas anteriores para corrigir ou complementar."
-          icon={<History className="h-7 w-7 text-primary" />}
-        />
-        <HubAction
-          to="/campo/faq"
-          title="FAQ de argumentação"
-          description="Respostas prontas com dados de apoio para qualquer tema."
-          icon={<BookOpenText className="h-7 w-7 text-primary" />}
         />
         {isAdmin ? (
           <HubAction
