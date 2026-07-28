@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ClipboardList, FileStack, MapPin, Sunrise } from 'lucide-react';
+import { ClipboardList, FileStack, MapPin } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
 import { useState } from 'react';
@@ -74,12 +74,6 @@ export default function CampoHubPage() {
           title="Aplicar Formulário"
           description="Aplique um formulário que o admin te autorizou — demografia + perguntas."
           icon={<ClipboardList className="h-7 w-7 text-primary" />}
-        />
-        <HubAction
-          to="/campo/hoje"
-          title="Campo Hoje"
-          description="Visão em tempo real: mapa, sentimento, temas e ranking da equipe."
-          icon={<Sunrise className="h-7 w-7 text-primary" />}
         />
         {isAdmin ? (
           <HubAction
