@@ -27,6 +27,8 @@ import PesquisasPublicasPage from '@/pages/PesquisasPublicasPage';
 import PesquisaPublicaDetalhePage from '@/pages/PesquisaPublicaDetalhePage';
 import FormulariosPage from '@/pages/FormulariosPage';
 import FormularioBuilderPage from '@/pages/FormularioBuilderPage';
+import AplicarPesquisaPage from '@/pages/AplicarPesquisaPage';
+import AplicarPesquisaFillPage from '@/pages/AplicarPesquisaFillPage';
 import PublicSurveyPage from '@/pages/PublicSurveyPage';
 import PublicSurveyThankYou from '@/pages/PublicSurveyThankYou';
 import OnboardingPage from '@/pages/Onboarding';
@@ -233,6 +235,9 @@ export default function App() {
             <Route path="/campo" element={<CampoHubPage />} />
             <Route path="/campo/hoje" element={<CampoHojePage />} />
             <Route path="/campo/historico" element={<CampoHistoricoPage />} />
+            {/* Aplicar Formulário de Pesquisa (migration 052, Fase 2) */}
+            <Route path="/campo/aplicar" element={<AplicarPesquisaPage />} />
+            <Route path="/campo/aplicar/:id" element={<AplicarPesquisaFillPage />} />
             {/* Redirect legados — links antigos seguem funcionando */}
             <Route
               path="/campo/minhas-entrevistas"

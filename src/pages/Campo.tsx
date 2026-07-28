@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   ClipboardCheck,
+  ClipboardList,
   BookOpenText,
   FileStack,
   Globe2,
@@ -83,6 +84,12 @@ export default function CampoHubPage() {
       <OfflineBanner onSyncRequest={handleSync} syncing={syncing} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <HubAction
+          to="/campo/aplicar"
+          title="Aplicar Formulário"
+          description="Aplique um formulário que o admin te autorizou — demografia + perguntas."
+          icon={<ClipboardList className="h-7 w-7 text-primary" />}
+        />
         <HubAction
           to="/campo/entrevista"
           title="Nova pesquisa"

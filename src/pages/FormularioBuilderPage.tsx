@@ -19,6 +19,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -32,8 +33,9 @@ import {
   type QuestionFormValues,
 } from '@/components/pesquisas/QuestionForm';
 import { useSurveyFormDetail } from '@/hooks/useSurveyForms';
+import { useFormInterviewers } from '@/hooks/useFormInterviewers';
 import { supabase } from '@/lib/supabase';
-import { CAMPAIGN_QUESTION_TYPE_LABEL, type SurveyFormQuestion } from '@/types';
+import { CAMPAIGN_QUESTION_TYPE_LABEL, ROLE_LABEL, type SurveyFormQuestion } from '@/types';
 
 const FIXED_DEMOGRAPHICS = [
   'Nome do eleitor',
@@ -45,6 +47,12 @@ const FIXED_DEMOGRAPHICS = [
 export default function FormularioBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const { form, questions, loading, reload } = useSurveyFormDetail(id);
+  const {
+    members: interviewers,
+    loading: interviewersLoading,
+    busy: assignBusy,
+    toggle: toggleInterviewer,
+  } = useFormInterviewers(id);
 
   const [busy, setBusy] = useState(false);
   const [editingHeader, setEditingHeader] = useState(false);
@@ -204,11 +212,17 @@ export default function FormularioBuilderPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/pesquisas/formularios">
-          <ArrowLeft className="h-4 w-4" /> Voltar para Formulários
-        </Link>
-      </Button>
+      <div className="flex items-center justify-between gap-2">
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/pesquisas/formularios">
+            <ArrowLeft className="h-4 w-4" /> Voltar para Formulários
+          </Link>
+        </Button>
+        <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-300">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Salvo automaticamente
+        </span>
+      </div>
 
       {/* 1. Cabeçalho */}
       <Card>
@@ -399,12 +413,55 @@ export default function FormularioBuilderPage() {
         </CardContent>
       </Card>
 
+      {/* 4. Entrevistadores autorizados */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UserCheck className="h-4 w-4" /> Entrevistadores autorizados
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {interviewersLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : interviewers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum membro com acesso a campo nesta campanha. Provisione entrevistadores em
+              Usuários (papéis: Pesquisador, Coordenador, Agente de campo).
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Marque quem pode aplicar este formulário em campo.
+              </p>
+              {interviewers.map((m) => (
+                <label
+                  key={m.user_id}
+                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-md border p-2.5 text-sm ${
+                    m.assigned ? 'border-primary/40 bg-primary/5' : 'border-border/40'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Checkbox
+                      checked={m.assigned}
+                      disabled={assignBusy}
+                      onCheckedChange={() => void toggleInterviewer(m)}
+                    />
+                    <span className="text-foreground">{m.full_name}</span>
+                    {!m.is_active ? (
+                      <span className="text-xs text-muted-foreground">(inativo)</span>
+                    ) : null}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{ROLE_LABEL[m.role]}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Próximas fases */}
       <Card className="border-dashed">
         <CardContent className="space-y-2 py-4 text-sm text-muted-foreground">
-          <p className="flex items-center gap-2">
-            <Circle className="h-3.5 w-3.5" /> Autorizar entrevistadores a aplicar (em breve)
-          </p>
           <p className="flex items-center gap-2">
             <Circle className="h-3.5 w-3.5" /> Publicar como link público para o eleitor (em breve)
           </p>
