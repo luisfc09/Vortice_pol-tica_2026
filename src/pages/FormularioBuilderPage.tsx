@@ -72,8 +72,14 @@ export default function FormularioBuilderPage() {
   );
   const filteredInterviewers = useMemo(() => {
     const q = interviewerSearch.trim().toLowerCase();
-    if (!q) return interviewers;
-    return interviewers.filter((m) => m.full_name.toLowerCase().includes(q));
+    const base = q
+      ? interviewers.filter((m) => m.full_name.toLowerCase().includes(q))
+      : interviewers;
+    // Autorizados primeiro, depois alfabético — a seleção fica sempre à vista.
+    return [...base].sort((a, b) => {
+      if (a.assigned !== b.assigned) return a.assigned ? -1 : 1;
+      return a.full_name.localeCompare(b.full_name);
+    });
   }, [interviewers, interviewerSearch]);
 
   const [busy, setBusy] = useState(false);
@@ -550,7 +556,7 @@ export default function FormularioBuilderPage() {
               {filteredInterviewers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhum nome encontrado.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                   {filteredInterviewers.map((m) => (
                     <label
                       key={m.user_id}
