@@ -1,14 +1,11 @@
 import { Link } from 'react-router-dom';
 import {
-  ClipboardCheck,
   ClipboardList,
   BookOpenText,
   FileStack,
-  Globe2,
   History,
   MapPin,
   Sunrise,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { OfflineBanner } from '@/components/field/OfflineBanner';
@@ -18,16 +15,11 @@ import { getQueue } from '@/lib/offline-queue';
 import { discardInterviewQueue, flushInterviewQueue } from '@/lib/data';
 import { useAuthStore } from '@/stores/auth';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
-import { useCampaignQuestions } from '@/hooks/useCampaignQuestions';
 
 export default function CampoHubPage() {
   const session = useAuthStore((s) => s.session);
   const effective = useEffectiveSession();
   const isAdmin = effective?.role === 'admin' || effective?.is_super_admin === true;
-  const { questions: regionalQuestions } = useCampaignQuestions({
-    activeOnly: true,
-    enabled: isAdmin,
-  });
   const [syncing, setSyncing] = useState(false);
 
   async function handleSync() {
@@ -91,12 +83,6 @@ export default function CampoHubPage() {
           icon={<ClipboardList className="h-7 w-7 text-primary" />}
         />
         <HubAction
-          to="/campo/entrevista"
-          title="Nova pesquisa"
-          description="Registre o contato com GPS, intenção de voto e observações."
-          icon={<ClipboardCheck className="h-7 w-7 text-primary" />}
-        />
-        <HubAction
           to="/campo/hoje"
           title="Campo Hoje"
           description="Visão em tempo real: mapa, sentimento, temas e ranking da equipe."
@@ -120,23 +106,6 @@ export default function CampoHubPage() {
             title="Formulários de Pesquisa"
             description="Monte formulários (demografia + perguntas) pra aplicar em campo ou publicar por link."
             icon={<FileStack className="h-7 w-7 text-primary" />}
-          />
-        ) : null}
-        {isAdmin ? (
-          <HubAction
-            to="/pesquisas/perguntas-regionais"
-            title="Perguntas Regionais"
-            description="Configure o Bloco 6 — perguntas próprias desta campanha no fim da pesquisa."
-            icon={<SlidersHorizontal className="h-7 w-7 text-primary" />}
-            badge={regionalQuestions.length}
-          />
-        ) : null}
-        {isAdmin ? (
-          <HubAction
-            to="/pesquisas/publicas"
-            title="Pesquisas Públicas"
-            description="Gere um link para o eleitor responder sozinho pelo WhatsApp, sem entrevistador."
-            icon={<Globe2 className="h-7 w-7 text-primary" />}
           />
         ) : null}
       </div>
