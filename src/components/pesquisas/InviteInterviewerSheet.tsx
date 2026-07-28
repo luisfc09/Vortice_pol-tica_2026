@@ -139,7 +139,14 @@ export function InviteInterviewerSheet({
   }
 
   function shareWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(accessText)}`, '_blank', 'noopener');
+    // Se temos o telefone, abre DIRETO na conversa da pessoa (wa.me/<numero>).
+    // Senão, abre o WhatsApp pra escolher o contato manualmente.
+    const digits = phone.replace(/\D/g, '');
+    const to = digits ? (digits.startsWith('55') ? digits : `55${digits}`) : '';
+    const url = to
+      ? `https://wa.me/${to}?text=${encodeURIComponent(accessText)}`
+      : `https://wa.me/?text=${encodeURIComponent(accessText)}`;
+    window.open(url, '_blank', 'noopener');
   }
 
   return (
