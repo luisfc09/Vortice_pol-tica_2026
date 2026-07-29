@@ -247,3 +247,166 @@ export function crossTabOf(
 
   return { columns: colOrder, rows };
 }
+
+// ============================================================================
+// Correlação — pergunta × pergunta (ou × demografia) + força (Cramér's V)
+// ============================================================================
+
+// Uma "variável" pra cruzar/correlacionar: uma demografia ou uma pergunta.
+// Perguntas de valor único (yes_no/single_choice/scale_1_5) são correlacionáveis;
+// multiple_choice e free_text não entram (valor não é categórico simples).
+export type Variable =
+  | { kind: 'demo'; key: DemographicKey; label: string }
+  | { kind: 'question'; question: SurveyFormQuestion; label: string };
+
+export function demoVariable(key: DemographicKey): Variable {
+  return { kind: 'demo', key, label: DEMOGRAPHIC_LABEL[key] };
+}
+export function questionVariable(question: SurveyFormQuestion): Variable {
+  return { kind: 'question', question, label: question.text };
+}
+
+export function isCorrelatable(q: SurveyFormQuestion): boolean {
+  return q.type === 'yes_no' || q.type === 'single_choice' || q.type === 'scale_1_5';
+}
+
+function variableValue(r: SurveyResponse, v: Variable): string | null {
+  if (v.kind === 'demo') return demoValue(r, v.key);
+  const raw = r.answers?.[v.question.id];
+  if (!isFilled(raw) || Array.isArray(raw)) return null; // multiple_choice fora
+  return String(raw);
+}
+
+// Cruza uma pergunta com QUALQUER variável (demografia ou outra pergunta).
+export function crossTab2(
+  question: SurveyFormQuestion,
+  groupBy: Variable,
+  responses: SurveyResponse[],
+): CrossTab {
+  const colOrder: string[] =
+    question.type === 'yes_no'
+      ? ['Sim', 'Não']
+      : (question.options ?? []).length
+        ? [...(question.options ?? [])]
+        : [];
+  const colSet = new Set(colOrder);
+
+  const matrix = new Map<string, Map<string, number>>();
+  for (const r of responses) {
+    const g = variableValue(r, groupBy);
+    if (!g) continue;
+    const labels = answerLabels(r, question.id);
+    if (labels.length === 0) continue;
+    if (!matrix.has(g)) matrix.set(g, new Map());
+    const row = matrix.get(g)!;
+    for (const l of labels) {
+      row.set(l, (row.get(l) ?? 0) + 1);
+      if (!colSet.has(l)) {
+        colSet.add(l);
+        colOrder.push(l);
+      }
+    }
+  }
+
+  const rows: CrossRow[] = [...matrix.entries()].map(([group, row]) => {
+    const total = [...row.values()].reduce((s, n) => s + n, 0);
+    const cells = colOrder.map((label) => ({
+      label,
+      count: row.get(label) ?? 0,
+      pct: pct(row.get(label) ?? 0, total),
+    }));
+    return { group, total, cells };
+  });
+  rows.sort((a, b) => b.total - a.total);
+  return { columns: colOrder, rows };
+}
+
+export interface Association {
+  v: number; // Cramér's V (0–1)
+  n: number; // respostas com ambas variáveis preenchidas
+}
+
+// Cramér's V — força da associação entre duas variáveis categóricas (0–1).
+export function cramersV(a: Variable, b: Variable, responses: SurveyResponse[]): Association {
+  const table = new Map<string, Map<string, number>>();
+  const rowTot = new Map<string, number>();
+  const colTot = new Map<string, number>();
+  let n = 0;
+  for (const r of responses) {
+    const av = variableValue(r, a);
+    const bv = variableValue(r, b);
+    if (av === null || bv === null) continue;
+    n++;
+    if (!table.has(av)) table.set(av, new Map());
+    const row = table.get(av)!;
+    row.set(bv, (row.get(bv) ?? 0) + 1);
+    rowTot.set(av, (rowTot.get(av) ?? 0) + 1);
+    colTot.set(bv, (colTot.get(bv) ?? 0) + 1);
+  }
+  const k = Math.min(rowTot.size, colTot.size);
+  if (n === 0 || k <= 1) return { v: 0, n };
+
+  let chi2 = 0;
+  for (const [av, rt] of rowTot) {
+    for (const [bv, ct] of colTot) {
+      const observed = table.get(av)?.get(bv) ?? 0;
+      const expected = (rt * ct) / n;
+      if (expected > 0) chi2 += (observed - expected) ** 2 / expected;
+    }
+  }
+  const v = Math.sqrt(chi2 / (n * (k - 1)));
+  return { v: Math.min(1, Math.round(v * 100) / 100), n };
+}
+
+export type StrengthLevel = 'Fraca' | 'Moderada' | 'Forte' | 'Muito forte';
+
+export function strengthOf(v: number): StrengthLevel {
+  if (v >= 0.55) return 'Muito forte';
+  if (v >= 0.35) return 'Forte';
+  if (v >= 0.15) return 'Moderada';
+  return 'Fraca';
+}
+
+export interface Correlation {
+  a: Variable;
+  b: Variable;
+  v: number;
+  n: number;
+}
+
+// Detecta os pares mais correlacionados: todas as perguntas correlacionáveis
+// entre si + cada pergunta × cada demografia. Filtra por força mínima e amostra.
+export function topCorrelations(
+  questions: SurveyFormQuestion[],
+  responses: SurveyResponse[],
+  opts: { minV?: number; minN?: number; limit?: number } = {},
+): Correlation[] {
+  const minV = opts.minV ?? 0.2;
+  const minN = opts.minN ?? 5;
+  const limit = opts.limit ?? 6;
+
+  const qVars = questions.filter(isCorrelatable).map(questionVariable);
+  const demoVars: Variable[] = (['age', 'gender', 'religion'] as DemographicKey[]).map(
+    demoVariable,
+  );
+
+  const out: Correlation[] = [];
+
+  // pergunta × pergunta
+  for (let i = 0; i < qVars.length; i++) {
+    for (let j = i + 1; j < qVars.length; j++) {
+      const { v, n } = cramersV(qVars[i], qVars[j], responses);
+      if (v >= minV && n >= minN) out.push({ a: qVars[i], b: qVars[j], v, n });
+    }
+  }
+  // pergunta × demografia
+  for (const q of qVars) {
+    for (const d of demoVars) {
+      const { v, n } = cramersV(q, d, responses);
+      if (v >= minV && n >= minN) out.push({ a: q, b: d, v, n });
+    }
+  }
+
+  out.sort((x, y) => y.v - x.v);
+  return out.slice(0, limit);
+}

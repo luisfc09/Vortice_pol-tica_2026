@@ -19,13 +19,21 @@ import { useSurveyForms, useSurveyFormDetail } from '@/hooks/useSurveyForms';
 import { useSurveyResponses } from '@/hooks/useSurveyResponses';
 import {
   aggregateQuestion,
-  crossTabOf,
+  cramersV,
+  crossTab2,
+  demoVariable,
   demographicsOf,
+  isCorrelatable,
+  questionVariable,
   sampleOf,
-  DEMOGRAPHIC_LABEL,
+  strengthOf,
+  topCorrelations,
+  type CrossTab,
   type DemographicKey,
   type DistItem,
   type QuestionAgg,
+  type StrengthLevel,
+  type Variable,
 } from '@/lib/surveyFormStats';
 import { computeTrends, type Trend, type TrendTone } from '@/lib/surveyTrends';
 import { CAMPAIGN_QUESTION_TYPE_LABEL, type CampaignQuestionType } from '@/types';
@@ -74,22 +82,60 @@ export function PorPesquisaTab() {
     [orderedQuestions, responses],
   );
 
-  // Cruzamento
+  // Correlações que se destacam (auto)
+  const correlations = useMemo(
+    () => topCorrelations(orderedQuestions, responses),
+    [orderedQuestions, responses],
+  );
+
+  // Cruzamento (pergunta × demografia OU × outra pergunta)
   const crossable = useMemo(
     () => orderedQuestions.filter((q) => q.type !== 'free_text'),
     [orderedQuestions],
   );
   const [crossQid, setCrossQid] = useState('');
-  const [crossDemo, setCrossDemo] = useState<DemographicKey>('age');
+  const [crossBy, setCrossBy] = useState('demo:age');
   useEffect(() => {
     if (crossable.length > 0 && !crossable.find((q) => q.id === crossQid)) {
       setCrossQid(crossable[0].id);
     }
   }, [crossable, crossQid]);
   const crossQuestion = crossable.find((q) => q.id === crossQid);
+
+  // Opções do "por": demografias + perguntas correlacionáveis (menos a analisada).
+  const byOptions = useMemo(() => {
+    const demos = [
+      { value: 'demo:age', label: 'Faixa etária' },
+      { value: 'demo:gender', label: 'Sexo' },
+      { value: 'demo:religion', label: 'Religião' },
+    ];
+    const qs = orderedQuestions
+      .filter((q) => isCorrelatable(q) && q.id !== crossQid)
+      .map((q) => ({ value: `q:${q.id}`, label: q.text }));
+    return [...demos, ...qs];
+  }, [orderedQuestions, crossQid]);
+  useEffect(() => {
+    if (byOptions.length > 0 && !byOptions.find((o) => o.value === crossBy)) {
+      setCrossBy(byOptions[0].value);
+    }
+  }, [byOptions, crossBy]);
+
+  const groupByVar = useMemo<Variable | null>(() => {
+    if (crossBy.startsWith('demo:')) return demoVariable(crossBy.slice(5) as DemographicKey);
+    const q = orderedQuestions.find((x) => x.id === crossBy.slice(2));
+    return q ? questionVariable(q) : null;
+  }, [crossBy, orderedQuestions]);
+
   const cross = useMemo(
-    () => (crossQuestion ? crossTabOf(crossQuestion, responses, crossDemo) : null),
-    [crossQuestion, responses, crossDemo],
+    () => (crossQuestion && groupByVar ? crossTab2(crossQuestion, groupByVar, responses) : null),
+    [crossQuestion, groupByVar, responses],
+  );
+  const assoc = useMemo(
+    () =>
+      crossQuestion && groupByVar
+        ? cramersV(questionVariable(crossQuestion), groupByVar, responses)
+        : null,
+    [crossQuestion, groupByVar, responses],
   );
 
   if (formsLoading) {
@@ -180,6 +226,35 @@ export function PorPesquisaTab() {
             )}
           </div>
 
+          {/* Correlações que se destacam */}
+          {correlations.length > 0 ? (
+            <div className="space-y-3">
+              <h3 className="font-display text-lg tracking-wide text-foreground">
+                Correlações que se destacam
+              </h3>
+              <div className="grid gap-2 md:grid-cols-2">
+                {correlations.map((c, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-vortex-border bg-vortex-surface/60 p-3 text-sm"
+                  >
+                    <span className="text-foreground/90">
+                      <span className="font-medium">{shortLabel(c.a.label)}</span>
+                      {' ↔ '}
+                      <span className="font-medium">{shortLabel(c.b.label)}</span>
+                      <span className="ml-1 text-xs text-muted-foreground">({c.n} resp.)</span>
+                    </span>
+                    <StrengthBadge v={c.v} />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Quanto mais forte a associação, mais as respostas “andam juntas” — indício de
+                que uma percepção influencia a outra.
+              </p>
+            </div>
+          ) : null}
+
           {/* Cruzamento */}
           {crossable.length > 0 && cross ? (
             <div className="space-y-3">
@@ -201,21 +276,23 @@ export function PorPesquisaTab() {
                     </SelectContent>
                   </Select>
                   <span className="text-muted-foreground">por</span>
-                  <Select
-                    value={crossDemo}
-                    onValueChange={(v) => setCrossDemo(v as DemographicKey)}
-                  >
-                    <SelectTrigger className="h-9 w-40">
+                  <Select value={crossBy} onValueChange={setCrossBy}>
+                    <SelectTrigger className="h-9 w-64">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(['age', 'gender', 'religion'] as DemographicKey[]).map((d) => (
-                        <SelectItem key={d} value={d}>
-                          {DEMOGRAPHIC_LABEL[d]}
+                      {byOptions.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {assoc && assoc.n > 0 ? (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      associação: <StrengthBadge v={assoc.v} />
+                    </span>
+                  ) : null}
                 </div>
                 <CrossTable cross={cross} type={crossQuestion?.type ?? 'single_choice'} />
               </div>
@@ -224,6 +301,29 @@ export function PorPesquisaTab() {
         </>
       )}
     </div>
+  );
+}
+
+function shortLabel(s: string): string {
+  return s.length > 42 ? `${s.slice(0, 42)}…` : s;
+}
+
+const STRENGTH_STYLE: Record<StrengthLevel, string> = {
+  Fraca: 'bg-muted text-muted-foreground',
+  Moderada: 'bg-amber-500/15 text-amber-300',
+  Forte: 'bg-emerald-500/15 text-emerald-300',
+  'Muito forte': 'bg-primary/20 text-primary',
+};
+
+function StrengthBadge({ v }: { v: number }) {
+  const level = strengthOf(v);
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STRENGTH_STYLE[level]}`}
+      title={`Cramér's V = ${v}`}
+    >
+      {level}
+    </span>
   );
 }
 
@@ -421,13 +521,7 @@ function Bar({
   );
 }
 
-function CrossTable({
-  cross,
-  type,
-}: {
-  cross: ReturnType<typeof crossTabOf>;
-  type: CampaignQuestionType;
-}) {
+function CrossTable({ cross, type }: { cross: CrossTab; type: CampaignQuestionType }) {
   if (cross.rows.length === 0) {
     return <p className="text-sm text-muted-foreground">Sem dados pra cruzar.</p>;
   }
