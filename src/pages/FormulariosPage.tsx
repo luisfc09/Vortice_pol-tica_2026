@@ -222,23 +222,26 @@ function FormCard({ form }: { form: SurveyForm }) {
           {form.response_count === 1 ? '' : 's'} coletada
           {form.response_count === 1 ? '' : 's'}
         </p>
-        {/* Ações diretas: resultados + compartilhar (se publicado) + editar */}
-        <div className="mt-auto flex flex-wrap gap-2 pt-1">
-          <Button asChild className="min-w-0 flex-1">
+        {/* Ações: 'Ver respostas' em linha cheia (principal) + secundárias
+            embaixo, pra o texto nunca vazar do botão em cards estreitos. */}
+        <div className="mt-auto space-y-2 pt-1">
+          <Button asChild className="w-full">
             <Link to={`/pesquisas/formularios/${form.id}/respostas`}>
               <Inbox className="h-4 w-4" /> Ver respostas ({form.response_count})
             </Link>
           </Button>
-          {form.is_public ? (
-            <Button variant="secondary" onClick={() => void share()}>
-              <Share2 className="h-4 w-4" /> Compartilhar
+          <div className="flex gap-2">
+            {form.is_public ? (
+              <Button variant="secondary" className="flex-1" onClick={() => void share()}>
+                <Share2 className="h-4 w-4" /> Compartilhar
+              </Button>
+            ) : null}
+            <Button asChild variant="secondary" className="flex-1">
+              <Link to={`/pesquisas/formularios/${form.id}`}>
+                <Pencil className="h-4 w-4" /> Editar
+              </Link>
             </Button>
-          ) : null}
-          <Button asChild variant="secondary">
-            <Link to={`/pesquisas/formularios/${form.id}`}>
-              <Pencil className="h-4 w-4" /> Editar
-            </Link>
-          </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
