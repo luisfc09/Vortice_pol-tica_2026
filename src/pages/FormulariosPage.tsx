@@ -12,6 +12,7 @@ import {
   Copy,
   FileStack,
   FolderPlus,
+  Globe2,
   Inbox,
   MessageSquare,
   Pencil,
@@ -221,7 +222,15 @@ function FormCard({ form }: { form: SurveyForm }) {
             </Link>
           </Button>
           <div className="flex gap-2">
-            {form.is_public ? <ShareMenu url={publicUrl} /> : null}
+            {form.is_public ? (
+              <ShareMenu url={publicUrl} />
+            ) : (
+              <Button asChild variant="secondary" className="flex-1">
+                <Link to={`/pesquisas/formularios/${form.id}#link-publico`}>
+                  <Globe2 className="h-4 w-4" /> Publicar link
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="secondary" className="flex-1">
               <Link to={`/pesquisas/formularios/${form.id}`}>
                 <Pencil className="h-4 w-4" /> Editar

@@ -8,8 +8,8 @@
 // respostas (Fase 4) entram nas próximas fases — aqui aparecem como próximos passos.
 // ============================================================================
 
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowDown,
@@ -53,7 +53,16 @@ const FIXED_DEMOGRAPHICS = [
 export default function FormularioBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { form, questions, loading, reload } = useSurveyFormDetail(id);
+
+  // Ao vir de "Publicar link" na lista (#link-publico), rola até a seção.
+  useEffect(() => {
+    if (location.hash === '#link-publico' && form) {
+      const el = document.getElementById('link-publico');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [location.hash, form]);
   const {
     members: interviewers,
     loading: interviewersLoading,
@@ -588,7 +597,7 @@ export default function FormularioBuilderPage() {
       </Card>
 
       {/* 5. Publicar como link público */}
-      <Card>
+      <Card id="link-publico" className="scroll-mt-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Globe2 className="h-4 w-4" /> Link público (eleitor responde sozinho)
