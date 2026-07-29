@@ -7,7 +7,17 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileStack, FolderPlus, Inbox, Pencil, Share2, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  Copy,
+  FileStack,
+  FolderPlus,
+  Inbox,
+  MessageSquare,
+  Pencil,
+  Share2,
+  Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,26 +180,6 @@ export default function FormulariosPage() {
 function FormCard({ form }: { form: SurveyForm }) {
   const publicUrl = `${window.location.origin}/f/${form.share_token}`;
 
-  async function share() {
-    const text = `Ajude nossa campanha respondendo essa pesquisa rápida: ${publicUrl}`;
-    // Web Share API (celular mostra a folha nativa com WhatsApp, copiar etc).
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({ title: form.name, text, url: publicUrl });
-        return;
-      } catch {
-        /* usuário cancelou — segue pro fallback */
-      }
-    }
-    // Fallback (desktop): copia o link.
-    try {
-      await navigator.clipboard.writeText(publicUrl);
-      toast.success('Link copiado!');
-    } catch {
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
-    }
-  }
-
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="pb-2">
@@ -231,11 +221,7 @@ function FormCard({ form }: { form: SurveyForm }) {
             </Link>
           </Button>
           <div className="flex gap-2">
-            {form.is_public ? (
-              <Button variant="secondary" className="flex-1" onClick={() => void share()}>
-                <Share2 className="h-4 w-4" /> Compartilhar
-              </Button>
-            ) : null}
+            {form.is_public ? <ShareMenu url={publicUrl} /> : null}
             <Button asChild variant="secondary" className="flex-1">
               <Link to={`/pesquisas/formularios/${form.id}`}>
                 <Pencil className="h-4 w-4" /> Editar
@@ -245,5 +231,61 @@ function FormCard({ form }: { form: SurveyForm }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Menu de compartilhar (WhatsApp + Copiar) — previsível no desktop e no
+// celular, sem a folha nativa do sistema.
+function ShareMenu({ url }: { url: string }) {
+  const [open, setOpen] = useState(false);
+  const text = `Ajude nossa campanha respondendo essa pesquisa rápida: ${url}`;
+
+  function whatsapp() {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    setOpen(false);
+  }
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copiado!');
+    } catch {
+      toast.error('Não consegui copiar o link.');
+    }
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative flex-1">
+      <Button variant="secondary" className="w-full" onClick={() => setOpen((o) => !o)}>
+        <Share2 className="h-4 w-4" /> Compartilhar
+      </Button>
+      {open ? (
+        <>
+          {/* clique fora fecha */}
+          <button
+            type="button"
+            aria-hidden
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute bottom-full left-0 z-50 mb-1 w-52 overflow-hidden rounded-md border border-vortex-border bg-vortex-surface shadow-lg">
+            <button
+              type="button"
+              onClick={whatsapp}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-vortex-bg/60"
+            >
+              <MessageSquare className="h-4 w-4 text-emerald-400" /> Enviar no WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-vortex-bg/60"
+            >
+              <Copy className="h-4 w-4" /> Copiar link
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
