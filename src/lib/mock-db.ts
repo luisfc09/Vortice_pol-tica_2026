@@ -67,6 +67,9 @@ export class MockCollection<T extends EntityWithId> implements Collection<T> {
 
   getSnapshot = (): T[] => this.snapshot;
 
+  // Mock é síncrono (dados do localStorage no construtor) — sempre "hidratado".
+  isHydrated = (): boolean => true;
+
   list(): T[] {
     return this.snapshot;
   }

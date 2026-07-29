@@ -36,10 +36,11 @@ import {
   UserPlus,
   Link2,
   Pencil,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { collections, useCollection } from '@/lib/data';
+import { collections, useCollection, useCollectionHydrated } from '@/lib/data';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { cn } from '@/lib/utils';
 import {
@@ -75,6 +76,10 @@ function initials(name: string): string {
 export default function MinhaRedePage() {
   const session = useEffectiveSession();
   const supporters = useCollection(collections.supporters);
+  // Se a coleção já terminou a carga inicial. Enquanto false, mostramos loading
+  // em vez do empty state "Sem perfil vinculado" — senão ele pisca (ou fica
+  // preso, no refresh) durante a hidratação/troca de campanha.
+  const supportersHydrated = useCollectionHydrated(collections.supporters);
 
   // Identifica o supporter logado por created_by = session.id E email match.
   // Ver useMySupporter.ts pra explicação completa da pegadinha — em resumo:
@@ -135,9 +140,22 @@ export default function MinhaRedePage() {
     }
   }
 
-  // -------- empty state ----------------------------------------------
+  // -------- loading / empty state ------------------------------------
   if (!session) return null;
   if (!me) {
+    // Ainda carregando os apoiadores da campanha — não sabemos se o user tem
+    // perfil ou não. Mostra loading em vez do empty state alarmante.
+    if (!supportersHydrated) {
+      return (
+        <div className="space-y-4">
+          <h2 className="font-display text-3xl text-foreground">Minha Rede</h2>
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-vortex-border bg-vortex-surface/40 p-8 text-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Carregando sua rede…</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-4">
         <h2 className="font-display text-3xl text-foreground">Minha Rede</h2>

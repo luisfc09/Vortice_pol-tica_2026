@@ -74,6 +74,13 @@ export function useCollection<T extends EntityWithId>(collection: Collection<T>)
   return useSyncExternalStore(collection.subscribe, collection.getSnapshot, collection.getSnapshot);
 }
 
+// Retorna se a carga inicial da coleção já terminou. Use junto de useCollection
+// pra mostrar loading enquanto os dados chegam, evitando piscar empty states
+// (ex.: "Sem perfil vinculado") durante a hidratação/troca de campanha.
+export function useCollectionHydrated<T extends EntityWithId>(collection: Collection<T>): boolean {
+  return useSyncExternalStore(collection.subscribe, collection.isHydrated, collection.isHydrated);
+}
+
 export function isMockMode(): boolean {
   return USE_MOCKS;
 }

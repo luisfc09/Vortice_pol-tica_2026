@@ -10,6 +10,9 @@ export interface CollectionWrite<T> {
 export interface Collection<T extends EntityWithId> {
   subscribe: (l: () => void) => () => void;
   getSnapshot: () => T[];
+  // Se a carga inicial já terminou. Permite à UI distinguir "carregando" de
+  // "vazio de fato".
+  isHydrated: () => boolean;
   list: () => T[];
   get: (id: string) => T | undefined;
   create: (input: CollectionWrite<T>) => T;

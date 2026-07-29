@@ -57,6 +57,10 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
   private channel: RealtimeChannel | null = null;
   private hydrated = false;
   private hydrating: Promise<void> | null = null;
+  // Geração da hidratação atual. Incrementa a cada reset() (troca de campanha
+  // ativa). Uma query em voo que resolve com geração antiga é descartada —
+  // impede que dados da campanha anterior sobrescrevam o snapshot novo.
+  private hydrationGen = 0;
 
   private readonly realtime: boolean;
   private readonly orderBy: string;
@@ -83,6 +87,12 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
   };
 
   getSnapshot = (): T[] => this.snapshot;
+
+  // Sinaliza se a primeira carga já terminou. A UI usa isto pra distinguir
+  // "ainda carregando" (mostrar spinner) de "carregou e está vazio de fato"
+  // (mostrar empty state). Sem isto, uma coleção vazia durante a hidratação
+  // é indistinguível de uma genuinamente sem dados.
+  isHydrated = (): boolean => this.hydrated;
 
   list(): T[] {
     return this.snapshot;
@@ -198,6 +208,11 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
   }
 
   private async hydrate(): Promise<void> {
+    // Captura a geração desta hidratação. Se um reset() (troca de campanha)
+    // acontecer enquanto a query está em voo, o resultado é descartado ao
+    // resolver (a geração terá mudado).
+    const gen = this.hydrationGen;
+
     // Sem campanha ativa numa tabela multi-tenant → não busca nada. Evita que
     // o super admin (leitura global no RLS) puxe dados de todas as campanhas
     // antes de uma campanha estar selecionada.
@@ -220,6 +235,10 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
     }
 
     const { data, error } = await query;
+    // Um reset() (troca de campanha) assumiu enquanto esta query estava em voo.
+    // Descarta o resultado stale — o reset já disparou uma nova hidratação no
+    // escopo correto.
+    if (gen !== this.hydrationGen) return;
     if (error) {
       // RLS errors return empty for safety. Don't toast on hydration failures
       // (a user with no membership row will hit these on every collection).
@@ -273,9 +292,12 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
       .subscribe();
   }
 
-  // Called when the user logs out; clears local state so the next login
-  // hydrates fresh data.
+  // Chamado quando a campanha ativa muda (login, "ver como cliente", logout).
+  // Limpa o estado local pra re-hidratar no escopo novo.
   reset(): void {
+    // Invalida qualquer hidratação em voo (a query antiga, ao resolver, verá
+    // a geração mudada e se descartará).
+    this.hydrationGen++;
     this.snapshot = [];
     this.hydrated = false;
     this.hydrating = null;
@@ -284,6 +306,18 @@ export class SupabaseCollection<T extends EntityWithId> implements Collection<T>
       this.channel = null;
     }
     this.emit();
+    // RE-HIDRATA se ainda há componentes inscritos. useSyncExternalStore não
+    // re-chama subscribe() após um emit — ele só re-lê o snapshot. Logo, sem
+    // isto, uma coleção resetada ficaria vazia até o componente remontar.
+    //
+    // Cenário do bug: no refresh, a 1ª hidratação roda com activeCampaignId
+    // ainda null (early-return vazio); logo em seguida a sessão hidrata e o
+    // AppLayout chama setActiveCampaignId(campanha) → reset(). Sem re-hidratar
+    // aqui, a página (ex.: Minha Rede) ficava presa no empty state até navegar
+    // pra outra rota e voltar (o que força um remount + novo subscribe).
+    if (this.listeners.size > 0) {
+      void this.ensureHydrated();
+    }
   }
 
   private emit(): void {
