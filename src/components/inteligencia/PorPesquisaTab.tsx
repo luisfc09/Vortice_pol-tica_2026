@@ -4,8 +4,18 @@
 // cruzamento (pergunta × demografia). Aba dentro de Inteligência Eleitoral.
 // ============================================================================
 
-import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Sparkles, TrendingUp, TriangleAlert, Users } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  BarChart3,
+  Brain,
+  Lightbulb,
+  Loader2,
+  Sparkles,
+  Target,
+  TrendingUp,
+  TriangleAlert,
+  Users,
+} from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import {
   Select,
@@ -14,9 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useSurveyForms, useSurveyFormDetail } from '@/hooks/useSurveyForms';
 import { useSurveyResponses } from '@/hooks/useSurveyResponses';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
+import { supabase } from '@/lib/supabase';
 import {
   aggregateQuestion,
   cramersV,
@@ -28,9 +41,12 @@ import {
   sampleOf,
   strengthOf,
   topCorrelations,
+  type Correlation,
   type CrossTab,
   type DemographicKey,
+  type Demographics,
   type DistItem,
+  type FormSample,
   type QuestionAgg,
   type StrengthLevel,
   type Variable,
@@ -39,6 +55,14 @@ import { computeTrends, type Trend, type TrendTone } from '@/lib/surveyTrends';
 import { CAMPAIGN_QUESTION_TYPE_LABEL, type CampaignQuestionType } from '@/types';
 
 const CHOICE_COLORS = ['#A78BFA', '#22C55E', '#F59E0B', '#38BDF8', '#FB923C', '#EF4444', '#84CC16'];
+
+interface AiAnalysis {
+  resumo?: string;
+  puxa_voto?: string[];
+  riscos?: string[];
+  oportunidades?: string[];
+  acoes?: string[];
+}
 
 const SCALE_COLORS: Record<string, string> = {
   '5': '#22C55E',
@@ -56,7 +80,48 @@ function colorFor(type: CampaignQuestionType, label: string): string {
   return '#A78BFA';
 }
 
+// Resumo textual que vai pro agente (demografia + respostas + correlações).
+function buildSummaryText(
+  sample: FormSample,
+  demo: Demographics,
+  aggs: QuestionAgg[],
+  correlations: Correlation[],
+): string {
+  const L: string[] = [];
+  const fmt = (items: { label: string; pct: number }[]) =>
+    items.map((d) => `${d.label} ${d.pct}%`).join(', ') || '—';
+  L.push(
+    `Amostra: ${sample.total} respostas (${sample.presencial} presencial, ${sample.publico} link público).`,
+  );
+  L.push('', 'DEMOGRAFIA:');
+  L.push(`- Faixa etária: ${fmt(demo.age)}`);
+  L.push(`- Sexo: ${fmt(demo.gender)}`);
+  L.push(`- Religião: ${fmt(demo.religion)}`);
+  L.push('', 'RESPOSTAS POR PERGUNTA:');
+  for (const a of aggs) {
+    if (a.type === 'free_text') {
+      L.push(
+        `- "${a.question.text}" (texto livre, ${a.total} resp): ${(a.texts ?? []).slice(0, 12).join(' | ') || '—'}`,
+      );
+    } else {
+      const dist = a.distribution.map((d) => `${d.label} ${d.pct}%`).join(', ');
+      L.push(
+        `- "${a.question.text}" (${a.total} resp${a.average != null ? `, média ${a.average}/5` : ''}): ${dist}`,
+      );
+    }
+  }
+  if (correlations.length > 0) {
+    L.push('', 'CORRELAÇÕES (força da associação):');
+    for (const c of correlations) {
+      L.push(`- "${c.a.label}" ↔ "${c.b.label}": ${strengthOf(c.v)} (n=${c.n})`);
+    }
+  }
+  return L.join('\n');
+}
+
 export function PorPesquisaTab() {
+  const session = useEffectiveSession();
+  const campaignId = session?.campaign?.id ?? null;
   const { forms, loading: formsLoading } = useSurveyForms();
   const [formId, setFormId] = useState('');
 
@@ -138,6 +203,56 @@ export function PorPesquisaTab() {
     [crossQuestion, groupByVar, responses],
   );
 
+  // --- Leitura estratégica por IA ---
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<AiAnalysis | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  // Troca de pesquisa zera a análise (é específica de cada formulário).
+  useEffect(() => {
+    setAiResult(null);
+    setAiError(null);
+  }, [formId]);
+
+  const selectedForm = forms.find((f) => f.id === formId);
+
+  async function runAi() {
+    if (!selectedForm || !campaignId) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const text = buildSummaryText(sample, demo, aggs, correlations);
+      const { data, error } = await supabase.functions.invoke('survey-form-analyze', {
+        body: { campaign_id: campaignId, form_name: selectedForm.name, summary: text },
+      });
+      if (error) {
+        let msg = 'Falha na análise.';
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const b = (await ctx.json()) as { error?: string };
+            if (b?.error) msg = b.error;
+          } catch {
+            /* mantém padrão */
+          }
+        } else if (error.message) {
+          msg = error.message;
+        }
+        setAiError(msg);
+        return;
+      }
+      const resp = data as { ok?: boolean; analysis?: AiAnalysis; error?: string };
+      if (!resp?.ok || !resp.analysis) {
+        setAiError(resp?.error ?? 'Sem resposta da IA.');
+        return;
+      }
+      setAiResult(resp.analysis);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Erro inesperado.');
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   if (formsLoading) {
     return <p className="text-sm text-muted-foreground">Carregando formulários…</p>;
   }
@@ -204,6 +319,66 @@ export function PorPesquisaTab() {
               </div>
             </div>
           ) : null}
+
+          {/* Leitura estratégica (IA) */}
+          <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="flex items-center gap-2 font-display text-lg tracking-wide text-foreground">
+                <Brain className="h-5 w-5 text-primary" /> Leitura estratégica (IA)
+              </h3>
+              <Button size="sm" onClick={() => void runAi()} disabled={aiLoading}>
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Analisando…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" /> {aiResult ? 'Refazer análise' : 'Analisar com IA'}
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {aiError ? (
+              <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-foreground">
+                {aiError}
+              </p>
+            ) : aiResult ? (
+              <div className="mt-3 space-y-3 text-sm">
+                {aiResult.resumo ? (
+                  <p className="text-foreground/90">{aiResult.resumo}</p>
+                ) : null}
+                <AiList
+                  title="O que puxa o voto"
+                  items={aiResult.puxa_voto}
+                  icon={<TrendingUp className="h-4 w-4 text-primary" />}
+                />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <AiList
+                    title="Riscos"
+                    items={aiResult.riscos}
+                    icon={<TriangleAlert className="h-4 w-4 text-amber-400" />}
+                  />
+                  <AiList
+                    title="Oportunidades"
+                    items={aiResult.oportunidades}
+                    icon={<Target className="h-4 w-4 text-emerald-400" />}
+                  />
+                </div>
+                <AiList
+                  title="Ações recomendadas"
+                  items={aiResult.acoes}
+                  icon={<Lightbulb className="h-4 w-4 text-primary" />}
+                  ordered
+                />
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Clique em “Analisar com IA” pra o agente ler esta pesquisa e sugerir estratégia:
+                o que puxa o voto, riscos, oportunidades e ações concretas.
+              </p>
+            )}
+          </div>
 
           {/* Demografia */}
           <div className="grid gap-3 md:grid-cols-3">
@@ -324,6 +499,35 @@ function StrengthBadge({ v }: { v: number }) {
     >
       {level}
     </span>
+  );
+}
+
+function AiList({
+  title,
+  items,
+  icon,
+  ordered,
+}: {
+  title: string;
+  items?: string[];
+  icon: ReactNode;
+  ordered?: boolean;
+}) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        {icon} {title}
+      </p>
+      <ul className="space-y-1 text-foreground/90">
+        {items.map((it, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="shrink-0 text-muted-foreground">{ordered ? `${i + 1}.` : '•'}</span>
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
