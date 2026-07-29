@@ -40,11 +40,17 @@ export function ConvidarLiderancaButton() {
   const [target, setTarget] = useState<{ name: string; invite_code: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Gate de visibilidade — fora dos roles permitidos OU sem campanha, some.
-  if (!session?.role || !ALLOWED_ROLES.includes(session.role as (typeof ALLOWED_ROLES)[number])) {
+  // Gate de visibilidade. Sem campanha ativa, some.
+  if (!session?.campaign) return null;
+  // Super admin (god-mode) vê sempre — mesmo sem membership na campanha
+  // (role === null). Senão, só os roles permitidos.
+  const isSuperAdmin = session.is_super_admin === true;
+  if (
+    !isSuperAdmin &&
+    (!session.role || !ALLOWED_ROLES.includes(session.role as (typeof ALLOWED_ROLES)[number]))
+  ) {
     return null;
   }
-  if (!session.campaign) return null;
 
   async function handleClick() {
     if (loading) return;
