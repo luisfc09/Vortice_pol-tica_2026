@@ -35,7 +35,9 @@ import {
   type CampaignStatus,
 } from '@/types';
 
-type StatusFilter = 'all' | CampaignStatus;
+type StatusFilter = 'all' | CampaignStatus | 'deleted';
+
+type DeletedRow = CampaignOverview & { deleted_at: string };
 
 const NUM = new Intl.NumberFormat('pt-BR');
 const DATE = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' });
@@ -70,6 +72,7 @@ export default function AdminCampaignsPage() {
   const viewAsId = useViewAsStore((s) => s.campaign?.id ?? null);
 
   const [rows, setRows] = useState<CampaignOverview[]>([]);
+  const [deletedRows, setDeletedRows] = useState<DeletedRow[]>([]);
   const [expiring, setExpiring] = useState<ExpiringRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -102,9 +105,10 @@ export default function AdminCampaignsPage() {
 
   async function load() {
     setLoading(true);
-    const [{ data, error }, { data: exp }] = await Promise.all([
+    const [{ data, error }, { data: exp }, { data: del }] = await Promise.all([
       supabase.rpc('list_campaigns_overview'),
       supabase.rpc('trial_campaigns_expiring', { p_days: 7 }),
+      supabase.rpc('list_deleted_campaigns'),
     ]);
     setLoading(false);
     if (error) {
@@ -113,6 +117,17 @@ export default function AdminCampaignsPage() {
     }
     setRows((data ?? []) as CampaignOverview[]);
     setExpiring((exp ?? []) as ExpiringRow[]);
+    setDeletedRows((del ?? []) as DeletedRow[]);
+  }
+
+  async function restoreCampaign(id: string, label: string) {
+    const { error } = await supabase.rpc('restore_campaign', { p_campaign_id: id });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(`"${label}" restaurada.`);
+    void load();
   }
 
   useEffect(() => {
@@ -226,6 +241,7 @@ export default function AdminCampaignsPage() {
     suspended: rows.filter((r) => r.status === 'suspended').length,
     cancelled: rows.filter((r) => r.status === 'cancelled').length,
     pending: rows.filter((r) => r.status === 'pending').length,
+    deleted: deletedRows.length,
   };
 
   const totalSupporters = rows.reduce((acc, r) => acc + Number(r.supporters_count ?? 0), 0);
@@ -345,10 +361,57 @@ export default function AdminCampaignsPage() {
             onClick={() => setFilter(s)}
           />
         ))}
+        {counts.deleted > 0 ? (
+          <FilterPill
+            label="Excluídas"
+            count={counts.deleted}
+            active={filter === 'deleted'}
+            onClick={() => setFilter('deleted')}
+          />
+        ) : null}
       </div>
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando campanhas...</p>
+      ) : filter === 'deleted' ? (
+        deletedRows.length === 0 ? (
+          <EmptyState
+            title="Lixeira vazia"
+            description="Nenhuma campanha excluída."
+            icon={<Trash2 className="h-5 w-5" />}
+          />
+        ) : (
+          <ul className="space-y-2">
+            {deletedRows.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-col gap-3 rounded-xl border border-destructive/25 bg-vortex-surface/60 p-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-semibold text-foreground" title={r.candidate_name}>
+                      {r.candidate_name}
+                    </p>
+                    <Badge variant="destructive">Excluída</Badge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {r.party} {r.party_number} · {r.office} · {r.state} · excluída em{' '}
+                    {DATE.format(new Date(r.deleted_at))} · {NUM.format(Number(r.supporters_count ?? 0))} lideranças ·{' '}
+                    {NUM.format(Number(r.voters_count ?? 0))} eleitores (preservados)
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => void restoreCampaign(r.id, r.candidate_name)}
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" /> Restaurar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )
       ) : filtered.length === 0 ? (
         <EmptyState
           title="Sem campanhas"
@@ -487,10 +550,11 @@ export default function AdminCampaignsPage() {
         title="Apagar campanha?"
         description={
           deleteTarget
-            ? `Apagar "${deleteTarget.label}" remove o acesso de todos os usuários e a esconde das listas. Os dados ficam preservados e podem ser restaurados pela página de detalhe.`
+            ? `Apagar "${deleteTarget.label}" remove o acesso de todos os usuários e a esconde das listas. Os dados ficam preservados — dá pra restaurar depois no filtro "Excluídas".`
             : ''
         }
         confirmLabel="Apagar"
+        requireText={deleteTarget?.label}
         onConfirm={() => {
           if (deleteTarget) void doSoftDelete(deleteTarget.id);
         }}

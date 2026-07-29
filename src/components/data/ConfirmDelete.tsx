@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface ConfirmDeleteProps {
   open: boolean;
@@ -10,6 +12,8 @@ interface ConfirmDeleteProps {
   onConfirm: () => void;
   /** Texto do botão de confirmação. Default: "Excluir". */
   confirmLabel?: string;
+  /** Se preenchido, exige digitar exatamente este texto pra liberar o botão. */
+  requireText?: string;
 }
 
 export function ConfirmDelete({
@@ -19,7 +23,16 @@ export function ConfirmDelete({
   description,
   onConfirm,
   confirmLabel = 'Excluir',
+  requireText,
 }: ConfirmDeleteProps) {
+  const [typed, setTyped] = useState('');
+  // Zera o campo quando abre/fecha.
+  useEffect(() => {
+    if (!open) setTyped('');
+  }, [open]);
+
+  const canConfirm = !requireText || typed.trim() === requireText.trim();
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
@@ -34,13 +47,30 @@ export function ConfirmDelete({
           <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
             {description}
           </DialogPrimitive.Description>
+
+          {requireText ? (
+            <div className="mt-4 space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                Pra confirmar, digite <span className="font-medium text-foreground">{requireText}</span>:
+              </p>
+              <Input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder={requireText}
+                autoFocus
+              />
+            </div>
+          ) : null}
+
           <div className="mt-5 flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
             <Button
               variant="destructive"
+              disabled={!canConfirm}
               onClick={() => {
+                if (!canConfirm) return;
                 onConfirm();
                 onOpenChange(false);
               }}
