@@ -7,74 +7,94 @@
 // onAuthStateChange (que useAuth.ts já escuta) → hidrata a sessão.
 //
 // Este componente apenas:
-//   1. Espera a sessão chegar (com timeout de segurança)
-//   2. Resolve a home correta por role e navega
-//   3. Em caso de erro, mostra mensagem e cai pro /login após 2s
+//   1. Confere que o supabase-js conseguiu materializar a sessão
+//   2. Espera o useAuth hidratar a store (com timeout de segurança)
+//   3. Resolve a home correta pela sessão hidratada e navega
+//   4. Em caso de erro, mostra mensagem e cai pro /login após 2s
 //
 // Por que precisa existir como rota: o redirect_url do OAuth deve apontar
 // pra uma rota PÚBLICA (sem ProtectedRoute), porque na hora em que o
 // callback chega, a sessão ainda não está populada no Zustand store.
 // Se redirecionássemos pra uma rota protegida, o ProtectedRoute redirecionaria
 // pra /login antes do hydrate completar.
+//
+// ⚠️ Chamar useAuth() aqui é obrigatório, não decorativo: é o hook que hidrata
+// a store. Antes esta tela navegava pra home logo depois do getSession(), com
+// a store ainda vazia — o ProtectedRoute do destino via `session === null` e
+// jogava o usuário de volta pro /login. Só funcionava por acidente, porque o
+// LoginForm montava o useAuth e redirecionava de novo depois.
 // ============================================================================
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { resolveHomeRoute } from '@/lib/homeRoute';
+
+// Teto de espera pela hidratação. Estourou (rede caída, RPC pendurada, ou o
+// hydrate deslogou o usuário por regra de negócio) → volta pro /login em vez
+// de deixar o spinner girando pra sempre.
+const HYDRATE_TIMEOUT_MS = 15000;
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const { session } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
+  // 1) A sessão do Supabase existe mesmo? getSession() só resolve depois do
+  // initialize(), então aqui o exchange do `?code=` (PKCE) já terminou.
   useEffect(() => {
-    async function handleAuthCallback() {
+    let cancelled = false;
+
+    function bail(message: string) {
+      if (cancelled) return;
+      setError(message);
+      setTimeout(() => navigate('/login', { replace: true }), 2000);
+    }
+
+    async function checkSession() {
       try {
-        // getSession() lê os tokens que o supabase-js já capturou do URL fragment.
-        // Não fazemos exchange manual porque o supabase-js já cuidou disso no
-        // boot (`detectSessionInUrl: true` é o default).
         const { data, error: sessionErr } = await supabase.auth.getSession();
-
+        if (cancelled) return;
         if (sessionErr) {
-          setError(`Erro de autenticação: ${sessionErr.message}`);
-          setTimeout(() => navigate('/login', { replace: true }), 2000);
+          bail(`Erro de autenticação: ${sessionErr.message}`);
           return;
         }
-
         if (!data.session) {
-          setError('Sessão não encontrada após callback.');
-          setTimeout(() => navigate('/login', { replace: true }), 2000);
-          return;
+          bail('Sessão não encontrada após callback.');
         }
-
-        // Resolve home por role — supporter → /minha-rede, leader → /agenda,
-        // demais → /dashboard. Usa o helper único de src/lib/homeRoute.ts
-        // (mesmo padrão de TrocarSenha + HomeRedirect + ProtectedRoute).
-        //
-        // ATENÇÃO: aqui não temos `session.role` pronto ainda (useAuth precisa
-        // de 1 tick a mais pra hidratar membership). Fallback pra /dashboard
-        // (que é a home da MAIORIA dos roles); se for supporter/leader, o
-        // ProtectedRoute redireciona via fallbackHome — sem loop.
-        const userMetaRole = data.session.user?.user_metadata?.role as
-          | string
-          | undefined;
-        const home = resolveHomeRoute(
-          (userMetaRole as Parameters<typeof resolveHomeRoute>[0]) ?? null,
-        );
-        navigate(home, { replace: true });
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[AuthCallback] erro inesperado:', err);
-        setError(
-          err instanceof Error ? err.message : 'Erro desconhecido na autenticação.',
-        );
-        setTimeout(() => navigate('/login', { replace: true }), 2000);
+        bail(err instanceof Error ? err.message : 'Erro desconhecido na autenticação.');
       }
     }
 
-    void handleAuthCallback();
+    void checkSession();
+    const timeout = setTimeout(
+      () => bail('Não foi possível concluir o login.'),
+      HYDRATE_TIMEOUT_MS,
+    );
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [navigate]);
+
+  // 2) Store hidratada pelo useAuth → agora dá pra resolver a home de verdade,
+  // com o role e o is_super_admin reais (antes isto chutava por user_metadata).
+  useEffect(() => {
+    if (!session) return;
+    // Super admin sem campanha vinculada administra pelo painel da Vórtice —
+    // mesmo destino que o ProtectedRoute usa.
+    const home =
+      session.is_super_admin && !session.campaign
+        ? '/admin/campaigns'
+        : resolveHomeRoute(session.role);
+    navigate(home, { replace: true });
+  }, [session, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-vortex-bg p-4">

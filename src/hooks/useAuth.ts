@@ -30,23 +30,20 @@ export function useAuth() {
       ]);
       if (!active) return { ok: false };
 
-      // Conta desativada explicitamente pelo admin → desloga
-      if (membership && !membership.is_active) {
+      const gate = evaluateMembership(membership, isSuperAdmin);
+      if (gate.signOut) {
         await supabase.auth.signOut();
         setSession(null);
-        return { ok: false, error: 'Sua conta foi desativada pelo admin da campanha.' };
+        return { ok: false, error: gate.error };
       }
-      // Campanha CANCELADA (terminal) → desloga. Suspensa/pending continuam
-      // logando: ProtectedRoute trava o acesso e manda pra /renovar.
-      const campaignStatus = membership?.campaign.status ?? 'active';
-      if (membership && campaignStatus === 'cancelled') {
-        await supabase.auth.signOut();
-        setSession(null);
-        return {
-          ok: false,
-          error: 'Esta campanha foi cancelada. Entre em contato com a Vórtice.',
-        };
-      }
+
+      // Guarda contra "sessão fantasma": este hydrate roda em paralelo com o
+      // login() e com o onAuthStateChange. Se outro caminho deslogou enquanto
+      // as RPCs acima estavam no ar, elas voltaram como anon — is_super_admin
+      // false e membership null — e gravar isso na store deixava o usuário
+      // preso em /aguardando-ativacao com uma sessão que não existe mais.
+      const { data: live } = await supabase.auth.getSession();
+      if (!active || !live.session) return { ok: false };
 
       // Caso "aguardando ativação": user logou (auth.user existe + profile pelo
       // trigger handle_new_user) mas ainda não foi vinculado a campanha. Em vez
@@ -67,8 +64,8 @@ export function useAuth() {
           must_change_password: false,
           created_at: new Date().toISOString(),
         },
-        campaign: membership?.campaign ?? null,
-        role: membership?.role ?? null,
+        campaign: gate.campaign,
+        role: gate.role,
         is_super_admin: isSuperAdmin,
       });
       return { ok: true };
@@ -131,16 +128,10 @@ export function useAuth() {
           fetchMembership(),
           fetchIsSuperAdmin(),
         ]);
-        if (membership && !membership.is_active) {
+        const gate = evaluateMembership(membership, isSuperAdmin);
+        if (gate.signOut) {
           await supabase.auth.signOut();
-          return { ok: false, error: 'Conta desativada pelo admin da campanha.' };
-        }
-        if (membership && membership.campaign.status === 'cancelled') {
-          await supabase.auth.signOut();
-          return {
-            ok: false,
-            error: 'Campanha cancelada. Entre em contato com a Vórtice.',
-          };
+          return { ok: false, error: gate.error };
         }
         const next: SessionUser = {
           id: data.user.id,
@@ -157,8 +148,8 @@ export function useAuth() {
             must_change_password: false,
             created_at: new Date().toISOString(),
           },
-          campaign: membership?.campaign ?? null,
-          role: membership?.role ?? null,
+          campaign: gate.campaign,
+          role: gate.role,
           is_super_admin: isSuperAdmin,
         };
         setSession(next);
@@ -218,6 +209,70 @@ interface Membership {
   campaign: Campaign;
   role: UserRole;
   is_active: boolean;
+}
+
+interface MembershipGate {
+  /** true → derruba a sessão do Supabase e mostra `error` no /login. */
+  signOut: boolean;
+  error?: string;
+  /** Campanha que vira contexto de trabalho da sessão (null = sem contexto). */
+  campaign: Campaign | null;
+  role: UserRole | null;
+}
+
+// Regras de bloqueio da membership, num lugar só (usado pelo boot/onAuthStateChange
+// e pelo login por senha — antes estavam duplicadas e podiam divergir).
+//
+// ⚠️ O super admin da Vórtice NÃO é gated por membership: ele administra todas
+// as campanhas e normalmente não é membro de nenhuma. Sem esta exceção, um
+// super admin que tenha sobrado como membro de uma campanha `cancelled` (ou
+// desativada) era deslogado à força em TODO login — inclusive no retorno do
+// OAuth do Google, onde o sintoma era "o botão do Google não faz nada" (o
+// Supabase autenticava, o app deslogava em seguida). Era exatamente o caso de
+// luisfc09@gmail.com e sanjai.oliveira@gmail.com: ambos com membership ativa
+// na campanha cancelada "Deputado Heleno do hospital".
+function evaluateMembership(
+  membership: Membership | null,
+  isSuperAdmin: boolean,
+): MembershipGate {
+  if (isSuperAdmin) {
+    // Campanha terminal não vira contexto de trabalho — o super admin cai em
+    // /admin/campaigns e escolhe quem quer ver via "Ver como cliente".
+    const usable =
+      membership && membership.is_active && membership.campaign.status !== 'cancelled'
+        ? membership
+        : null;
+    return {
+      signOut: false,
+      campaign: usable?.campaign ?? null,
+      role: usable?.role ?? null,
+    };
+  }
+
+  // Conta desativada explicitamente pelo admin → desloga
+  if (membership && !membership.is_active) {
+    return {
+      signOut: true,
+      error: 'Sua conta foi desativada pelo admin da campanha.',
+      campaign: null,
+      role: null,
+    };
+  }
+  // Campanha CANCELADA (terminal) → desloga. Suspensa/pending continuam
+  // logando: ProtectedRoute trava o acesso e manda pra /renovar.
+  if (membership && membership.campaign.status === 'cancelled') {
+    return {
+      signOut: true,
+      error: 'Esta campanha foi cancelada. Entre em contato com a Vórtice.',
+      campaign: null,
+      role: null,
+    };
+  }
+  return {
+    signOut: false,
+    campaign: membership?.campaign ?? null,
+    role: membership?.role ?? null,
+  };
 }
 
 // Usa a RPC get_my_membership() (security definer) em vez de ler campaign_users

@@ -306,9 +306,13 @@ Implementada via `<ProtectedRoute roles={[...]}>` em `App.tsx` (gate de rota) + 
 
 - **Store:** `src/stores/auth.ts` (zustand) — `session`, `isLoading`, `setSession`, `logout`.
 - **Hook:** `src/hooks/useAuth.ts` — escuta `supabase.auth.onAuthStateChange`; em cada sessão chama em paralelo `fetchProfile()`, `fetchMembership()` (RPC `get_my_membership`), `fetchIsSuperAdmin()` (RPC `is_super_admin`). Regras:
+  As regras vivem em `evaluateMembership()` (helper único, usado tanto pelo boot/`onAuthStateChange` quanto pelo `login()` por senha):
   - `membership.is_active === false` → signOut ("conta desativada").
   - campanha `cancelled` → signOut.
+  - **super admin é exceção às duas regras acima** — ele administra todas as campanhas e normalmente não é membro de nenhuma, então o status da membership dele nunca barra o login. Se a campanha dele for `cancelled`/inativa, a sessão fica com `campaign: null` e ele cai em `/admin/campaigns`. Sem essa exceção, um super admin que sobrou como membro de campanha cancelada era deslogado à força em **todo** login (inclusive no retorno do OAuth do Google, onde o sintoma era "o botão do Google não faz nada").
   - sem membership → `session` válida com `campaign: null`/`role: null` → `ProtectedRoute` manda para `/aguardando-ativacao`.
+  - antes de gravar na store, o hydrate reconfere `supabase.auth.getSession()`: se outro caminho deslogou enquanto as RPCs estavam no ar, elas voltariam como anon (`is_super_admin: false`, `membership: null`) e prenderiam o usuário numa "sessão fantasma" em `/aguardando-ativacao`.
+- **Callback de OAuth:** `src/pages/AuthCallback.tsx` (rota pública `/auth/callback`, para onde `signInWithOAuth` redireciona). Monta `useAuth()` — é ele que hidrata a store — e só navega depois que `session` existe, usando `role`/`is_super_admin` reais. Tem timeout de 15s → `/login`. **O URL precisa estar em Supabase → Authentication → URL Configuration → Redirect URLs** (hoje: `https://www.vorticeeleitoral.com.br/**`; `localhost` **não** está liberado, então login Google não funciona em dev).
 - **Sessão efetiva:** `useEffectiveSession()` (§6.4) — **componentes que dependem de `campaign`/`role` usam este hook**, não a store direto.
 - **Guard de rotas:** `src/components/layout/ProtectedRoute.tsx`:
   - sem sessão → `/login`; `must_change_password` → `/trocar-senha`;
@@ -412,6 +416,8 @@ Uso típico nas páginas: `const voters = useCollection(collections.voters)` e
 | 047 | **supporters-hierarquia-fase2** | Convite descartável: `supporters.invite_used_at timestamptz` (null = ainda ativo; preenchido = consumido) + RPC pública `get_invite_info(p_code text)` `SECURITY DEFINER STABLE` que devolve só campos não-sensíveis (referrer_name, candidate_name, party, plan) e bloqueia code inválido/usado/inativo. GRANT EXECUTE para `anon` e `authenticated`. |
 | 048 | **alert-novo-apoiador-e-notes** | (a) Novo valor `'novo_apoiador_cadastrado'` no enum `alert_type` — usado pelo detector que avisa admin/coord quando supporter/leader cadastra apoiador via `/minha-rede`. (b) Coluna `supporters.notes text` (nullable) — campo livre de observações usado pelo `AddSupporterSheet`. Rodar em 2 blocos por causa da pegadinha do enum (§14.4). |
 | 049 | **invite-reusavel** | Recria `get_invite_info(p_code)` removendo o filtro `invite_used_at IS NULL` — link de convite agora é REUTILIZÁVEL (mesma URL aceita N cadastros sem expirar). UPDATE zerando `invite_used_at` dos códigos previamente consumidos. Coluna `invite_used_at` mantida no banco mas inerte (`accept-invite` parou de escrever nela). Idempotente, 1 bloco só. |
+
+| 056 | **membership-status-priority** | (a) `get_my_membership()` passa a ordenar por prioridade de status (`active` > `trial` > `pending` > `suspended` > `cancelled`) antes de `created_at` — antes devolvia a membership mais antiga e quem tinha uma campanha cancelada no histórico era deslogado à força mesmo tendo campanha boa. (b) Policy `super_admins_select` trocada por `public.is_super_admin()` — a versão anterior consultava a própria tabela dentro da policy e estourava `42P17 infinite recursion`. (c) `revoke execute on list_super_admin_user_ids from public/anon` — a função ficou executável por `anon` (default do Postgres) e listava os UUIDs dos super admins pra qualquer um com a anon key. |
 
 > Todas as DDLs estão em `supabase/migration-0XX-*.sql`. A partir da 038 todas
 > são versionadas no repo junto com a documentação. Migrations 042 a 049 foram
