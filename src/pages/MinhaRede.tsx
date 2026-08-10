@@ -25,20 +25,15 @@
 import { useMemo, useState } from 'react';
 import {
   Network,
-  Copy,
-  KeyRound,
-  CheckCircle2,
   ChevronRight,
   Target,
   Layers,
   Award,
-  Share2,
   UserPlus,
   Link2,
   Pencil,
   Loader2,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { collections, useCollection, useCollectionHydrated } from '@/lib/data';
 import { useEffectiveSession } from '@/hooks/useEffectiveSession';
@@ -124,21 +119,6 @@ export default function MinhaRedePage() {
   const [editing, setEditing] = useState<Supporter | null>(null);
   // Convite por link (reusa InviteModal das Lideranças)
   const [inviteOpen, setInviteOpen] = useState(false);
-
-  // -------- copy do link de convite ----------------------------------
-  const [copied, setCopied] = useState(false);
-  async function copyInviteLink() {
-    if (!me?.invite_code) return;
-    const url = `${window.location.origin}/convite/${me.invite_code}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      toast.success('Link copiado! Envie para quem você quer convidar.');
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      toast.error('Não foi possível copiar — copie o código manualmente.');
-    }
-  }
 
   // -------- loading / empty state ------------------------------------
   if (!session) return null;
@@ -236,37 +216,6 @@ export default function MinhaRedePage() {
         supporters={supporters}
         onInvite={() => setInviteOpen(true)}
       />
-
-      {/* Card de compartilhar convite ------------------------------- */}
-      <div className="rounded-xl border border-vortex-border bg-vortex-surface/60 p-5 backdrop-blur">
-        <div className="mb-3 flex items-center gap-2">
-          <Share2 className="h-4 w-4 text-vortex-lime" />
-          <h3 className="font-display text-lg">Convide alguém pra sua rede</h3>
-        </div>
-{me.invite_code ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Envie este link para qualquer pessoa entrar na sua rede. Pode reutilizar
-              o mesmo link quantas vezes quiser — não expira.
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="flex flex-1 items-center gap-2 rounded-lg border border-vortex-border bg-vortex-bg/40 px-3 py-2">
-                <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate font-mono text-xs text-foreground/80">
-                  {window.location.origin}/convite/{me.invite_code}
-                </span>
-              </div>
-              <Button onClick={copyInviteLink} variant={copied ? 'outline' : 'default'} size="sm">
-                {copied ? <CheckCircle2 className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}
-                {copied ? 'Copiado!' : 'Copiar link'}
-              </Button>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Código: <span className="font-mono">{me.invite_code}</span>
-            </p>
-          </div>
-        ) : null}
-      </div>
 
       {/* Path até a raiz (ancestrais) -------------------------------- */}
       {ancestors.length > 0 ? (
