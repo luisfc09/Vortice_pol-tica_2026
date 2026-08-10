@@ -130,10 +130,15 @@ Deno.serve(async (req: Request) => {
     user_metadata: { full_name: name },
   });
   if (userErr || !createdUser?.user) {
-    // 422 unique_violation pelo Supabase quando o email já existe
-    if (/already (registered|exists)|duplicate|unique/i.test(userErr?.message ?? '')) {
+    // Supabase varia a mensagem: "already registered" / "already been
+    // registered" / "already exists" / unique/duplicate. `already.*(...)` cobre
+    // o "been" no meio.
+    if (/already.*(registered|exists)|duplicate|unique/i.test(userErr?.message ?? '')) {
       return json(
-        { error: 'E-mail já cadastrado. Faça login normalmente — o admin vincula você à campanha.' },
+        {
+          error:
+            'Este e-mail já tem conta no sistema. Faça login com ele (senha temporária 123456 se nunca trocou). Para recadastrar esta pessoa do zero, o administrador deve excluir a conta dela em Usuários antes de reenviar o convite.',
+        },
         409,
       );
     }

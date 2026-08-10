@@ -269,6 +269,51 @@ export default function UsuariosPage() {
     collections.campaign_users.update(member.id, { is_active: !member.is_active });
   }
 
+  // Exclusão de CONTA COMPLETA via edge (login + vínculo + liderança).
+  // Diferente do simples remove() de campaign_users: também apaga o auth.user
+  // quando a pessoa não está em nenhuma outra campanha, LIBERANDO o e-mail pra
+  // um novo convite (resolve o "already registered" ao recadastrar).
+  async function deleteUserFully() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    if (isMockMode()) {
+      collections.campaign_users.remove(target.id);
+      toast.success('Usuário removido (modo demonstração).');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('delete-user', {
+      body: { user_id: target.user_id, campaign_id: target.campaign_id },
+    });
+    if (error) {
+      let msg = 'Falha ao excluir usuário.';
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        try {
+          const b = (await ctx.json()) as { error?: string };
+          if (b?.error) msg = b.error;
+        } catch {
+          /* corpo não-JSON */
+        }
+      } else if (error.message) {
+        msg = error.message;
+      }
+      toast.error(msg);
+      return;
+    }
+    const resp = data as { ok?: boolean; deletedAuth?: boolean; warning?: string };
+    if (!resp?.ok) {
+      toast.error('Não foi possível excluir o usuário.');
+      return;
+    }
+    // Atualiza a lista de imediato (o realtime também remove).
+    collections.campaign_users.remove(target.id);
+    if (resp.warning) toast.warning(resp.warning);
+    else if (resp.deletedAuth)
+      toast.success('Conta excluída. O e-mail está livre para um novo convite.');
+    else toast.success('Usuário removido desta campanha.');
+  }
+
   /**
    * Abre o EditUserSheet. Precisa do email — `profiles` não tem essa
    * coluna, então puxa via SQL ad-hoc em `auth.users`. Só admin/super
@@ -543,9 +588,10 @@ export default function UsuariosPage() {
       <ConfirmDelete
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Remover usuário?"
-        description="A pessoa perderá acesso imediatamente. Para suspender temporariamente, use Desativar."
-        onConfirm={() => deleteTarget && collections.campaign_users.remove(deleteTarget.id)}
+        title="Excluir conta do usuário?"
+        description="Remove o vínculo com a campanha E a conta de login desta pessoa (se ela não estiver em outra campanha), liberando o e-mail para um novo convite. Não pode ser desfeito. Para apenas suspender, use Desativar."
+        confirmLabel="Excluir conta"
+        onConfirm={deleteUserFully}
       />
     </div>
   );
