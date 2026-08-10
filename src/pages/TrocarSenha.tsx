@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { ShieldCheck, KeyRound } from 'lucide-react';
+import { ShieldCheck, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,10 @@ export default function TrocarSenhaPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Toggle de visibilidade (ícone de olho) — o usuário confere a senha
+  // digitada antes de confirmar. Independente por campo.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   if (!session) return <Navigate to="/login" replace />;
 
@@ -126,15 +130,27 @@ export default function TrocarSenhaPage() {
         >
           <div className="space-y-2">
             <Label htmlFor="password">Nova senha</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={MIN_LENGTH}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={MIN_LENGTH}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                aria-pressed={showPassword}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             <p className="text-[11px] text-muted-foreground">
               Mínimo {MIN_LENGTH} caracteres. Não use a senha temporária.
             </p>
@@ -142,15 +158,27 @@ export default function TrocarSenhaPage() {
 
           <div className="space-y-2">
             <Label htmlFor="confirm">Confirme a senha</Label>
-            <Input
-              id="confirm"
-              type="password"
-              autoComplete="new-password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              minLength={MIN_LENGTH}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="confirm"
+                type={showConfirm ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                minLength={MIN_LENGTH}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((v) => !v)}
+                aria-label={showConfirm ? 'Ocultar senha' : 'Mostrar senha'}
+                aria-pressed={showConfirm}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <Button type="submit" size="lg" className="w-full" disabled={submitting}>
