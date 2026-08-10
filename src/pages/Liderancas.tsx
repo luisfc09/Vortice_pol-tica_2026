@@ -184,7 +184,14 @@ export default function LiderancasPage() {
     if (!deleteTarget) return;
     collections.supporters.remove(deleteTarget.id);
   }
-  const canManage = session?.role === 'admin' || session?.role === 'coordinator';
+  // Super admin (usuário mestre) sempre gerencia — mesmo quando é membro da
+  // campanha vista (aí o useEffectiveSession devolve o papel real, que pode
+  // não ser admin/coord, escondendo o Excluir). Sem o guard de is_super_admin,
+  // o mestre ficava sem conseguir corrigir/excluir lideranças.
+  const canManage =
+    session?.is_super_admin === true ||
+    session?.role === 'admin' ||
+    session?.role === 'coordinator';
 
   const STATUS_LABEL: Record<string, string> = {
     ativo: 'Ativo',
