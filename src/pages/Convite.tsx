@@ -335,10 +335,6 @@ export default function ConvitePage() {
                   required
                   autoComplete="email"
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Vamos criar sua conta com a senha temporária <strong className="font-mono">123456</strong>.
-                  Você troca no primeiro acesso.
-                </p>
               </div>
 
               <div className="space-y-1.5">
