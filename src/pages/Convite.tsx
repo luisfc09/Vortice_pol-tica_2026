@@ -25,6 +25,7 @@ import { MunicipalityCombobox } from '@/components/ui/municipality-combobox';
 import { VorticeLogo } from '@/components/brand/VorticeLogo';
 import { supabase } from '@/lib/supabase';
 import { formatPhone } from '@/lib/utils';
+import { formatCep, lookupCep, onlyCepDigits } from '@/lib/cep';
 import { MG_MUNICIPALITIES } from '@/data/municipalities-mg';
 
 interface InviteInfo {
@@ -37,6 +38,7 @@ interface InviteInfo {
   state: string;
   office: string;
   plan: string;
+  candidate_photo_url: string | null;
 }
 
 interface FormState {
@@ -45,6 +47,11 @@ interface FormState {
   phone: string;
   municipality_code: string;
   city: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  neighborhood: string;
+  complemento: string;
 }
 
 const EMPTY: FormState = {
@@ -53,6 +60,11 @@ const EMPTY: FormState = {
   phone: '',
   municipality_code: '',
   city: '',
+  cep: '',
+  logradouro: '',
+  numero: '',
+  neighborhood: '',
+  complemento: '',
 };
 
 export default function ConvitePage() {
@@ -64,6 +76,7 @@ export default function ConvitePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
 
   // -------- carrega o convite via RPC pública ------------------------
   useEffect(() => {
@@ -99,6 +112,41 @@ export default function ConvitePage() {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
+  // Busca ativa por CEP (ViaCEP). Dispara quando o CEP fica completo (8 díg).
+  // Preenche rua + bairro e tenta auto-selecionar o município pelo IBGE.
+  const runCepLookup = useCallback(async (rawCep: string) => {
+    if (onlyCepDigits(rawCep).length !== 8) return;
+    setCepLoading(true);
+    try {
+      const addr = await lookupCep(rawCep);
+      if (!addr) {
+        toast.error('CEP não encontrado. Preencha o endereço manualmente.');
+        return;
+      }
+      setForm((p) => {
+        const muni = addr.ibge
+          ? MG_MUNICIPALITIES.find((m) => m.code === addr.ibge)
+          : undefined;
+        return {
+          ...p,
+          logradouro: addr.logradouro || p.logradouro,
+          neighborhood: addr.bairro || p.neighborhood,
+          // Só sobrescreve o município se o CEP for de MG (casou no IBGE).
+          municipality_code: muni ? muni.code : p.municipality_code,
+          city: muni ? muni.name : p.city,
+        };
+      });
+    } finally {
+      setCepLoading(false);
+    }
+  }, []);
+
+  function handleCepChange(raw: string) {
+    const masked = formatCep(raw);
+    update('cep', masked);
+    if (onlyCepDigits(masked).length === 8) void runCepLookup(masked);
+  }
+
   const onSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -106,6 +154,13 @@ export default function ConvitePage() {
       if (form.name.trim().length < 2) return toast.error('Informe seu nome completo.');
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
         return toast.error('E-mail inválido.');
+      // Endereço obrigatório (pedido do cliente): CEP, rua, número e bairro.
+      if (onlyCepDigits(form.cep).length !== 8)
+        return toast.error('Informe um CEP válido (8 dígitos).');
+      if (!form.logradouro.trim()) return toast.error('Informe o nome da rua.');
+      if (!form.numero.trim()) return toast.error('Informe o número.');
+      if (!form.neighborhood.trim()) return toast.error('Informe o bairro.');
+      if (!form.municipality_code) return toast.error('Selecione o município.');
 
       setSubmitting(true);
       try {
@@ -117,6 +172,11 @@ export default function ConvitePage() {
             phone: form.phone || null,
             city: form.city || null,
             municipality_code: form.municipality_code || null,
+            cep: onlyCepDigits(form.cep) || null,
+            logradouro: form.logradouro.trim() || null,
+            numero: form.numero.trim() || null,
+            neighborhood: form.neighborhood.trim() || null,
+            complemento: form.complemento.trim() || null,
           },
         });
         if (error) {
@@ -223,14 +283,33 @@ export default function ConvitePage() {
           ) : invite ? (
             <form onSubmit={onSubmit} className="space-y-5">
               <div className="space-y-2 text-center">
-                <Sparkles className="mx-auto h-5 w-5 text-vortex-violet" />
+                {invite.candidate_photo_url ? (
+                  <img
+                    src={invite.candidate_photo_url}
+                    alt={invite.candidate_name}
+                    className="mx-auto h-24 w-24 rounded-full border-2 border-vortex-violet/40 object-cover shadow-lg"
+                  />
+                ) : (
+                  <Sparkles className="mx-auto h-5 w-5 text-vortex-violet" />
+                )}
                 <p className="text-xs uppercase tracking-widest text-vortex-violet">Você foi convidado(a)</p>
-                <h2 className="font-display text-2xl text-foreground">
+                <h2 className="font-display text-xl text-foreground">
                   Junte-se à campanha de
                 </h2>
-                <p className="text-lg font-semibold text-primary">{invite.candidate_name}</p>
+                <p className="font-display text-2xl font-semibold text-primary">
+                  {invite.candidate_name}
+                </p>
+                {/* Nome + NÚMERO em destaque (pedido do cliente) */}
+                <div className="flex items-center justify-center gap-2">
+                  <span className="rounded-md bg-primary/15 px-2.5 py-1 text-sm font-bold tracking-wide text-primary">
+                    {invite.party} {invite.party_number}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {invite.office} · {invite.state}
+                  </span>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  {invite.party} {invite.party_number} · {invite.office} {invite.state} · indicado(a) por{' '}
+                  indicado(a) por{' '}
                   <strong className="text-foreground/90">{invite.referrer_name}</strong>
                 </p>
               </div>
@@ -274,16 +353,92 @@ export default function ConvitePage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Município</Label>
-                <MunicipalityCombobox
-                  value={form.municipality_code}
-                  onChange={handleMunicipalityChange}
-                  placeholder="Buscar município…"
-                />
-                {cityName ? (
-                  <p className="text-[11px] text-muted-foreground">Selecionado: {cityName}</p>
-                ) : null}
+              {/* -------- Endereço (obrigatório) -------------------------- */}
+              <div className="space-y-1.5 rounded-lg border border-vortex-border/60 bg-vortex-bg/30 p-3">
+                <p className="text-xs font-medium uppercase tracking-widest text-vortex-violet">
+                  Endereço
+                </p>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="cep">CEP *</Label>
+                  <div className="relative">
+                    <Input
+                      id="cep"
+                      inputMode="numeric"
+                      value={form.cep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      onBlur={() => runCepLookup(form.cep)}
+                      placeholder="00000-000"
+                      autoComplete="postal-code"
+                      required
+                    />
+                    {cepLoading ? (
+                      <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    ) : null}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Digite o CEP que preenchemos rua, bairro e cidade automaticamente.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2 space-y-1.5">
+                    <Label htmlFor="logradouro">Rua *</Label>
+                    <Input
+                      id="logradouro"
+                      value={form.logradouro}
+                      onChange={(e) => update('logradouro', e.target.value)}
+                      placeholder="Nome da rua"
+                      autoComplete="address-line1"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="numero">Número *</Label>
+                    <Input
+                      id="numero"
+                      inputMode="numeric"
+                      value={form.numero}
+                      onChange={(e) => update('numero', e.target.value)}
+                      placeholder="123"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="neighborhood">Bairro *</Label>
+                  <Input
+                    id="neighborhood"
+                    value={form.neighborhood}
+                    onChange={(e) => update('neighborhood', e.target.value)}
+                    placeholder="Seu bairro"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Município *</Label>
+                  <MunicipalityCombobox
+                    value={form.municipality_code}
+                    onChange={handleMunicipalityChange}
+                    placeholder="Buscar município…"
+                  />
+                  {cityName ? (
+                    <p className="text-[11px] text-muted-foreground">Selecionado: {cityName}</p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="complemento">Complemento</Label>
+                  <Input
+                    id="complemento"
+                    value={form.complemento}
+                    onChange={(e) => update('complemento', e.target.value)}
+                    placeholder="Apto, bloco, referência (opcional)"
+                    autoComplete="address-line2"
+                  />
+                </div>
               </div>
 
               <Button type="submit" className="w-full" disabled={submitting}>

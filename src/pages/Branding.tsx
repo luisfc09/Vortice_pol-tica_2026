@@ -39,13 +39,16 @@ export default function BrandingPage() {
   const realSession = useAuthStore((s) => s.session);
   const setSession = useAuthStore((s) => s.setSession);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [slogan, setSlogan] = useState('');
   const [primary, setPrimary] = useState(DEFAULT_PRIMARY);
   const [secondary, setSecondary] = useState(DEFAULT_SECONDARY);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     if (!session?.campaign) return;
@@ -53,6 +56,7 @@ export default function BrandingPage() {
     setPrimary(session.campaign.brand_primary_hex ?? DEFAULT_PRIMARY);
     setSecondary(session.campaign.brand_secondary_hex ?? DEFAULT_SECONDARY);
     setLogoUrl(session.campaign.brand_logo_url ?? null);
+    setPhotoUrl(session.campaign.candidate_photo_url ?? null);
   }, [session?.campaign?.id]);
 
   // Nunca renderiza tela branca: sessão hidratando → skeleton; sem campanha
@@ -117,6 +121,38 @@ export default function BrandingPage() {
     toast.info('Logo removido. Clique em Salvar para aplicar.');
   }
 
+  async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error('Arquivo maior que 2MB. Reduza ou comprima.');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `${campaignId}/candidate-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage
+        .from('brand-assets')
+        .upload(path, file, { upsert: true, cacheControl: '3600' });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const { data } = supabase.storage.from('brand-assets').getPublicUrl(path);
+      setPhotoUrl(data.publicUrl);
+      toast.success('Foto enviada. Clique em Salvar para aplicar.');
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  }
+
+  function removePhoto() {
+    setPhotoUrl(null);
+    toast.info('Foto removida. Clique em Salvar para aplicar.');
+  }
+
   async function save() {
     if (!session?.campaign) return;
     if (primary && !isValidHex(primary)) {
@@ -135,6 +171,7 @@ export default function BrandingPage() {
         brand_primary_hex: primary === DEFAULT_PRIMARY ? null : primary,
         brand_secondary_hex: secondary === DEFAULT_SECONDARY ? null : secondary,
         brand_logo_url: logoUrl,
+        candidate_photo_url: photoUrl,
       };
       const { error } = await supabase
         .from('campaigns')
@@ -190,9 +227,9 @@ export default function BrandingPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {/* Logo */}
-        <Card className="lg:col-span-1">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ImageIcon className="h-4 w-4 text-primary" />
@@ -250,8 +287,71 @@ export default function BrandingPage() {
           </CardContent>
         </Card>
 
-        {/* Cores */}
-        <Card className="lg:col-span-2">
+        {/* Foto do candidato */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="h-4 w-4 text-vortex-violet" />
+              Foto do candidato
+            </CardTitle>
+            <CardDescription>Aparece no convite público — rosto do candidato</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex h-40 w-full items-center justify-center rounded-lg border border-dashed border-vortex-border bg-vortex-bg/40">
+              {photoUrl ? (
+                <img
+                  src={photoUrl}
+                  alt="Foto do candidato"
+                  className="h-32 w-32 rounded-full border-2 border-vortex-violet/40 object-cover"
+                />
+              ) : (
+                <div className="text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-vortex-border">
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">Nenhuma foto enviada</p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhoto}
+              >
+                {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploadingPhoto ? 'Enviando…' : 'Enviar foto'}
+              </Button>
+              {photoUrl ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-red-300 hover:text-red-200"
+                  onClick={removePhoto}
+                >
+                  Remover
+                </Button>
+              ) : null}
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={onPickPhoto}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Foto de rosto, boa iluminação. Proporção quadrada renderiza melhor (recorte circular).
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Cores */}
+      <div className="grid grid-cols-1 gap-4">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="h-4 w-4 text-vortex-violet" />

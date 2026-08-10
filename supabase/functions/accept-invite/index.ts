@@ -3,7 +3,8 @@
 // ----------------------------------------------------------------------------
 // Fluxo Fase 2 da hierarquia (migration 047):
 //
-//   POST { code, name, email, phone, city }
+//   POST { code, name, email, phone, city, municipality_code,
+//          cep, logradouro, numero, neighborhood, complemento }
 //     1. Valida `code` via get_invite_info()  → bloqueia se inválido/usado.
 //     2. Cria auth.users com senha 123456 + email_confirm=true.
 //        (Se o e-mail já existir, devolve 409 — usuário deve fazer login.)
@@ -43,6 +44,11 @@ interface AcceptInviteRequest {
   phone?: string;
   city?: string;
   municipality_code?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  neighborhood?: string;
+  complemento?: string;
 }
 
 const TEMP_PASSWORD = '123456';
@@ -77,6 +83,13 @@ Deno.serve(async (req: Request) => {
   const phone = body.phone?.trim() || null;
   const city = body.city?.trim() || null;
   const municipality_code = body.municipality_code?.trim() || null;
+  // Endereço (colunas já existentes em supporters). Persistidos quando vierem
+  // do form do convite; nulos quando ausentes (compat com chamadas antigas).
+  const cep = body.cep?.replace(/\D/g, '').slice(0, 8) || null;
+  const logradouro = body.logradouro?.trim() || null;
+  const numero = body.numero?.trim() || null;
+  const neighborhood = body.neighborhood?.trim() || null;
+  const complemento = body.complemento?.trim() || null;
 
   if (!code) return json({ error: 'code obrigatório' }, 400);
   if (!name || name.length < 2) return json({ error: 'Nome obrigatório (mín. 2 chars)' }, 400);
@@ -154,12 +167,12 @@ Deno.serve(async (req: Request) => {
       phone,
       email,
       city,
-      neighborhood: null,
+      neighborhood,
       municipality_code,
-      cep: null,
-      logradouro: null,
-      numero: null,
-      complemento: null,
+      cep,
+      logradouro,
+      numero,
+      complemento,
       role: 'apoiador',
       role_custom: null,
       status: 'ativo',

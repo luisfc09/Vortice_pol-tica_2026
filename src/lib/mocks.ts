@@ -10,6 +10,7 @@ export const MOCK_CAMPAIGN: Campaign = {
   office: 'Governador',
   election_year: 2026,
   logo_url: null,
+  candidate_photo_url: null,
   vote_target: 350_000,
   slogan: 'Estratégia que move eleições.',
   status: 'active',

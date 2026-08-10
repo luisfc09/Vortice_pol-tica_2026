@@ -233,6 +233,9 @@ export interface Campaign {
   office: string;
   election_year: number;
   logo_url: string | null;
+  // Foto do candidato (rosto) — separada do brand_logo_url. Exibida no convite
+  // público. Upload via tela Branding, bucket brand-assets. (migration 056)
+  candidate_photo_url: string | null;
   vote_target: number;
   slogan: string | null;
   status: CampaignStatus;
