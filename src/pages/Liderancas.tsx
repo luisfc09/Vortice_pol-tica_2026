@@ -147,12 +147,19 @@ export default function LiderancasPage() {
   const [viewMode, setViewMode] = useState<'lista' | 'rede'>('lista');
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    // Busca por NOME/CIDADE (texto, tolerante a acento) OU TELEFONE (por
+    // dígitos — casa mesmo o número formatado "(31) 98…"). Bairro saiu da busca.
+    const qText = normText(query);
+    const qDigits = onlyDigits(query);
     return supporters.filter((s) => {
       if (roleFilter !== 'all' && s.role !== roleFilter) return false;
-      if (!q) return true;
-      const haystack = `${s.name} ${s.city} ${s.neighborhood ?? ''} ${s.phone ?? ''}`.toLowerCase();
-      return haystack.includes(q);
+      if (!qText && !qDigits) return true;
+      const text = normText(`${s.name} ${s.city ?? ''}`);
+      const textMatch = qText ? text.includes(qText) : false;
+      // phone + whatsapp comparados só por dígitos (mín. 3 pra evitar ruído).
+      const phones = `${onlyDigits(s.phone)} ${onlyDigits(s.whatsapp)}`;
+      const phoneMatch = qDigits.length >= 3 ? phones.includes(qDigits) : false;
+      return textMatch || phoneMatch;
     });
   }, [supporters, query, roleFilter]);
 
@@ -520,7 +527,7 @@ export default function LiderancasPage() {
       <SearchBar
         value={query}
         onChange={setQuery}
-        placeholder="Buscar por nome, cidade, bairro ou telefone"
+        placeholder="Buscar por nome, cidade ou telefone"
       />
 
       <div className="flex flex-wrap items-center gap-2">
