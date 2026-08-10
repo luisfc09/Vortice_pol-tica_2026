@@ -137,7 +137,7 @@ Deno.serve(async (req: Request) => {
       return json(
         {
           error:
-            'Este e-mail já tem conta no sistema. Faça login com ele (senha temporária 123456 se nunca trocou). Para recadastrar esta pessoa do zero, o administrador deve excluir a conta dela em Usuários antes de reenviar o convite.',
+            'Este e-mail já tem conta no sistema. Faça login com ele. Para recadastrar esta pessoa do zero, o administrador deve excluir a conta dela em Usuários antes de reenviar o convite.',
         },
         409,
       );
