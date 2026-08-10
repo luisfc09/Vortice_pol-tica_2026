@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
+import { KeyRound, Pencil, Plus, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/data/EmptyState';
 import { ConfirmDelete } from '@/components/data/ConfirmDelete';
 import { SearchBar } from '@/components/data/SearchBar';
 import { ProvisionSheet } from '@/components/team/ProvisionSheet';
+import { LiberarEmailSheet } from '@/components/team/LiberarEmailSheet';
 import { EditUserSheet } from '@/components/team/EditUserSheet';
 import { PendingUsersSection } from '@/components/team/PendingUsersSection';
 import { AvatarUpload } from '@/components/team/AvatarUpload';
@@ -53,6 +54,7 @@ export default function UsuariosPage() {
   const session = useAuthStore((s) => s.session);
   const members = useCollection(collections.campaign_users);
   const [provisionOpen, setProvisionOpen] = useState(false);
+  const [liberarOpen, setLiberarOpen] = useState(false);
   // Alvo do EditUserSheet — guarda só o user_id; resolução do email vem
   // da auth.users (puxa via supabase no momento de abrir) já que profiles
   // não tem email.
@@ -383,9 +385,14 @@ export default function UsuariosPage() {
             </>
           )}
         </p>
-        <Button onClick={() => setProvisionOpen(true)}>
-          <UserPlus className="h-4 w-4" /> Provisionar usuário
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setLiberarOpen(true)}>
+            <KeyRound className="h-4 w-4" /> Liberar e-mail
+          </Button>
+          <Button onClick={() => setProvisionOpen(true)}>
+            <UserPlus className="h-4 w-4" /> Provisionar usuário
+          </Button>
+        </div>
       </div>
 
       {/* Barra de filtros — busca em nome/telefone + dropdown de papel.
@@ -579,6 +586,7 @@ export default function UsuariosPage() {
       )}
 
       <ProvisionSheet open={provisionOpen} onOpenChange={setProvisionOpen} />
+      <LiberarEmailSheet open={liberarOpen} onOpenChange={setLiberarOpen} />
       <EditUserSheet
         open={editTarget !== null}
         onOpenChange={(o) => !o && setEditTarget(null)}
