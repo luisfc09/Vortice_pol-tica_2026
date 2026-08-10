@@ -3,13 +3,25 @@ import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CentralAlertas } from './CentralAlertas';
 import { useAlertas } from '@/hooks/useAlertas';
+import { useMeusNudges } from '@/hooks/useMeusNudges';
+import { useEffectiveSession } from '@/hooks/useEffectiveSession';
 import { cn } from '@/lib/utils';
+
+const GESTOR_ROLES = ['admin', 'coordinator', 'candidate'];
 
 export function AlertsBadge() {
   const [open, setOpen] = useState(false);
+  const session = useEffectiveSession();
   const { counts } = useAlertas();
-  const unread = counts.unread;
-  const hasUrgent = counts.urgente > 0;
+  const { nudges } = useMeusNudges();
+
+  // Gestor conta alertas da campanha; demais roles só os nudges pessoais.
+  const isGestor =
+    session?.is_super_admin === true ||
+    (session?.role ? GESTOR_ROLES.includes(session.role) : false);
+  const campaignUnread = isGestor ? counts.unread : 0;
+  const unread = nudges.length + campaignUnread;
+  const hasUrgent = isGestor && counts.urgente > 0;
 
   return (
     <>
