@@ -7,7 +7,11 @@
 //          cep, logradouro, numero, neighborhood, complemento }
 //     1. Valida `code` via get_invite_info()  → bloqueia se inválido/usado.
 //     2. Cria auth.users com senha 123456 + email_confirm=true.
-//        (Se o e-mail já existir, devolve 409 — usuário deve fazer login.)
+//        AUTO-CURA: se o e-mail já existir, NÃO dá beco sem saída — religa a
+//        conta à campanha (cria nó de rede + vínculo, idempotente). Se a conta
+//        nunca foi ativada (senha ainda temporária), faz auto-login; se já tem
+//        senha própria, devolve session:null pedindo login com a senha dela.
+//        (Nunca redefine senha de conta existente — sem risco de sequestro.)
 //     3. Atualiza profile: full_name + phone + must_change_password=true
 //        (a row em profiles é criada automaticamente por trigger no insert
 //        de auth.users — provavelmente handle_new_user). Em caso de race,
@@ -66,6 +70,27 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Acha o auth.user por e-mail (a API admin dessa versão não filtra por e-mail).
+// Usado na AUTO-CURA: quando o e-mail já existe, religamos a conta à campanha
+// em vez de dar erro de "já cadastrado".
+async function findUserByEmail(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  email: string,
+): Promise<{ id: string } | null> {
+  const target = email.toLowerCase().trim();
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error || !data?.users?.length) break;
+    const found = data.users.find(
+      (u: { email?: string }) => (u.email ?? '').toLowerCase() === target,
+    );
+    if (found) return { id: found.id };
+    if (data.users.length < 1000) break;
+  }
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -122,79 +147,119 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Convite inválido, expirado ou já utilizado' }, 410);
   }
 
-  // ----- 2) cria auth.users -----
+  // ----- 2) cria auth.users (ou RELIGA conta existente — auto-cura) -----
+  let userId: string;
+  let existingUser = false;
+  // Só faz auto-login quando a conta pode logar com a senha TEMPORÁRIA (conta
+  // nova, ou conta antiga que nunca foi ativada). A temporária é pública, então
+  // isso NÃO é bypass — quem tem o e-mail já poderia logar com ela direto. Se a
+  // pessoa já trocou a senha, não logamos por ela.
+  let canAutoLogin = true;
+
   const { data: createdUser, error: userErr } = await admin.auth.admin.createUser({
     email,
     password: TEMP_PASSWORD,
     email_confirm: true,
     user_metadata: { full_name: name },
   });
-  if (userErr || !createdUser?.user) {
-    // Supabase varia a mensagem: "already registered" / "already been
-    // registered" / "already exists" / unique/duplicate. `already.*(...)` cobre
-    // o "been" no meio.
-    if (/already.*(registered|exists)|duplicate|unique/i.test(userErr?.message ?? '')) {
+  if (createdUser?.user) {
+    userId = createdUser.user.id;
+  } else {
+    const already = /already.*(registered|exists)|duplicate|unique/i.test(
+      userErr?.message ?? '',
+    );
+    if (!already) {
+      return json({ error: `Falha ao criar usuário: ${userErr?.message ?? 'desconhecido'}` }, 500);
+    }
+    // AUTO-CURA: o e-mail já existe. Em vez de dar beco sem saída, religamos a
+    // conta a esta campanha (cria o nó de rede + vínculo, idempotente).
+    const found = await findUserByEmail(admin, email);
+    if (!found) {
       return json(
-        {
-          error:
-            'Este e-mail já tem conta no sistema. Faça login com ele. Para recadastrar esta pessoa do zero, o administrador deve excluir a conta dela em Usuários antes de reenviar o convite.',
-        },
+        { error: 'Este e-mail já tem conta, mas não consegui localizá-la. Contate o administrador.' },
         409,
       );
     }
-    return json({ error: `Falha ao criar usuário: ${userErr?.message ?? 'desconhecido'}` }, 500);
+    userId = found.id;
+    existingUser = true;
+    // Auto-login só se a conta nunca foi ativada (must_change_password = true →
+    // senha ainda é a temporária).
+    const { data: prof } = await admin
+      .from('profiles')
+      .select('must_change_password')
+      .eq('id', userId)
+      .maybeSingle();
+    canAutoLogin = prof?.must_change_password === true;
   }
-  const userId = createdUser.user.id;
 
-  // ----- 3) atualiza profile (handle_new_user trigger já criou row básica) -----
-  // UPSERT defensivo: se trigger ainda não rodou ou está em race, garantimos.
-  const { error: profileErr } = await admin
-    .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        full_name: name,
-        phone,
-        must_change_password: true,
-      },
-      { onConflict: 'id' },
-    );
-  if (profileErr) console.warn('[accept-invite] profile upsert falhou:', profileErr.message);
+  // ----- 3) profile — só pra conta NOVA (não sobrescreve conta existente) ----
+  // UPSERT defensivo: se o trigger handle_new_user ainda não rodou, garantimos.
+  if (!existingUser) {
+    const { error: profileErr } = await admin
+      .from('profiles')
+      .upsert(
+        { id: userId, full_name: name, phone, must_change_password: true },
+        { onConflict: 'id' },
+      );
+    if (profileErr) console.warn('[accept-invite] profile upsert falhou:', profileErr.message);
+  }
 
-  // ----- 4) cria supporter (filho do convite) -----
-  const { data: supporterRow, error: supporterErr } = await admin
+  // ----- 4) supporter (nó de rede) — IDEMPOTENTE -----
+  // Se o user já tem nó nesta campanha (religação), atualiza com os dados do
+  // form; senão, cria novo filho do convite.
+  const { data: existingSup } = await admin
     .from('supporters')
-    .insert({
-      campaign_id: invite.campaign_id,
-      created_by: userId,
-      name,
-      cpf: null,
-      phone,
-      email,
-      city,
-      neighborhood,
-      municipality_code,
-      cep,
-      logradouro,
-      numero,
-      complemento,
-      role: 'apoiador',
-      role_custom: null,
-      status: 'ativo',
-      vote_potential: null,
-      whatsapp: phone,                       // assume mesmo número como WhatsApp
-      social_platform: null,
-      social_handle: null,
-      referrer_id: invite.referrer_id,       // VÍNCULO HIERÁRQUICO
-      invite_used_at: null,                  // este NOVO supporter começa com seu próprio code ativo
-    })
     .select('id')
-    .single();
-  if (supporterErr) {
-    // rollback do auth.user pra não ficar lixo (cuidado: pode falhar se já
-    // tem profile; aceitamos como custo de falha rara)
-    await admin.auth.admin.deleteUser(userId).catch(() => undefined);
-    return json({ error: `Falha ao registrar liderança: ${supporterErr.message}` }, 500);
+    .eq('campaign_id', invite.campaign_id)
+    .eq('created_by', userId)
+    .limit(1)
+    .maybeSingle();
+
+  const supFields = {
+    name,
+    phone,
+    email,
+    city,
+    neighborhood,
+    municipality_code,
+    cep,
+    logradouro,
+    numero,
+    complemento,
+    status: 'ativo',
+    whatsapp: phone,
+  };
+
+  let supporterId: string;
+  if (existingSup) {
+    supporterId = existingSup.id as string;
+    await admin.from('supporters').update(supFields).eq('id', supporterId);
+  } else {
+    const { data: supporterRow, error: supporterErr } = await admin
+      .from('supporters')
+      .insert({
+        campaign_id: invite.campaign_id,
+        created_by: userId,
+        cpf: null,
+        role: 'apoiador',
+        role_custom: null,
+        vote_potential: null,
+        social_platform: null,
+        social_handle: null,
+        referrer_id: invite.referrer_id, // VÍNCULO HIERÁRQUICO
+        invite_used_at: null,
+        ...supFields,
+      })
+      .select('id')
+      .single();
+    if (supporterErr) {
+      // Rollback do auth.user SÓ se foi criado agora (nunca apaga conta alheia).
+      if (!existingUser) {
+        await admin.auth.admin.deleteUser(userId).catch(() => undefined);
+      }
+      return json({ error: `Falha ao registrar liderança: ${supporterErr.message}` }, 500);
+    }
+    supporterId = supporterRow.id as string;
   }
 
   // ----- 5) campaign_users (APROVAÇÃO AUTOMÁTICA — sem espera de admin) -----
@@ -203,60 +268,66 @@ Deno.serve(async (req: Request) => {
   // de novo. Mudança aplicada em 2026-06-08 a pedido do usuário; o fluxo
   // de provision-user (admin cria usuário manualmente) continua exigindo
   // aprovação por toggle de is_active na lista de Usuários.
-  const { error: cuErr } = await admin
+  const { data: existingCu } = await admin
     .from('campaign_users')
-    .insert({
+    .select('id, is_active')
+    .eq('campaign_id', invite.campaign_id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (!existingCu) {
+    const { error: cuErr } = await admin.from('campaign_users').insert({
       campaign_id: invite.campaign_id,
       user_id: userId,
       role: 'supporter',
-      is_active: true,                       // ⬅ ATIVO de cara
-      // invited_by: campos do RPC não traz quem indicou no nível de user;
-      // deixamos null por ora. O frontend vai mostrar pela hierarquia em
-      // supporters.referrer_id quando precisar.
+      is_active: true, // ⬅ ATIVO de cara (aprovação implícita do convite)
     });
-  if (cuErr) {
-    console.warn('[accept-invite] campaign_users insert falhou:', cuErr.message);
-    // Não rollback aqui — supporter ficou registrado e o supporter pode
-    // pedir aprovação manual ao admin.
+    if (cuErr) console.warn('[accept-invite] campaign_users insert falhou:', cuErr.message);
+  } else if (existingCu.is_active !== true) {
+    // Já era membro mas estava desativado — reativa (religação).
+    await admin.from('campaign_users').update({ is_active: true }).eq('id', existingCu.id);
   }
 
   // ----- 6) sign-in com a senha temp pra devolver session -----
-  // (passo "queima do convite" foi REMOVIDO na migration-049 — link agora
-  // é reutilizável, mesma URL aceita N cadastros sem expirar.)
-  const anon = createClient(url, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  const { data: signInData, error: signInErr } = await anon.auth.signInWithPassword({
-    email,
-    password: TEMP_PASSWORD,
-  });
-  if (signInErr || !signInData?.session) {
-    // Conta foi criada com sucesso, mas auto-login falhou — usuário pode
-    // fazer login manual com a senha temp.
-    return json(
-      {
-        ok: true,
-        supporter_id: supporterRow.id,
-        user_id: userId,
-        must_change_password: true,
-        session: null,
-        message: 'Conta criada. Faça login com a senha temporária 123456.',
-      },
-      201,
-    );
+  // Só auto-loga quando a conta ainda usa a senha temporária (conta nova, ou
+  // conta antiga nunca ativada). Se a pessoa já trocou a senha (canAutoLogin
+  // = false), religamos o cadastro mas mandamos ela logar com a própria senha.
+  if (canAutoLogin) {
+    const anon = createClient(url, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: signInData } = await anon.auth.signInWithPassword({
+      email,
+      password: TEMP_PASSWORD,
+    });
+    if (signInData?.session) {
+      return json(
+        {
+          ok: true,
+          supporter_id: supporterId,
+          user_id: userId,
+          must_change_password: true,
+          session: {
+            access_token: signInData.session.access_token,
+            refresh_token: signInData.session.refresh_token,
+            expires_at: signInData.session.expires_at,
+          },
+        },
+        201,
+      );
+    }
   }
 
+  // Sem auto-login: conta com senha própria (religada) OU auto-login falhou.
   return json(
     {
       ok: true,
-      supporter_id: supporterRow.id,
+      supporter_id: supporterId,
       user_id: userId,
-      must_change_password: true,
-      session: {
-        access_token: signInData.session.access_token,
-        refresh_token: signInData.session.refresh_token,
-        expires_at: signInData.session.expires_at,
-      },
+      must_change_password: false,
+      session: null,
+      message: existingUser
+        ? 'Você já tinha conta no sistema — seu cadastro foi vinculado à campanha. Faça login com o seu e-mail e senha.'
+        : 'Conta criada. Faça login para continuar.',
     },
     201,
   );
