@@ -150,11 +150,14 @@ Deno.serve(async (req: Request) => {
   // ----- 2) cria auth.users (ou RELIGA conta existente — auto-cura) -----
   let userId: string;
   let existingUser = false;
-  // Só faz auto-login quando a conta pode logar com a senha TEMPORÁRIA (conta
-  // nova, ou conta antiga que nunca foi ativada). A temporária é pública, então
-  // isso NÃO é bypass — quem tem o e-mail já poderia logar com ela direto. Se a
-  // pessoa já trocou a senha, não logamos por ela.
+  // Auto-login só quando a conta NÃO é um usuário ativo (senha própria). Conta
+  // nova, conta nunca ativada (senha temp) ou conta ÓRFÃ (profile removido numa
+  // exclusão anterior) são reonboardadas: senha volta pra temporária e entra
+  // direto. A temporária é pública → não é bypass. Só uma conta com senha
+  // própria (usuário ativo de verdade) é preservada — sem risco de sequestro.
   let canAutoLogin = true;
+  // true quando precisamos (re)criar o profile: conta nova OU órfã reclamada.
+  let ensureProfile = true;
 
   const { data: createdUser, error: userErr } = await admin.auth.admin.createUser({
     email,
@@ -182,19 +185,30 @@ Deno.serve(async (req: Request) => {
     }
     userId = found.id;
     existingUser = true;
-    // Auto-login só se a conta nunca foi ativada (must_change_password = true →
-    // senha ainda é a temporária).
     const { data: prof } = await admin
       .from('profiles')
       .select('must_change_password')
       .eq('id', userId)
       .maybeSingle();
-    canAutoLogin = prof?.must_change_password === true;
+    // Usuário ATIVO de verdade = tem profile e já trocou a senha. Só esse é
+    // preservado. Conta nunca ativada (must_change_password=true) ou ÓRFÃ
+    // (sem profile) são reclamadas pra reonboarding.
+    const isActiveOnboarded = prof?.must_change_password === false;
+    canAutoLogin = !isActiveOnboarded;
+    ensureProfile = !prof; // recria o profile só quando sumiu (conta órfã)
+    if (canAutoLogin) {
+      // Reclama a conta: garante que a senha é a temporária pra o auto-login
+      // funcionar (sem isso, a pessoa cairia num "faça login" sem ter senha).
+      const { error: pwErr } = await admin.auth.admin.updateUserById(userId, {
+        password: TEMP_PASSWORD,
+      });
+      if (pwErr) console.warn('[accept-invite] reset temp password falhou:', pwErr.message);
+    }
   }
 
-  // ----- 3) profile — só pra conta NOVA (não sobrescreve conta existente) ----
-  // UPSERT defensivo: se o trigger handle_new_user ainda não rodou, garantimos.
-  if (!existingUser) {
+  // ----- 3) profile — conta NOVA ou conta órfã reclamada (não sobrescreve
+  // profile de usuário ativo existente) -----
+  if (ensureProfile) {
     const { error: profileErr } = await admin
       .from('profiles')
       .upsert(
